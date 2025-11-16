@@ -117,12 +117,12 @@ source ~/Python3venv/MalDataGen/bin/activate
 ## ⚙️ Installation <a name="installation"></a>
 
 ```bash
-git clone https://github.com/SBSeg25/MalDataGen.git
+pip install maldatagen
+# or
+git clone https://github.com/SBSeg25/MalDataGen.git 
 cd MalDataGen
 pip install --upgrade pip
 pip install -r requirements.txt
-# or
-pip install .
 ```
 ## Security worries <a name="securty_worries"></a>
 
