@@ -16,9 +16,9 @@
 </div>
 
 
-# 🌊 SynDataGen - v.1.0.0 (Jellyfish 🪼)
+# 🌊 MalDataGen - v.1.0.0 (Jellyfish 🪼)
 
-SynDataGen (Previous MalDataGen) is an advanced Python framework for generating and evaluating synthetic tabular datasets using modern generative models, including diffusion and adversarial architectures. Designed for researchers and practitioners, it provides reproducible pipelines, fine-grained control over model configuration, and integrated evaluation metrics for realistic data synthesis.
+SynDataGen is an advanced Python framework for generating and evaluating synthetic tabular datasets using modern generative models, including diffusion and adversarial architectures. Designed for researchers and practitioners, it provides reproducible pipelines, fine-grained control over model configuration, and integrated evaluation metrics for realistic data synthesis.
 
 [![SynDataGen](https://img.shields.io/badge/Webpage%20SynDataGen%20Library-red?style=for-the-badge&logo=github&logoColor=white)](https://kayua.github.io/SyntheticDataGen.github.io/)
 
