@@ -233,6 +233,27 @@ if ML_FRAMEWORK == 'pytorch':
                 Returns:
                     tuple: (representação latente, labels)
                 """
+                # Garante que os tensores tenham 2 dimensões
+                # data_input esperado: (batch_size, features) - 2D
+                # label_input esperado: (batch_size, num_classes) - 2D
+
+                # Se data_input tem mais de 2 dimensões, achata para 2D
+                if len(data_input.shape) > 2:
+                    data_input = data_input.view(data_input.shape[0], -1)
+                elif len(data_input.shape) == 1:
+                    data_input = data_input.unsqueeze(0)
+
+                # Se label_input tem mais de 2 dimensões, achata para 2D
+                if len(label_input.shape) > 2:
+                    label_input = label_input.view(label_input.shape[0], -1)
+                elif len(label_input.shape) == 1:
+                    label_input = label_input.unsqueeze(0)
+
+                # Verifica se batch sizes são compatíveis
+                if data_input.shape[0] != label_input.shape[0]:
+                    raise ValueError(f"Batch size mismatch: data_input has {data_input.shape[0]} samples, "
+                                     f"but label_input has {label_input.shape[0]} samples")
+
                 # Concatena entradas
                 x = torch.cat([data_input, label_input], dim=-1)
 
@@ -476,3 +497,6 @@ class VanillaEncoder:
             raise ValueError("dropout_decay_rate_encoder must be a float between 0 and 1.")
 
         self._encoder_dropout_decay_rate_encoder = dropout_decay_rate_generator
+
+
+#

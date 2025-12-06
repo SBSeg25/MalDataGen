@@ -8,6 +8,7 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Kayuã Oleques']
 
+import os
 
 # MIT License
 #
@@ -31,7 +32,7 @@ __credits__ = ['Kayuã Oleques']
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-
+os.environ['ML_FRAMEWORK'] = 'pytorch'
 try:
     import sys
     import time

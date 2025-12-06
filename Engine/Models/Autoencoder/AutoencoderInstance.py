@@ -8,6 +8,8 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/12/06'
 __credits__ = ['Synthetic Ocean AI']
 
+from Engine.Algorithms.Autoencoder.AutoencoderAlgorithm import AutoencoderAlgorithm
+from Engine.Models.Autoencoder.ModelAutoencoder import AutoencoderModel
 
 # MIT License
 #
@@ -58,9 +60,6 @@ try:
 
     else:
         raise ValueError(f"Unsupported ML_FRAMEWORK: {ML_FRAMEWORK}. Use 'tensorflow' or 'pytorch'")
-
-    from Engine.Algorithms.Autoencoder.AutoencoderAlgorithm import AutoencoderAlgorithm
-    from Engine.Models.Autoencoder.ModelAutoencoder import AutoencoderModel
 
 
 except ImportError as error:
@@ -252,6 +251,68 @@ class AutoencoderInstance:
         else:
             raise ValueError(f"Unsupported framework: {self._framework}")
 
+    def _get_optimizer(self, arguments):
+        """
+        Creates and returns the appropriate optimizer for the current framework.
+
+        Args:
+            arguments: Configuration arguments that may contain:
+                - autoencoder_optimizer: Optimizer name (optional)
+                - autoencoder_learning_rate: Learning rate (optional)
+                - autoencoder_momentum: Momentum for SGD (optional)
+
+        Returns:
+            Configured optimizer instance for the current framework
+        """
+        # Get learning rate from arguments or use default
+        learning_rate = getattr(arguments, 'autoencoder_learning_rate', 0.001)
+        optimizer_name = getattr(arguments, 'autoencoder_optimizer', 'adam').lower()
+
+        if self._framework == 'tensorflow':
+            # TensorFlow/Keras optimizers
+            if optimizer_name == 'adam':
+                from tensorflow.keras.optimizers import Adam
+                return Adam(learning_rate=learning_rate)
+            elif optimizer_name == 'sgd':
+                from tensorflow.keras.optimizers import SGD
+                momentum = getattr(arguments, 'autoencoder_momentum', 0.9)
+                return SGD(learning_rate=learning_rate, momentum=momentum)
+            elif optimizer_name == 'rmsprop':
+                from tensorflow.keras.optimizers import RMSprop
+                return RMSprop(learning_rate=learning_rate)
+            elif optimizer_name == 'adagrad':
+                from tensorflow.keras.optimizers import Adagrad
+                return Adagrad(learning_rate=learning_rate)
+            else:
+                # Default to Adam if unknown optimizer
+                from tensorflow.keras.optimizers import Adam
+                return Adam(learning_rate=learning_rate)
+
+        elif self._framework == 'pytorch':
+            # PyTorch optimizers
+            # Get all model parameters from encoder and decoder
+            encoder = self._autoencoder_model.get_encoder(
+                arguments.input_shape if hasattr(arguments, 'input_shape') else 784)
+            decoder = self._autoencoder_model.get_decoder(
+                arguments.output_shape if hasattr(arguments, 'output_shape') else 784)
+
+            all_params = list(encoder.parameters()) + list(decoder.parameters())
+
+            if optimizer_name == 'adam':
+                return torch.optim.Adam(all_params, lr=learning_rate)
+            elif optimizer_name == 'sgd':
+                momentum = getattr(arguments, 'autoencoder_momentum', 0.9)
+                return torch.optim.SGD(all_params, lr=learning_rate, momentum=momentum)
+            elif optimizer_name == 'rmsprop':
+                return torch.optim.RMSprop(all_params, lr=learning_rate)
+            elif optimizer_name == 'adagrad':
+                return torch.optim.Adagrad(all_params, lr=learning_rate)
+            else:
+                # Default to Adam if unknown optimizer
+                return torch.optim.Adam(all_params, lr=learning_rate)
+        else:
+            raise ValueError(f"Unsupported framework: {self._framework}")
+
     def _print_model_summary(self, input_shape):
         """
         Prints model summaries in a framework-appropriate way.
@@ -289,13 +350,15 @@ class AutoencoderInstance:
             arguments (Namespace): Configuration parameters including:
                 - autoencoder_loss_function: Loss function to use
                 - use_early_stop: Whether to use early stopping
+                - autoencoder_optimizer: Optimizer to use (optional, defaults based on framework)
+                - autoencoder_learning_rate: Learning rate (optional)
             x_real_samples (ndarray or Tensor): Training data samples
             y_real_samples (ndarray or Tensor): Corresponding class labels
 
         Process:
             1. Initializes model architecture (encoder + decoder)
             2. Prints model summaries
-            3. Configures loss function
+            3. Configures optimizer and loss function
             4. Sets up training callbacks (model monitor, early stopping)
             5. Converts labels to categorical format
             6. Executes autoencoder training
@@ -312,8 +375,14 @@ class AutoencoderInstance:
         # Print the model summaries for the encoder and decoder
         self._print_model_summary(input_shape)
 
-        # Compile the autoencoder algorithm with the specified loss function
-        self._autoencoder_algorithm.compile(loss=arguments.autoencoder_loss_function)
+        # Get optimizer configuration
+        optimizer = self._get_optimizer(arguments)
+
+        # Compile the autoencoder algorithm with optimizer and loss function
+        self._autoencoder_algorithm.compile(
+            optimizer=optimizer,
+            loss=arguments.autoencoder_loss_function
+        )
 
         # Setup callbacks list
         # callbacks_list = [self._callback_resources_monitor, self._callback_model_monitor]

@@ -396,21 +396,46 @@ elif ML_FRAMEWORK == 'pytorch':
             if loss is not None:
                 self._loss_function = loss
 
-        def forward(self, x):
-            """Forward pass do autoencoder."""
-            encoded = self._encoder(x)
-            decoded = self._decoder(encoded)
-            return decoded
+        def forward(self, data_input, label_input):
+            """
+            Forward pass do autoencoder.
+
+            Args:
+                data_input: Tensor de dados de entrada
+                label_input: Tensor de labels (one-hot encoded)
+
+            Returns:
+                Tensor reconstruído
+            """
+            # O encoder retorna (latent, labels)
+            latent, _ = self._encoder(data_input, label_input)
+            # O decoder recebe (latent, labels)
+            reconstructed = self._decoder(latent, label_input)
+            return reconstructed
 
         def train_step(self, batch):
-            """Executa um passo de treinamento."""
+            """
+            Executa um passo de treinamento.
+
+            Args:
+                batch: Tupla (batch_x, batch_y) onde:
+                    - batch_x: Tupla (features, labels)
+                    - batch_y: Features target (para reconstrução)
+            """
+            # Desempacota o batch
             batch_x, batch_y = batch
+
+            # batch_x é uma tupla (features, labels)
+            if isinstance(batch_x, (tuple, list)):
+                features, labels = batch_x
+            else:
+                raise ValueError("batch_x must be a tuple of (features, labels)")
 
             self.train()
             self.optimizer.zero_grad()
 
-            # Forward pass
-            reconstructed_data = self.forward(batch_x)
+            # Forward pass com features e labels
+            reconstructed_data = self.forward(features, labels)
 
             # Calcula perda
             loss = F.mse_loss(reconstructed_data, batch_y)
@@ -426,9 +451,21 @@ elif ML_FRAMEWORK == 'pytorch':
             return {"loss": avg_loss}
 
         def fit(self, x=None, y=None, batch_size=32, epochs=1, verbose=1,
-                validation_data=None, shuffle=True, *args, **kwargs):
+                validation_data=None, shuffle=True, callbacks=None, *args, **kwargs):
             """
             Treina o modelo autoencoder (PyTorch).
+
+            Args:
+                x: Pode ser:
+                   - Tupla (features, labels) onde ambos são arrays
+                   - Array de features (requer y)
+                y: Target data (features para reconstrução)
+                batch_size: Tamanho do batch
+                epochs: Número de épocas
+                verbose: Nível de verbosidade
+                validation_data: Dados de validação (não implementado)
+                shuffle: Se deve embaralhar os dados
+                callbacks: Lista de callbacks (não implementado completamente)
             """
             if self.optimizer is None:
                 raise ValueError("Model must be compiled before training. Call .compile(optimizer=...) first.")
@@ -436,16 +473,21 @@ elif ML_FRAMEWORK == 'pytorch':
             # Processa entrada
             if isinstance(x, (tuple, list)) and len(x) == 2:
                 features, labels = x
+                target = y if y is not None else features
             elif y is not None:
-                features, labels = x, y
+                features = x
+                labels = None  # Labels serão derivadas se necessário
+                target = y
             else:
                 raise ValueError("You must provide either x as (features, labels) tuple or both x and y separately.")
 
             # Converte para numpy
             if not isinstance(features, numpy.ndarray):
                 features = numpy.array(features)
-            if not isinstance(labels, numpy.ndarray):
+            if labels is not None and not isinstance(labels, numpy.ndarray):
                 labels = numpy.array(labels)
+            if not isinstance(target, numpy.ndarray):
+                target = numpy.array(target)
 
             num_samples = len(features)
             history = {'loss': []}
@@ -457,7 +499,9 @@ elif ML_FRAMEWORK == 'pytorch':
                 if shuffle:
                     indices = numpy.random.permutation(num_samples)
                     features = features[indices]
-                    labels = labels[indices]
+                    if labels is not None:
+                        labels = labels[indices]
+                    target = target[indices]
 
                 num_batches = int(numpy.ceil(num_samples / batch_size))
 
@@ -466,10 +510,22 @@ elif ML_FRAMEWORK == 'pytorch':
                     end_idx = min((batch_idx + 1) * batch_size, num_samples)
 
                     batch_features = features[start_idx:end_idx]
-                    batch_labels = labels[start_idx:end_idx]
+                    batch_target = target[start_idx:end_idx]
 
-                    batch_x = torch.from_numpy(batch_features).float()
-                    batch_y = torch.from_numpy(batch_labels).float()
+                    # Converte para tensores
+                    batch_features_tensor = torch.from_numpy(batch_features).float()
+                    batch_target_tensor = torch.from_numpy(batch_target).float()
+
+                    if labels is not None:
+                        batch_labels = labels[start_idx:end_idx]
+                        batch_labels_tensor = torch.from_numpy(batch_labels).float()
+                    else:
+                        # Se labels não fornecidas, cria dummy labels
+                        batch_labels_tensor = torch.zeros(len(batch_features), 2).float()
+
+                    # batch_x deve ser uma tupla (features, labels)
+                    batch_x = (batch_features_tensor, batch_labels_tensor)
+                    batch_y = batch_target_tensor
 
                     loss_dict = self.train_step((batch_x, batch_y))
                     epoch_losses.append(float(loss_dict['loss']))

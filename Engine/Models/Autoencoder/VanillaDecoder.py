@@ -222,6 +222,27 @@ if ML_FRAMEWORK == 'pytorch':
                 Returns:
                     Tensor: Saída reconstruída do decoder.
                 """
+                # Garante que os tensores tenham 2 dimensões
+                # latent_input esperado: (batch_size, latent_dim) - 2D
+                # label_input esperado: (batch_size, num_classes) - 2D
+
+                # Se latent_input tem mais de 2 dimensões, achata para 2D
+                if len(latent_input.shape) > 2:
+                    latent_input = latent_input.view(latent_input.shape[0], -1)
+                elif len(latent_input.shape) == 1:
+                    latent_input = latent_input.unsqueeze(0)
+
+                # Se label_input tem mais de 2 dimensões, achata para 2D
+                if len(label_input.shape) > 2:
+                    label_input = label_input.view(label_input.shape[0], -1)
+                elif len(label_input.shape) == 1:
+                    label_input = label_input.unsqueeze(0)
+
+                # Verifica se batch sizes são compatíveis
+                if latent_input.shape[0] != label_input.shape[0]:
+                    raise ValueError(f"Batch size mismatch: latent_input has {latent_input.shape[0]} samples, "
+                                     f"but label_input has {label_input.shape[0]} samples")
+
                 # Concatena entradas
                 x = torch.cat([latent_input, label_input], dim=-1)
 
