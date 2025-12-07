@@ -46,8 +46,8 @@ try:
 
     from Engine.Layers.VectorQuantizerLayer import VectorQuantizer
 
-    from Engine.Models.QuantizedVAE.Tensorflow.QuantizedVAEVanillaDecoder import QuantizedVAEVanillaDecoder
-    from Engine.Models.QuantizedVAE.Tensorflow.QuantizedVAEVanillaEncoder import QuantizedVAEVanillaEncoder
+    from Engine.Models.QuantizedVAE.Tensorflow.QuantizedVAEVanillaDecoderTensorflow import QuantizedVAEVanillaDecoder
+    from Engine.Models.QuantizedVAE.Tensorflow.QuantizedVAEVanillaEncoderTensorflow import QuantizedVAEVanillaEncoder
 
 
 except ImportError as error:
@@ -67,7 +67,7 @@ DEFAULT_QUANTIZED_VAE_INITIALIZER_MEAN = 0
 DEFAULT_QUANTIZED_VAE_INITIALIZER_DEVIATION = 0.125
 
 
-class QuantizedVAEModel(QuantizedVAEVanillaEncoder, QuantizedVAEVanillaDecoder):
+class QuantizedVAEModelTensorflow(QuantizedVAEVanillaEncoder, QuantizedVAEVanillaDecoder):
 
     def __init__(self,
                  latent_dimension: int = DEFAULT_QUANTIZED_VAE_LATENT_DIMENSION,

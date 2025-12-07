@@ -40,7 +40,7 @@ except ImportError as error:
     sys.exit(-1)
 
 
-class Activations:
+class ActivationsTorch:
     """
     Helper class for applying activation functions in PyTorch models.
     This class provides a unified interface for various activation functions.

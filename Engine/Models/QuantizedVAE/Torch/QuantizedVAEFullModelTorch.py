@@ -60,7 +60,7 @@ DEFAULT_QUANTIZED_VAE_INITIALIZER_MEAN = 0
 DEFAULT_QUANTIZED_VAE_INITIALIZER_DEVIATION = 0.125
 
 
-class QuantizedVAEModel(QuantizedVAEVanillaEncoder, QuantizedVAEVanillaDecoder):
+class QuantizedVAEModelTorch(QuantizedVAEVanillaEncoder, QuantizedVAEVanillaDecoder):
 
     def __init__(self,
                  latent_dimension: int = DEFAULT_QUANTIZED_VAE_LATENT_DIMENSION,
@@ -155,7 +155,7 @@ class QuantizedVAEModel(QuantizedVAEVanillaEncoder, QuantizedVAEVanillaDecoder):
         self._encoder_model = self.get_encoder_model(self.output_shape_encoder)
         self._decoder_model = self.get_decoder_model(self.output_shape_encoder)
 
-        return QuantizedVAEFullModel(
+        return QuantizedVAEModelTorch(
             encoder=self._encoder_model,
             decoder=self._decoder_model,
             vector_quantizer=self._vector_quantizer_layer
@@ -232,11 +232,11 @@ class QuantizedVAEModel(QuantizedVAEVanillaEncoder, QuantizedVAEVanillaDecoder):
         self._decoder_last_layer_activation = last_layer_activation
 
 
-class QuantizedVAEFullModel(nn.Module):
+class QuantizedVAEModelTorch(nn.Module):
     """Complete VQ-VAE model combining encoder, quantizer, and decoder"""
 
     def __init__(self, encoder, decoder, vector_quantizer):
-        super(QuantizedVAEFullModel, self).__init__()
+        super(QuantizedVAEModelTorch, self).__init__()
         self.encoder = encoder
         self.decoder = decoder
         self.vector_quantizer = vector_quantizer

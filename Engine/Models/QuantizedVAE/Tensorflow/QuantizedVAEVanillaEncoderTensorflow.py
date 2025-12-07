@@ -30,20 +30,34 @@ __credits__ = ['Synthetic Ocean AI']
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+
 try:
     import sys
     import numpy
-    import torch
-    import torch.nn as nn
-    from typing import Any, Dict, Optional
+
+    from typing import Any
+    from typing import Dict
+    from typing import Optional
+    
+    from tensorflow.keras.layers import Dense
+    from tensorflow.keras.layers import Input
+    from tensorflow.keras.models import Model
+    from tensorflow.keras.models import Model
+
+    from tensorflow.keras.layers import Dropout
+    from tensorflow.keras.layers import Flatten
+
+    from tensorflow.keras.layers import Concatenate
+
     from Engine.Activations.Activations import Activations
+    from tensorflow.keras.initializers import RandomNormal
 
 except ImportError as error:
     print(error)
     sys.exit(-1)
 
 
-class QuantizedVAEVanillaEncoder(Activations, nn.Module):
+class QuantizedVAEVanillaEncoderTensorflow(Activations):
     """
     VanillaEncoder
 
@@ -117,8 +131,7 @@ class QuantizedVAEVanillaEncoder(Activations, nn.Module):
             dataset_type (dtype, optional): The data type of the input dataset. Defaults to numpy.float32.
             number_samples_per_class (dict, optional): Specifies the number of samples per class.
         """
-        Activations.__init__(self)
-        nn.Module.__init__(self)
+
 
         if not isinstance(latent_dimension, int) or latent_dimension <= 0:
             raise ValueError("latent_dimension must be a positive integer.")
@@ -140,6 +153,7 @@ class QuantizedVAEVanillaEncoder(Activations, nn.Module):
                 raise ValueError("Each element in number_neurons_encoder must be a positive integer.")
 
         if number_samples_per_class is not None:
+
             if not isinstance(number_samples_per_class, dict):
                 raise ValueError("number_samples_per_class must be a dictionary.")
 
@@ -154,7 +168,7 @@ class QuantizedVAEVanillaEncoder(Activations, nn.Module):
         self._encoder_number_neurons_encoder = number_neurons_encoder
         self._encoder_number_samples_per_class = number_samples_per_class
 
-    def get_encoder_model(self, input_shape: int):
+    def get_encoder_model(self, input_shape: int) -> Model:
         """
         Creates and returns the encoder model.
 
@@ -166,25 +180,42 @@ class QuantizedVAEVanillaEncoder(Activations, nn.Module):
             input_shape (tuple): The shape of the input data.
 
         Returns:
-            nn.Module: The encoder model which takes input data and labels and outputs the
+            keras.Model: The encoder model which takes input data and labels and outputs the
                           encoded latent representation and labels.
         """
 
         if not isinstance(input_shape, int) or input_shape <= 0:
             raise ValueError(f"Invalid value for output_shape: {input_shape}. It must be a positive integer.")
 
-        return EncoderModel(
-            input_shape=input_shape,
-            latent_dimension=self._encoder_latent_dimension,
-            number_classes=self._encoder_number_samples_per_class["number_classes"],
-            number_neurons=self._encoder_number_neurons_encoder,
-            activation_function=self._encoder_activation_function,
-            last_layer_activation=self._encoder_last_layer_activation,
-            dropout_rate=self._encoder_dropout_decay_rate_encoder,
-            initializer_mean=self._encoder_initializer_mean,
-            initializer_deviation=self._encoder_initializer_deviation,
-            add_activation_layer=self._add_activation_layer
-        )
+        # Initialize weights with a normal distribution
+        initialization = RandomNormal(mean=self._encoder_initializer_mean, stddev=self._encoder_initializer_deviation)
+
+        # Define input layers
+        neural_model_inputs = Input(shape=(input_shape,), dtype=self._encoder_dataset_type, name="first_input")
+        label_input = Input(shape=(self._encoder_number_samples_per_class["number_classes"],),
+                            dtype=self._encoder_dataset_type, name="second_input")
+
+        # Concatenate inputs
+        concatenate_input = Concatenate()([neural_model_inputs, label_input])
+
+        conditional_encoder = Dense(self._encoder_number_neurons_encoder[0],
+                                    kernel_initializer=initialization)(concatenate_input)
+        conditional_encoder = Dropout(self._encoder_dropout_decay_rate_encoder)(conditional_encoder)
+        conditional_encoder = self._add_activation_layer(conditional_encoder, self._encoder_activation_function)
+
+        # Iterate over specified dense layers
+        for number_neurons in self._encoder_number_neurons_encoder[1:]:
+            conditional_encoder = Dense(number_neurons, kernel_initializer=initialization)(conditional_encoder)
+            conditional_encoder = Dropout(self._encoder_dropout_decay_rate_encoder)(conditional_encoder)
+            conditional_encoder = self._add_activation_layer(conditional_encoder, self._encoder_activation_function)
+
+        # Map to the latent space
+        conditional_encoder = Dense(self._encoder_latent_dimension, kernel_initializer=initialization)(
+            conditional_encoder)
+        conditional_encoder = self._add_activation_layer(conditional_encoder, self._encoder_last_layer_activation)
+
+        # Return the encoder model
+        return Model([neural_model_inputs, label_input], [conditional_encoder, label_input], name="Encoder")
 
     @property
     def dropout_decay_rate_encoder(self) -> float:
@@ -221,71 +252,3 @@ class QuantizedVAEVanillaEncoder(Activations, nn.Module):
             raise ValueError("dropout_decay_rate_encoder must be a float between 0 and 1.")
 
         self._encoder_dropout_decay_rate_encoder = dropout_decay_rate_generator
-
-
-class EncoderModel(nn.Module):
-    """PyTorch implementation of the encoder network"""
-
-    def __init__(self, input_shape, latent_dimension, number_classes, number_neurons,
-                 activation_function, last_layer_activation, dropout_rate,
-                 initializer_mean, initializer_deviation, add_activation_layer):
-        super(EncoderModel, self).__init__()
-
-        self.add_activation_layer = add_activation_layer
-        self.activation_function = activation_function
-        self.last_layer_activation = last_layer_activation
-
-        # Calculate input size after concatenation
-        concat_size = input_shape + number_classes
-
-        # Build layers
-        self.layers = nn.ModuleList()
-        self.dropouts = nn.ModuleList()
-
-        # First layer
-        first_layer = nn.Linear(concat_size, number_neurons[0])
-        nn.init.normal_(first_layer.weight, mean=initializer_mean, std=initializer_deviation)
-        nn.init.zeros_(first_layer.bias)
-        self.layers.append(first_layer)
-        self.dropouts.append(nn.Dropout(dropout_rate))
-
-        # Hidden layers
-        for i in range(len(number_neurons) - 1):
-            layer = nn.Linear(number_neurons[i], number_neurons[i + 1])
-            nn.init.normal_(layer.weight, mean=initializer_mean, std=initializer_deviation)
-            nn.init.zeros_(layer.bias)
-            self.layers.append(layer)
-            self.dropouts.append(nn.Dropout(dropout_rate))
-
-        # Output layer
-        output_layer = nn.Linear(number_neurons[-1], latent_dimension)
-        nn.init.normal_(output_layer.weight, mean=initializer_mean, std=initializer_deviation)
-        nn.init.zeros_(output_layer.bias)
-        self.output_layer = output_layer
-
-    def forward(self, x):
-        """
-        Forward pass through encoder
-
-        Args:
-            x: List/tuple of [input_data, labels]
-
-        Returns:
-            List of [latent_representation, labels]
-        """
-        input_data, labels = x
-
-        # Concatenate input and labels
-        x = torch.cat([input_data, labels], dim=1)
-
-        # Pass through layers
-        for i, (layer, dropout) in enumerate(zip(self.layers, self.dropouts)):
-            x = layer(x)
-            x = dropout(x)
-            x = self.add_activation_layer(x, self.activation_function)
-
-        # Output layer
-        x = self.output_layer(x)
-        x = self.add_activation_layer(x, self.last_layer_activation)
-
-        return [x, labels]

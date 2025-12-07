@@ -40,7 +40,7 @@ except ImportError as error:
     sys.exit(-1)
 
 
-class VectorQuantizer(nn.Module):
+class VectorQuantizerTorch(nn.Module):
     """
     Vector Quantization layer for discrete latent representations.
 
@@ -51,7 +51,7 @@ class VectorQuantizer(nn.Module):
     """
 
     def __init__(self, num_embeddings, embedding_dim, commitment_cost=0.25, name="vector_quantizer"):
-        super(VectorQuantizer, self).__init__()
+        super(VectorQuantizerTorch, self).__init__()
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
         self.commitment_cost = commitment_cost

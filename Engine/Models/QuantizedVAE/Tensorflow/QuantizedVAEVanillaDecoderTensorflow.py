@@ -52,7 +52,7 @@ except ImportError as error:
     sys.exit(-1)
 
 
-class QuantizedVAEVanillaDecoder(Activations):
+class QuantizedVAEVanillaDecoderTensorflow(Activations):
     """
     VanillaDecoder
 

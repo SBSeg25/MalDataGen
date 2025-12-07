@@ -42,7 +42,7 @@ except ImportError as error:
     sys.exit(-1)
 
 
-class QuantizedVAEVanillaDecoder(Activations, nn.Module):
+class QuantizedVAEVanillaDecoderTorch(Activations, nn.Module):
     """
     VanillaDecoder
 
