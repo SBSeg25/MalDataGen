@@ -40,8 +40,8 @@ try:
     from typing import Optional
     from typing import Any
 
-    from Engine.Models.Autoencoder.VanillaDecoderTorch import VanillaDecoderTorch
-    from Engine.Models.Autoencoder.VanillaEncoderTorch import VanillaEncoderTorch
+    from Engine.Models.Autoencoder.Torch.VanillaDecoderTorch import VanillaDecoderTorch
+    from Engine.Models.Autoencoder.Torch.VanillaEncoderTorch import VanillaEncoderTorch
 
     # Detecta o framework a partir da variável de ambiente
     ML_FRAMEWORK = os.getenv('ML_FRAMEWORK', 'pytorch').lower()

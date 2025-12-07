@@ -60,7 +60,7 @@ try:
     from Engine.Callbacks.CallbackResources import ResourceMonitorCallback
 
     from Engine.Models.Adversarial.Tensorflow.AdversarialModelTensorflow import AdversarialModel
-    from Engine.Models.Autoencoder.ModelAutoencoder import AutoencoderModel
+    from Engine.Models.Autoencoder.Tensorflow.ModelAutoencoder import AutoencoderModel
 
     from Engine.Models.WassersteinGP.ModelWassersteinGPGAN import WassersteinGPModel
     from Engine.Models.QuantizedVAE.ModelQuantizedVAE import QuantizedVAEModel
@@ -69,7 +69,7 @@ try:
     from Engine.Models.DiffusionKernel.DiffusionModelUnet import UNetModelKernel
 
     from Engine.Algorithms.Wasserstein.AlgorithmWassersteinGAN import WassersteinAlgorithm
-    from Engine.Models.Wasserstein.ModelWassersteinGAN import WassersteinModel
+    from Engine.Models.Wasserstein.Tensorflow.ModelWassersteinGAN import WassersteinModel
 
     from Engine.Algorithms.RandomNoise.AlgorithmRandomNoise import RandomNoiseAlgorithm
     from Engine.Algorithms.Adversarial.AdversarialAlgorithm import AdversarialAlgorithm

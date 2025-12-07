@@ -9,7 +9,7 @@ __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
 from Engine.Algorithms.Autoencoder.AutoencoderAlgorithmTorch import AutoencoderAlgorithmTorch
-from Engine.Models.Autoencoder.ModelAutoencoderTorch import AutoencoderModelTorch
+from Engine.Models.Autoencoder.Torch.ModelAutoencoderTorch import AutoencoderModelTorch
 
 # MIT License
 #
@@ -53,7 +53,7 @@ try:
     from tensorflow.python.keras.losses import BinaryCrossentropy
 
     from Engine.Algorithms.Autoencoder.AutoencoderAlgorithm import AutoencoderAlgorithm
-    from Engine.Models.Autoencoder.ModelAutoencoder import AutoencoderModel
+    from Engine.Models.Autoencoder.Tensorflow.ModelAutoencoder import AutoencoderModel
 
 except ImportError as error:
     logging.error(error)

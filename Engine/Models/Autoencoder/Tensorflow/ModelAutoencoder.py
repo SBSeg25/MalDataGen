@@ -40,8 +40,8 @@ try:
     from typing import Optional
     from typing import Any
 
-    from Engine.Models.Autoencoder.VanillaDecoder import VanillaDecoder
-    from Engine.Models.Autoencoder.VanillaEncoder import VanillaEncoder
+    from Engine.Models.Autoencoder.Tensorflow.VanillaDecoder import VanillaDecoder
+    from Engine.Models.Autoencoder.Tensorflow.VanillaEncoder import VanillaEncoder
 
     # Detecta o framework a partir da variável de ambiente
     ML_FRAMEWORK = os.getenv('ML_FRAMEWORK', 'tensorflow').lower()

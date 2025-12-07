@@ -8,8 +8,8 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/12/07'
 __credits__ = ['Synthetic Ocean AI']
 
-from Engine.Models.Wasserstein.VanillaDiscriminatorTorch import VanillaDiscriminatorTorch
-from Engine.Models.Wasserstein.VanillaGeneratorTorch import VanillaGeneratorTorch
+from Engine.Models.Wasserstein.Torch.VanillaDiscriminatorTorch import VanillaDiscriminatorTorch
+from Engine.Models.Wasserstein.Torch.VanillaGeneratorTorch import VanillaGeneratorTorch
 
 # MIT License
 #

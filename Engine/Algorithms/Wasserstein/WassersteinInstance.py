@@ -9,7 +9,7 @@ __last_update__ = '2025/12/07'
 __credits__ = ['Synthetic Ocean AI']
 
 from Engine.Algorithms.Wasserstein.AlgorithmWassersteinGANTorch import AlgorithmWassersteinModelTorch
-from Engine.Models.Wasserstein.ModelWassersteinGANTorch import WassersteinModelTorch
+from Engine.Models.Wasserstein.Torch.ModelWassersteinGANTorch import WassersteinModelTorch
 
 # MIT License
 #
