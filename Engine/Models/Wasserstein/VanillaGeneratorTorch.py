@@ -301,8 +301,7 @@ class VanillaGeneratorTorch(nn.Module):
         Raises:
             ValueError: If the activation function is not supported.
         """
-        activation_name = activation_name.lower().replace('_', '')
-
+        activation_name = activation_name.strip().lower().replace('_', '')
         activation_map = {
             'relu': nn.ReLU(),
             'leakyrelu': nn.LeakyReLU(alpha),

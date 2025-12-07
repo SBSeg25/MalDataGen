@@ -195,6 +195,8 @@ class VanillaDiscriminatorTorch(nn.Module):
             dense_layer_sizes_d: List[int],
             dataset_type: torch.dtype = torch.float32,
             number_samples_per_class: Optional[Dict[str, int]] = None) -> None:
+        print("[DEBUG LOADED FILE] Discriminator loaded from:", __file__)
+
         """
         Initializes the VanillaDiscriminatorTorch.
 
@@ -207,6 +209,7 @@ class VanillaDiscriminatorTorch(nn.Module):
             output_shape (int): Dimensionality of the output data.
             activation_function (str): Activation function for all hidden layers.
             initializer_mean (float): Mean of the normal distribution used to initialize weights.
+            
             initializer_deviation (float): Standard deviation of the normal distribution.
             dropout_decay_rate_d (float): Dropout rate applied to dense layers (0 to 1).
             last_layer_activation (str): Activation function applied to the final output layer.
@@ -298,7 +301,8 @@ class VanillaDiscriminatorTorch(nn.Module):
         Raises:
             ValueError: If the activation function is not supported.
         """
-        activation_name = activation_name.lower().replace('_', '')
+        print(f"[DEBUG] Activation received: {repr(activation_name)}")
+        activation_name = activation_name.strip().lower().replace('_', '')
 
         activation_map = {
             'relu': nn.ReLU(),
