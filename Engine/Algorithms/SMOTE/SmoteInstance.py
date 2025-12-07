@@ -69,7 +69,7 @@ try:
     from Engine.Models.DiffusionKernel.DiffusionModelUnet import UNetModelKernel
 
     from Engine.Algorithms.Wasserstein.AlgorithmWassersteinGAN import WassersteinAlgorithm
-    from Engine.Models.Wasserstein.Tensorflow.ModelWassersteinGAN import WassersteinModel
+    from Engine.Models.Wasserstein.Tensorflow.ModelWassersteinGANTensorflow import WassersteinModel
 
     from Engine.Algorithms.RandomNoise.AlgorithmRandomNoise import RandomNoiseAlgorithm
     from Engine.Algorithms.Adversarial.AdversarialAlgorithm import AdversarialAlgorithm
