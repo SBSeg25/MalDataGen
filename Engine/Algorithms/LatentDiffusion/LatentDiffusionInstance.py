@@ -8,11 +8,6 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
-from Engine.Algorithms.LatentDiffusion.AlgorithmVAELatentDiffusion import VAELatentDiffusionAlgorithm
-from Engine.Algorithms.LatentDiffusion.GaussianLatentDiffusion import GaussianDiffusion
-from Engine.Models.LatentDiffusion.DiffusionModelUnet import UNetModel
-from Engine.Models.LatentDiffusion.VariationalAutoencoderModel import VariationalModelDiffusion
-from Engine.Models.VariationalAutoencoder.VariationalAutoencoderModel import VariationalModel
 
 # MIT License
 #
@@ -54,7 +49,11 @@ try:
 
     from tensorflow.python.keras.losses import BinaryCrossentropy
 
-
+    from Engine.Algorithms.LatentDiffusion.AlgorithmVAELatentDiffusion import VAELatentDiffusionAlgorithm
+    from Engine.Algorithms.LatentDiffusion.GaussianLatentDiffusion import GaussianDiffusion
+    from Engine.Models.LatentDiffusion.DiffusionModelUnet import UNetModel
+    from Engine.Models.LatentDiffusion.VariationalAutoencoderModel import VariationalModelDiffusion
+    from Engine.Models.VariationalAutoencoder.VariationalAutoencoderModel import VariationalModel
 
 except ImportError as error:
     logging.error(error)

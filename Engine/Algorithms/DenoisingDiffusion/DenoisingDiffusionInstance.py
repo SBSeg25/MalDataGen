@@ -8,9 +8,6 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
-from Engine.Algorithms.DenoisingDiffusion.AlgorithmDenoisingDiffusion import DenoisingDiffusionAlgorithm
-from Engine.Algorithms.DenoisingDiffusion.GaussianDenoisingDiffusion import GaussianDiffusion
-from Engine.Models.DenoisingDiffusion.DiffusionModelUnet import UNetDenoisingModel
 
 # MIT License
 #
@@ -51,6 +48,10 @@ try:
     from tensorflow.python.keras.losses import MeanSquaredError
 
     from tensorflow.python.keras.losses import BinaryCrossentropy
+
+    from Engine.Algorithms.DenoisingDiffusion.AlgorithmDenoisingDiffusion import DenoisingDiffusionAlgorithm
+    from Engine.Algorithms.DenoisingDiffusion.GaussianDenoisingDiffusion import GaussianDiffusion
+    from Engine.Models.DenoisingDiffusion.DiffusionModelUnet import UNetDenoisingModel
 
 except ImportError as error:
     logging.error(error)

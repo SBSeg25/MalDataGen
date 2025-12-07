@@ -16,10 +16,10 @@ from Engine.Algorithms.QuantizedVAE.QuantizedVAEInstance import QuantizedVAEInst
 from Engine.Algorithms.RandomNoise.AlgorithmRandomNoise import RandomNoiseAlgorithm
 from Engine.Callbacks.CallbackModel import ModelMonitorCallback
 from Engine.Callbacks.CallbackResources import ResourceMonitorCallback
-from Engine.Models.Smote.SmoteInstance import SmoteInstance
-from Engine.Models.VariationalAutoencoder.VariationalAutoencoderInstance import VariationalAutoencoderInstance
-from Engine.Models.Wasserstein.WassersteinInstance import WassersteinInstance
-from Engine.Models.WassersteinGP.WassersteinGPInstance import WassersteinGPInstance
+from Engine.Algorithms.SMOTE.SmoteInstance import SmoteInstance
+from Engine.Algorithms.VariationalAutoencoder.VariationalAutoencoderInstance import VariationalAutoencoderInstance
+from Engine.Algorithms.Wasserstein.WassersteinInstance import WassersteinInstance
+from Engine.Algorithms.WassersteinGP.WassersteinGPInstance import WassersteinGPInstance
 
 # MIT License
 #
