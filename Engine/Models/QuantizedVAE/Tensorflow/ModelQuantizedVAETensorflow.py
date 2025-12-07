@@ -8,6 +8,9 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
+from Engine.Layers.VectorQuantizerLayer import VectorQuantizer
+from Engine.Models.QuantizedVAE.Tensorflow.QuantizedVAEVanillaDecoderTensorflow import QuantizedVAEVanillaDecoderTensorflow
+from Engine.Models.QuantizedVAE.Tensorflow.QuantizedVAEVanillaEncoderTensorflow import QuantizedVAEVanillaEncoderTensorflow
 
 # MIT License
 #
@@ -34,7 +37,7 @@ __credits__ = ['Synthetic Ocean AI']
 try:
     import sys
     import numpy
-    
+
     from typing import List
     from typing import Tuple
     from typing import Optional
@@ -43,11 +46,6 @@ try:
     from tensorflow.keras.layers import Input
     from tensorflow.keras.models import Model
     from tensorflow.keras.layers import Concatenate
-
-    from Engine.Layers.VectorQuantizerLayer import VectorQuantizer
-
-    from Engine.Models.QuantizedVAE.Tensorflow.QuantizedVAEVanillaDecoderTensorflow import QuantizedVAEVanillaDecoder
-    from Engine.Models.QuantizedVAE.Tensorflow.QuantizedVAEVanillaEncoderTensorflow import QuantizedVAEVanillaEncoder
 
 
 except ImportError as error:
@@ -67,7 +65,7 @@ DEFAULT_QUANTIZED_VAE_INITIALIZER_MEAN = 0
 DEFAULT_QUANTIZED_VAE_INITIALIZER_DEVIATION = 0.125
 
 
-class QuantizedVAEModelTensorflow(QuantizedVAEVanillaEncoder, QuantizedVAEVanillaDecoder):
+class QuantizedVAEModelTensorflow(QuantizedVAEVanillaEncoderTensorflow, QuantizedVAEVanillaDecoderTensorflow):
 
     def __init__(self,
                  latent_dimension: int = DEFAULT_QUANTIZED_VAE_LATENT_DIMENSION,
@@ -92,32 +90,32 @@ class QuantizedVAEModelTensorflow(QuantizedVAEVanillaEncoder, QuantizedVAEVanill
 
         if not isinstance(latent_dimension, int) or latent_dimension <= 0:
             raise ValueError("latent_dimension must be a positive integer.")
-    
+
         if not isinstance(activation_function, str):
             raise ValueError("activation_function must be a string.")
-    
+
         if not isinstance(initializer_mean, (float, int)):
             raise ValueError("initializer_mean must be a float or integer.")
-    
+
         if not isinstance(initializer_deviation, (float, int)):
             raise ValueError("initializer_deviation must be a float or integer.")
-    
+
         if not isinstance(dropout_decay_encoder, (float, int)) or not (0 <= dropout_decay_encoder <= 1):
             raise ValueError("dropout_decay_encoder must be a float or integer between 0 and 1.")
-    
+
         if not isinstance(dropout_decay_decoder, (float, int)) or not (0 <= dropout_decay_decoder <= 1):
             raise ValueError("dropout_decay_decoder must be a float or integer between 0 and 1.")
-    
+
         if not isinstance(last_layer_activation, str):
             raise ValueError("last_layer_activation must be a string.")
-    
+
         if not isinstance(number_neurons_encoder, list) or not all(isinstance(x, int) for x in number_neurons_encoder):
             raise ValueError("number_neurons_encoder must be a list of integers.")
-    
+
         if not isinstance(number_neurons_decoder, list) or not all(isinstance(x, int) for x in number_neurons_decoder):
             raise ValueError("number_neurons_decoder must be a list of integers.")
 
-        QuantizedVAEVanillaDecoder.__init__(self,
+        QuantizedVAEVanillaDecoderTensorflow.__init__(self,
                                             latent_dimension,
                                             output_shape,
                                             activation_function,
@@ -129,7 +127,7 @@ class QuantizedVAEModelTensorflow(QuantizedVAEVanillaEncoder, QuantizedVAEVanill
                                             dataset_type,
                                             number_samples_per_class)
 
-        QuantizedVAEVanillaEncoder.__init__(self,
+        QuantizedVAEVanillaEncoderTensorflow.__init__(self,
                                             latent_dimension,
                                             output_shape,
                                             activation_function,

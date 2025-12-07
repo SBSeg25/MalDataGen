@@ -8,6 +8,9 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
+from Engine.Algorithms.QuantizedVAE.AlgorithmQuantizedVAETorch import QuantizedVAEAlgorithmTorch
+from Engine.Models.QuantizedVAE.Torch.QuantizedVAEVanillaModelTorch import QuantizedVAEModelTorch
+
 # MIT License
 #
 # Copyright (c) 2025 Synthetic Ocean AI
@@ -36,9 +39,6 @@ try:
     import logging
     import torch
     import torch.nn.functional as F
-
-    from Engine.Algorithms.QuantizedVAE.AlgorithmQuantizedVAE import QuantizedVAEAlgorithm
-    from Engine.Models.QuantizedVAE.ModelQuantizedVAE import QuantizedVAEModel
 
 except ImportError as error:
     logging.error(error)
@@ -132,7 +132,7 @@ class QuantizedVAEInstance:
         """
 
         # Quantized VAE Model setup for Encoder, Decoder, and Quantization
-        self._quantized_vae_model = QuantizedVAEModel(
+        self._quantized_vae_model = QuantizedVAEModelTorch(
             latent_dimension=self._quantized_vae_latent_dimension,
             number_embeddings=self._quantized_vae_number_embeddings,
             output_shape=input_shape,
@@ -151,7 +151,7 @@ class QuantizedVAEInstance:
         quantized_model = self._quantized_vae_model.get_quantized_model()
 
         # Quantized VAE Algorithm setup for training and model operations
-        self._quantized_vae_algorithm = QuantizedVAEAlgorithm(
+        self._quantized_vae_algorithm = QuantizedVAEAlgorithmTorch(
             encoder_model=self._quantized_vae_model.get_encoder(),
             decoder_model=self._quantized_vae_model.get_decoder(),
             quantized_vae_model=quantized_model,

@@ -45,7 +45,7 @@ except ImportError as error:
     sys.exit(-1)
 
 
-class QuantizedVAEAlgorithm:
+class QuantizedVAEAlgorithmTorch:
     """
     Implements a Vector Quantized Variational Autoencoder (VQ-VAE) for discrete latent
     representation learning and generation. This model combines an encoder, decoder,
