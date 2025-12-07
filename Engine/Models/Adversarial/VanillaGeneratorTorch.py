@@ -182,11 +182,11 @@ class VanillaGeneratorTorch(nn.Module):
         Returns:
             nn.Module: PyTorch activation module.
         """
-        activation_name = activation_name.lower()
+        activation_name = activation_name.lower().replace('_', '')
 
         activation_map = {
             'relu': nn.ReLU(),
-            'leaky_relu': nn.LeakyReLU(0.2),
+            'leakyrelu': nn.LeakyReLU(0.2),
             'tanh': nn.Tanh(),
             'sigmoid': nn.Sigmoid(),
             'softmax': nn.Softmax(dim=1),

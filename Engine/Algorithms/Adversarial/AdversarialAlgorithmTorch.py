@@ -185,8 +185,11 @@ class AdversarialAlgorithmTorch(nn.Module):
         self._latent_dimension = latent_dimension
         self._optimizer_generator = None
         self._optimizer_discriminator = None
-        self._loss_generator = loss_generator
-        self._loss_discriminator = loss_discriminator
+
+        # Convert loss functions to PyTorch if needed
+        self._loss_generator = self._convert_loss_to_pytorch(loss_generator)
+        self._loss_discriminator = self._convert_loss_to_pytorch(loss_discriminator)
+
         self._smoothing_rate = smoothing_rate
         self._latent_mean_distribution = latent_mean_distribution
         self._latent_stander_deviation = latent_stander_deviation
@@ -199,24 +202,92 @@ class AdversarialAlgorithmTorch(nn.Module):
         self._generator.to(self.device)
         self._discriminator.to(self.device)
 
+    def _convert_loss_to_pytorch(self, loss):
+        """
+        Converts a loss function to PyTorch if it's from TensorFlow/Keras.
+
+        Args:
+            loss: Loss function (can be PyTorch nn.Module, TensorFlow loss, or string).
+
+        Returns:
+            nn.Module: PyTorch loss function.
+        """
+        # If it's already a PyTorch loss, return it
+        if isinstance(loss, nn.Module):
+            return loss
+
+        # If it's a string, convert to PyTorch loss
+        if isinstance(loss, str):
+            loss_name = loss.lower()
+            loss_map = {
+                'binary_crossentropy': nn.BCELoss(),
+                'bce': nn.BCELoss(),
+                'mse': nn.MSELoss(),
+                'mean_squared_error': nn.MSELoss(),
+                'mae': nn.L1Loss(),
+                'mean_absolute_error': nn.L1Loss(),
+            }
+            if loss_name in loss_map:
+                return loss_map[loss_name]
+
+        # If it's a TensorFlow/Keras loss or unknown type, default to BCELoss
+        logging.warning(f"Non-PyTorch loss function detected: {type(loss)}. Using BCELoss() as default.")
+        return nn.BCELoss()
+
     def compile(self, optimizer_generator, optimizer_discriminator,
                 loss_generator=None, loss_discriminator=None):
         """
         Compiles the adversarial algorithm by setting optimizers and loss functions.
 
         Args:
-            optimizer_generator: Optimizer for the generator.
-            optimizer_discriminator: Optimizer for the discriminator.
+            optimizer_generator: Optimizer for the generator (PyTorch optimizer or learning rate).
+            optimizer_discriminator: Optimizer for the discriminator (PyTorch optimizer or learning rate).
             loss_generator (optional): Generator's loss function (overrides __init__ if provided).
             loss_discriminator (optional): Discriminator's loss function (overrides __init__ if provided).
         """
-        self._optimizer_generator = optimizer_generator
-        self._optimizer_discriminator = optimizer_discriminator
+        # Handle optimizer_generator
+        if isinstance(optimizer_generator, (int, float)):
+            # If a learning rate is passed, create Adam optimizer
+            self._optimizer_generator = torch.optim.Adam(
+                self._generator.parameters(),
+                lr=optimizer_generator
+            )
+        elif hasattr(optimizer_generator, 'zero_grad'):
+            # It's a PyTorch optimizer
+            self._optimizer_generator = optimizer_generator
+        else:
+            # It's likely a TensorFlow/Keras optimizer, create PyTorch Adam with default lr
+            logging.warning("Non-PyTorch optimizer detected for generator. Creating default Adam optimizer.")
+            self._optimizer_generator = torch.optim.Adam(
+                self._generator.parameters(),
+                lr=0.0002,
+                betas=(0.5, 0.999)
+            )
 
+        # Handle optimizer_discriminator
+        if isinstance(optimizer_discriminator, (int, float)):
+            # If a learning rate is passed, create Adam optimizer
+            self._optimizer_discriminator = torch.optim.Adam(
+                self._discriminator.parameters(),
+                lr=optimizer_discriminator
+            )
+        elif hasattr(optimizer_discriminator, 'zero_grad'):
+            # It's a PyTorch optimizer
+            self._optimizer_discriminator = optimizer_discriminator
+        else:
+            # It's likely a TensorFlow/Keras optimizer, create PyTorch Adam with default lr
+            logging.warning("Non-PyTorch optimizer detected for discriminator. Creating default Adam optimizer.")
+            self._optimizer_discriminator = torch.optim.Adam(
+                self._discriminator.parameters(),
+                lr=0.0002,
+                betas=(0.5, 0.999)
+            )
+
+        # Handle loss functions - convert to PyTorch if needed
         if loss_generator is not None:
-            self._loss_generator = loss_generator
+            self._loss_generator = self._convert_loss_to_pytorch(loss_generator)
         if loss_discriminator is not None:
-            self._loss_discriminator = loss_discriminator
+            self._loss_discriminator = self._convert_loss_to_pytorch(loss_discriminator)
 
     def train_step(self, batch: Tuple[torch.Tensor, torch.Tensor]) -> Dict[str, float]:
         """
@@ -311,7 +382,8 @@ class AdversarialAlgorithmTorch(nn.Module):
         return {"loss_d": loss_d.item(), "loss_g": loss_g.item()}
 
     def fit(self, x=None, y=None, epochs=1, batch_size=32, verbose=1,
-            validation_data=None, shuffle=True, **kwargs):
+            validation_data=None, shuffle=True, optimizer_generator=None,
+            optimizer_discriminator=None, learning_rate=0.0002, **kwargs):
         """
         Train the adversarial model.
 
@@ -323,12 +395,36 @@ class AdversarialAlgorithmTorch(nn.Module):
             verbose (int): Verbosity level (0=silent, 1=progress bar).
             validation_data: Validation data (not implemented yet).
             shuffle (bool): Whether to shuffle training data.
+            optimizer_generator: Optional PyTorch optimizer for generator.
+            optimizer_discriminator: Optional PyTorch optimizer for discriminator.
+            learning_rate (float): Learning rate if optimizers not provided.
             **kwargs: Additional arguments.
 
         Returns:
             History: Training history object containing loss values.
         """
         from torch.utils.data import DataLoader, TensorDataset
+
+        # Create optimizers if not already set
+        if self._optimizer_generator is None:
+            if optimizer_generator is not None:
+                self._optimizer_generator = optimizer_generator
+            else:
+                self._optimizer_generator = torch.optim.Adam(
+                    self._generator.parameters(),
+                    lr=learning_rate,
+                    betas=(0.5, 0.999)
+                )
+
+        if self._optimizer_discriminator is None:
+            if optimizer_discriminator is not None:
+                self._optimizer_discriminator = optimizer_discriminator
+            else:
+                self._optimizer_discriminator = torch.optim.Adam(
+                    self._discriminator.parameters(),
+                    lr=learning_rate,
+                    betas=(0.5, 0.999)
+                )
 
         # Handle different input formats
         if isinstance(x, DataLoader):
@@ -532,11 +628,23 @@ class AdversarialAlgorithmTorch(nn.Module):
     def set_optimizer_discriminator(self, optimizer_discriminator):
         self._optimizer_discriminator = optimizer_discriminator
 
-    def set_loss_generator(self, loss_generator: nn.Module):
-        self._loss_generator = loss_generator
+    def set_loss_generator(self, loss_generator):
+        """
+        Sets the loss function for the generator.
 
-    def set_loss_discriminator(self, loss_discriminator: nn.Module):
-        self._loss_discriminator = loss_discriminator
+        Args:
+            loss_generator: Loss function (PyTorch nn.Module, TensorFlow loss, or string).
+        """
+        self._loss_generator = self._convert_loss_to_pytorch(loss_generator)
+
+    def set_loss_discriminator(self, loss_discriminator):
+        """
+        Sets the loss function for the discriminator.
+
+        Args:
+            loss_discriminator: Loss function (PyTorch nn.Module, TensorFlow loss, or string).
+        """
+        self._loss_discriminator = self._convert_loss_to_pytorch(loss_discriminator)
 
     @property
     def generator(self):

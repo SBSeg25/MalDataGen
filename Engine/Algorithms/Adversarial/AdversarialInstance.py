@@ -9,7 +9,9 @@ __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
 from Engine.Algorithms.Adversarial.AdversarialAlgorithm import AdversarialAlgorithm
+from Engine.Algorithms.Adversarial.AdversarialAlgorithmTorch import AdversarialAlgorithmTorch
 from Engine.Models.Adversarial.AdversarialModel import AdversarialModel
+from Engine.Models.Adversarial.AdversarialModelTorch import AdversarialModelTorch
 
 # MIT License
 #
@@ -154,7 +156,7 @@ class AdversarialInstance:
         """
 
         # Adversarial Model setup for Generator and Discriminator
-        self._adversarial_model = AdversarialModel(latent_dimension=self._adversarial_latent_dimension,
+        self._adversarial_model = AdversarialModelTorch(latent_dimension=self._adversarial_latent_dimension,
                                                    output_shape=input_shape,
                                                    activation_function=self._adversarial_activation_function,
                                                    initializer_mean=self._adversarial_initializer_mean,
@@ -168,7 +170,7 @@ class AdversarialInstance:
                                                    number_samples_per_class = self._number_samples_per_class)
 
         # Adversarial Algorithm setup for training and model operations
-        self._adversarial_algorithm = AdversarialAlgorithm(generator_model=self._adversarial_model.get_generator(),
+        self._adversarial_algorithm = AdversarialAlgorithmTorch(generator_model=self._adversarial_model.get_generator(),
                                                            discriminator_model=self._adversarial_model.get_discriminator(),
                                                            latent_dimension=self._adversarial_latent_dimension,
                                                            loss_generator=self._adversarial_loss_generator,
@@ -203,8 +205,8 @@ class AdversarialInstance:
         self._get_adversarial_model(input_shape)
 
         # Print the model summaries for the generator and discriminator
-        self._adversarial_model.get_generator().summary()
-        self._adversarial_model.get_discriminator().summary()
+        self._adversarial_model.get_generator()
+        self._adversarial_model.get_discriminator()
 
         # Set up optimizers for the generator and discriminator
         generator_optimizer = keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5, beta_2=0.9)

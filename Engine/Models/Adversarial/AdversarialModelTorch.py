@@ -54,12 +54,13 @@ DEFAULT_ADVERSARIAL_DENSE_LAYERS_SETTINGS_G = [128]
 DEFAULT_ADVERSARIAL_DENSE_LAYERS_SETTINGS_D = [128]
 
 
-class AdversarialModelTorch(VanillaGeneratorTorch, VanillaDiscriminatorTorch):
+class AdversarialModelTorch:
     """
     AdversarialModelTorch
 
-    Combines a generator and a discriminator in a unified adversarial model for PyTorch,
-    inheriting from `VanillaGeneratorTorch` and `VanillaDiscriminatorTorch` classes.
+    Combines a generator and a discriminator in a unified adversarial model for PyTorch.
+    Uses composition instead of multiple inheritance to avoid MRO conflicts.
+
     This class allows for seamless integration of both models in a Generative Adversarial
     Network (GAN) framework, with methods for initializing, configuring, and interacting
     with the generator and discriminator networks.
@@ -131,7 +132,7 @@ class AdversarialModelTorch(VanillaGeneratorTorch, VanillaDiscriminatorTorch):
                  dataset_type: torch.dtype = torch.float32,
                  number_samples_per_class: Optional[Dict] = None):
         """
-        Initializes the AdversarialModelTorch by constructing both the generator and discriminator networks.
+        Initializes the AdversarialModelTorch by creating separate generator and discriminator instances.
 
         Args:
             latent_dimension (int):
@@ -174,31 +175,51 @@ class AdversarialModelTorch(VanillaGeneratorTorch, VanillaDiscriminatorTorch):
         if dense_layer_sizes_g is None:
             dense_layer_sizes_g = DEFAULT_ADVERSARIAL_DENSE_LAYERS_SETTINGS_G.copy()
 
-        # Initialize generator using parent class constructor
-        VanillaGeneratorTorch.__init__(self,
-                                       latent_dimension,
-                                       output_shape,
-                                       activation_function,
-                                       initializer_mean,
-                                       initializer_deviation,
-                                       dropout_decay_rate_g,
-                                       last_layer_activation,
-                                       dense_layer_sizes_g,
-                                       dataset_type,
-                                       number_samples_per_class)
+        # Create generator instance using composition
+        self._generator_builder = VanillaGeneratorTorch(
+            latent_dimension=latent_dimension,
+            output_shape=output_shape,
+            activation_function=activation_function,
+            initializer_mean=initializer_mean,
+            initializer_deviation=initializer_deviation,
+            dropout_decay_rate_g=dropout_decay_rate_g,
+            last_layer_activation=last_layer_activation,
+            dense_layer_sizes_g=dense_layer_sizes_g,
+            dataset_type=dataset_type,
+            number_samples_per_class=number_samples_per_class
+        )
 
-        # Initialize discriminator using parent class constructor
-        VanillaDiscriminatorTorch.__init__(self,
-                                           latent_dimension,
-                                           output_shape,
-                                           activation_function,
-                                           initializer_mean,
-                                           initializer_deviation,
-                                           dropout_decay_rate_d,
-                                           last_layer_activation,
-                                           dense_layer_sizes_d,
-                                           dataset_type,
-                                           number_samples_per_class)
+        # Create discriminator instance using composition
+        self._discriminator_builder = VanillaDiscriminatorTorch(
+            latent_dimension=latent_dimension,
+            output_shape=output_shape,
+            activation_function=activation_function,
+            initializer_mean=initializer_mean,
+            initializer_deviation=initializer_deviation,
+            dropout_decay_rate_d=dropout_decay_rate_d,
+            last_layer_activation=last_layer_activation,
+            dense_layer_sizes_d=dense_layer_sizes_d,
+            dataset_type=dataset_type,
+            number_samples_per_class=number_samples_per_class
+        )
+
+    def get_generator(self):
+        """
+        Build and return the generator model.
+
+        Returns:
+            ConditionalGenerator: The generator model.
+        """
+        return self._generator_builder.get_generator()
+
+    def get_discriminator(self):
+        """
+        Build and return the discriminator model.
+
+        Returns:
+            ConditionalDiscriminator: The discriminator model.
+        """
+        return self._discriminator_builder.get_discriminator()
 
     def get_dense_generator_model(self) -> Optional[torch.nn.Module]:
         """
@@ -207,7 +228,7 @@ class AdversarialModelTorch(VanillaGeneratorTorch, VanillaDiscriminatorTorch):
         Returns:
             Optional[torch.nn.Module]: The dense model of the generator, or None if not built.
         """
-        return self._generator_model_dense
+        return self._generator_builder.get_dense_generator_model()
 
     def get_dense_discriminator_model(self) -> Optional[torch.nn.Module]:
         """
@@ -216,7 +237,7 @@ class AdversarialModelTorch(VanillaGeneratorTorch, VanillaDiscriminatorTorch):
         Returns:
             Optional[torch.nn.Module]: The dense model of the discriminator, or None if not built.
         """
-        return self._discriminator_model_dense
+        return self._discriminator_builder.get_dense_discriminator_model()
 
     def set_latent_dimension(self, latent_dimension: int) -> None:
         """
@@ -231,8 +252,8 @@ class AdversarialModelTorch(VanillaGeneratorTorch, VanillaDiscriminatorTorch):
         if not isinstance(latent_dimension, int) or latent_dimension <= 0:
             raise ValueError("latent_dimension must be a positive integer.")
 
-        self._generator_latent_dimension = latent_dimension
-        self._discriminator_latent_dimension = latent_dimension
+        self._generator_builder._generator_latent_dimension = latent_dimension
+        self._discriminator_builder._discriminator_latent_dimension = latent_dimension
 
     def set_output_shape(self, output_shape: int) -> None:
         """
@@ -247,8 +268,8 @@ class AdversarialModelTorch(VanillaGeneratorTorch, VanillaDiscriminatorTorch):
         if not isinstance(output_shape, int) or output_shape <= 0:
             raise ValueError("output_shape must be a positive integer.")
 
-        self._generator_output_shape = output_shape
-        self._discriminator_output_shape = output_shape
+        self._generator_builder._generator_output_shape = output_shape
+        self._discriminator_builder._discriminator_output_shape = output_shape
 
     def set_activation_function(self, activation_function: str) -> None:
         """
@@ -263,8 +284,8 @@ class AdversarialModelTorch(VanillaGeneratorTorch, VanillaDiscriminatorTorch):
         if not isinstance(activation_function, str):
             raise ValueError("activation_function must be a string.")
 
-        self._generator_activation_function = activation_function
-        self._discriminator_activation_function = activation_function
+        self._generator_builder._generator_activation_function = activation_function
+        self._discriminator_builder._discriminator_activation_function = activation_function
 
     def set_last_layer_activation(self, last_layer_activation: str) -> None:
         """
@@ -279,8 +300,8 @@ class AdversarialModelTorch(VanillaGeneratorTorch, VanillaDiscriminatorTorch):
         if not isinstance(last_layer_activation, str):
             raise ValueError("last_layer_activation must be a string.")
 
-        self._generator_last_layer_activation = last_layer_activation
-        self._discriminator_last_layer_activation = last_layer_activation
+        self._generator_builder._generator_last_layer_activation = last_layer_activation
+        self._discriminator_builder._discriminator_last_layer_activation = last_layer_activation
 
     def set_dataset_type(self, dataset_type: torch.dtype) -> None:
         """
@@ -289,8 +310,8 @@ class AdversarialModelTorch(VanillaGeneratorTorch, VanillaDiscriminatorTorch):
         Args:
             dataset_type (torch.dtype): New dataset type.
         """
-        self._generator_dataset_type = dataset_type
-        self._discriminator_dataset_type = dataset_type
+        self._generator_builder._generator_dataset_type = dataset_type
+        self._discriminator_builder._discriminator_dataset_type = dataset_type
 
     def set_initializer_mean(self, initializer_mean: float) -> None:
         """
@@ -305,8 +326,8 @@ class AdversarialModelTorch(VanillaGeneratorTorch, VanillaDiscriminatorTorch):
         if not isinstance(initializer_mean, (float, int)):
             raise ValueError("initializer_mean must be a float or integer.")
 
-        self._generator_initializer_mean = initializer_mean
-        self._discriminator_initializer_mean = initializer_mean
+        self._generator_builder._generator_initializer_mean = initializer_mean
+        self._discriminator_builder._discriminator_initializer_mean = initializer_mean
 
     def set_initializer_deviation(self, initializer_deviation: float) -> None:
         """
@@ -321,8 +342,50 @@ class AdversarialModelTorch(VanillaGeneratorTorch, VanillaDiscriminatorTorch):
         if not isinstance(initializer_deviation, (float, int)) or initializer_deviation <= 0:
             raise ValueError("initializer_deviation must be a positive float or integer.")
 
-        self._generator_initializer_deviation = initializer_deviation
-        self._discriminator_initializer_deviation = initializer_deviation
+        self._generator_builder._generator_initializer_deviation = initializer_deviation
+        self._discriminator_builder._discriminator_initializer_deviation = initializer_deviation
+
+    def set_dropout_decay_rate_generator(self, dropout_decay_rate_generator: float) -> None:
+        """
+        Sets the dropout decay rate for the generator.
+
+        Args:
+            dropout_decay_rate_generator (float): New dropout rate for generator.
+
+        Raises:
+            ValueError: If dropout rate is not between 0.0 and 1.0.
+        """
+        self._generator_builder.set_dropout_decay_rate_generator(dropout_decay_rate_generator)
+
+    def set_dropout_decay_rate_discriminator(self, dropout_decay_rate_discriminator: float) -> None:
+        """
+        Sets the dropout decay rate for the discriminator.
+
+        Args:
+            dropout_decay_rate_discriminator (float): New dropout rate for discriminator.
+
+        Raises:
+            ValueError: If dropout rate is not between 0.0 and 1.0.
+        """
+        self._discriminator_builder.set_dropout_decay_rate_discriminator(dropout_decay_rate_discriminator)
+
+    def set_dense_layer_sizes_generator(self, dense_layer_sizes_generator: List[int]) -> None:
+        """
+        Sets the dense layer sizes for the generator.
+
+        Args:
+            dense_layer_sizes_generator (List[int]): New layer sizes for generator.
+        """
+        self._generator_builder.set_dense_layer_sizes_generator(dense_layer_sizes_generator)
+
+    def set_dense_layer_sizes_discriminator(self, dense_layer_sizes_discriminator: List[int]) -> None:
+        """
+        Sets the dense layer sizes for the discriminator.
+
+        Args:
+            dense_layer_sizes_discriminator (List[int]): New layer sizes for discriminator.
+        """
+        self._discriminator_builder.set_dense_layer_sizes_discriminator(dense_layer_sizes_discriminator)
 
     def get_generator_parameters(self) -> dict:
         """
@@ -332,14 +395,14 @@ class AdversarialModelTorch(VanillaGeneratorTorch, VanillaDiscriminatorTorch):
             dict: Dictionary containing generator configuration parameters.
         """
         return {
-            'latent_dimension': self._generator_latent_dimension,
-            'output_shape': self._generator_output_shape,
-            'activation_function': self._generator_activation_function,
-            'last_layer_activation': self._generator_last_layer_activation,
-            'dropout_decay_rate': self._generator_dropout_decay_rate_g,
-            'dense_layer_sizes': self._generator_dense_layer_sizes_g,
-            'initializer_mean': self._generator_initializer_mean,
-            'initializer_deviation': self._generator_initializer_deviation
+            'latent_dimension': self._generator_builder._generator_latent_dimension,
+            'output_shape': self._generator_builder._generator_output_shape,
+            'activation_function': self._generator_builder._generator_activation_function,
+            'last_layer_activation': self._generator_builder._generator_last_layer_activation,
+            'dropout_decay_rate': self._generator_builder._generator_dropout_decay_rate_g,
+            'dense_layer_sizes': self._generator_builder._generator_dense_layer_sizes_g,
+            'initializer_mean': self._generator_builder._generator_initializer_mean,
+            'initializer_deviation': self._generator_builder._generator_initializer_deviation
         }
 
     def get_discriminator_parameters(self) -> dict:
@@ -350,14 +413,14 @@ class AdversarialModelTorch(VanillaGeneratorTorch, VanillaDiscriminatorTorch):
             dict: Dictionary containing discriminator configuration parameters.
         """
         return {
-            'latent_dimension': self._discriminator_latent_dimension,
-            'output_shape': self._discriminator_output_shape,
-            'activation_function': self._discriminator_activation_function,
-            'last_layer_activation': self._discriminator_last_layer_activation,
-            'dropout_decay_rate': self._discriminator_dropout_decay_rate_d,
-            'dense_layer_sizes': self._discriminator_dense_layer_sizes_d,
-            'initializer_mean': self._discriminator_initializer_mean,
-            'initializer_deviation': self._discriminator_initializer_deviation
+            'latent_dimension': self._discriminator_builder._discriminator_latent_dimension,
+            'output_shape': self._discriminator_builder._discriminator_output_shape,
+            'activation_function': self._discriminator_builder._discriminator_activation_function,
+            'last_layer_activation': self._discriminator_builder._discriminator_last_layer_activation,
+            'dropout_decay_rate': self._discriminator_builder._discriminator_dropout_decay_rate_d,
+            'dense_layer_sizes': self._discriminator_builder._discriminator_dense_layer_sizes_d,
+            'initializer_mean': self._discriminator_builder._discriminator_initializer_mean,
+            'initializer_deviation': self._discriminator_builder._discriminator_initializer_deviation
         }
 
     def to(self, device: torch.device):
@@ -370,8 +433,8 @@ class AdversarialModelTorch(VanillaGeneratorTorch, VanillaDiscriminatorTorch):
         Returns:
             self: Returns self for method chaining.
         """
-        if self._generator_model_dense is not None:
-            self._generator_model_dense.to(device)
-        if self._discriminator_model_dense is not None:
-            self._discriminator_model_dense.to(device)
+        if self._generator_builder._generator_model_dense is not None:
+            self._generator_builder._generator_model_dense.to(device)
+        if self._discriminator_builder._discriminator_model_dense is not None:
+            self._discriminator_builder._discriminator_model_dense.to(device)
         return self
