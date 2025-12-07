@@ -492,29 +492,92 @@ class AlgorithmWassersteinModelTorch:
                 self.discriminator_optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             print(f"Discriminator loaded from epoch {epoch}")
 
-    def generate_samples(self, num_samples: int, labels: Optional[torch.Tensor] = None) -> np.ndarray:
+    def get_samples(self, num_samples, labels: Optional[torch.Tensor] = None) -> dict:
         """
         Generate samples using the trained generator.
 
         Args:
-            num_samples: Number of samples to generate
+            num_samples: Number of samples to generate (int or dict mapping class to count)
             labels: Optional labels for conditional generation
 
         Returns:
-            Generated samples as numpy array
+            Dictionary mapping class indices to generated samples as numpy arrays
+            Format: {class_0: np.array([samples]), class_1: np.array([samples]), ...}
         """
         self.generator.eval()
 
+        # Handle dictionary input (samples per class)
+        if isinstance(num_samples, dict):
+            # Check if 'classes' key contains the actual sample counts
+            if 'classes' in num_samples and isinstance(num_samples['classes'], dict):
+                num_samples = num_samples['classes']
+
+            # Filter out non-numeric keys and convert string keys to int
+            filtered_samples = {}
+            for key, value in num_samples.items():
+                try:
+                    # Try to convert key to integer (handles both int and string numeric keys)
+                    numeric_key = int(key)
+
+                    # Handle nested dictionary values or ensure value is an integer
+                    if isinstance(value, dict):
+                        actual_count = sum(value.values()) if value else 0
+                    else:
+                        actual_count = int(value)
+
+                    if actual_count > 0:
+                        filtered_samples[numeric_key] = actual_count
+                except (ValueError, TypeError):
+                    # Skip non-numeric keys like 'classes', 'number_classes'
+                    continue
+
+            if not filtered_samples:
+                raise ValueError(f"No valid class samples found in num_samples dictionary.")
+
+            # Determine number of classes
+            num_classes = max(filtered_samples.keys()) + 1
+
+            # Generate samples for each class and store in dictionary
+            generated_samples_dict = {}
+
+            for class_idx, count in sorted(filtered_samples.items()):
+                with torch.no_grad():
+                    z = self._sample_latent(count)
+
+                    # Create one-hot labels for this class
+                    class_labels = torch.zeros((count, num_classes), device=self.device)
+                    class_labels[:, class_idx] = 1
+
+                    generated = self.generator(z, class_labels)
+
+                    # Store generated samples for this class
+                    generated_samples_dict[class_idx] = generated.cpu().numpy()
+
+            self.generator.train()
+            return generated_samples_dict
+
+        # Handle integer input (original behavior)
+        # Split evenly across available classes
         with torch.no_grad():
-            z = self._sample_latent(num_samples)
+            total_samples = int(num_samples)
 
             if labels is None:
-                # Generate random labels if not provided
-                # Assumes binary classification if no info available
-                labels = torch.randint(0, 2, (num_samples,), device=self.device)
-                labels = torch.eye(2, device=self.device)[labels]
+                # Binary classification - split samples between 2 classes
+                num_classes = 2
+                samples_per_class = total_samples // num_classes
 
-            generated = self.generator(z, labels)
+                generated_samples_dict = {}
+                for class_idx in range(num_classes):
+                    z = self._sample_latent(samples_per_class)
+                    class_labels = torch.zeros((samples_per_class, num_classes), device=self.device)
+                    class_labels[:, class_idx] = 1
+
+                    generated = self.generator(z, class_labels)
+                    generated_samples_dict[class_idx] = generated.cpu().numpy()
+            else:
+                # Use provided labels
+                generated = self.generator(self._sample_latent(total_samples), labels)
+                generated_samples_dict = {0: generated.cpu().numpy()}
 
         self.generator.train()
-        return generated.cpu().numpy()
+        return generated_samples_dict
