@@ -60,7 +60,7 @@ try:
     from Engine.Callbacks.CallbackResources import ResourceMonitorCallback
 
     from Engine.Models.Adversarial.Tensorflow.AdversarialModelTensorflow import AdversarialModel
-    from Engine.Models.Autoencoder.Tensorflow.ModelAutoencoder import AutoencoderModel
+    from Engine.Models.Autoencoder.Tensorflow.ModelAutoencoderTensorflow import AutoencoderModel
 
     from Engine.Models.WassersteinGP.ModelWassersteinGPGAN import WassersteinGPModel
     from Engine.Models.QuantizedVAE.ModelQuantizedVAE import QuantizedVAEModel

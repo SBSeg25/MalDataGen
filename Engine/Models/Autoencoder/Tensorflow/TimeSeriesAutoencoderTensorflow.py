@@ -40,8 +40,8 @@ try:
 
     from tensorflow.keras.models import Model
 
-    from Engine.Models.Autoencoder.Tensorflow.TimeSeriesEncoder import TimeSeriesEncoder
-    from Engine.Models.Autoencoder.Tensorflow.TimeSeriesDecoder import TimeSeriesDecoder
+    from Engine.Models.Autoencoder.Tensorflow.TimeSeriesEncoderTensorflow import TimeSeriesEncoder
+    from Engine.Models.Autoencoder.Tensorflow.TimeSeriesDecoderTensorflow import TimeSeriesDecoder
 
 except ImportError as error:
     print(error)

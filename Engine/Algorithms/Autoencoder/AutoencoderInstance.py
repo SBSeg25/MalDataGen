@@ -53,7 +53,7 @@ try:
     from tensorflow.python.keras.losses import BinaryCrossentropy
 
     from Engine.Algorithms.Autoencoder.AutoencoderAlgorithm import AutoencoderAlgorithm
-    from Engine.Models.Autoencoder.Tensorflow.ModelAutoencoder import AutoencoderModel
+    from Engine.Models.Autoencoder.Tensorflow.ModelAutoencoderTensorflow import AutoencoderModel
 
 except ImportError as error:
     logging.error(error)
