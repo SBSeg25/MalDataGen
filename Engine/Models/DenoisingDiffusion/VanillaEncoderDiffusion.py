@@ -51,7 +51,7 @@ try:
     from Engine.Activations.Activations import Activations
     from tensorflow.keras.initializers import RandomNormal
 
-    from Engine.Layers.SamplingLayer import LayerSampling
+    from Engine.Layers.Tensorflow.SamplingLayer import LayerSampling
 
 except ImportError as error:
     print(error)

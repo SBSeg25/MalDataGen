@@ -51,10 +51,10 @@ try:
     from Engine.Activations.Activations import Activations
     from tensorflow.keras.layers import LayerNormalization
 
-    from Engine.Layers.TimeEmbeddingLayer import TimeEmbedding
-    from Engine.Layers.AttentionBlockLayer import AttentionBlock
+    from Engine.Layers.Tensorflow.TimeEmbeddingLayer import TimeEmbedding
+    from Engine.Layers.Tensorflow.AttentionBlockLayer import AttentionBlock
 
-    from Engine.Layers.CrossAttentionLayer import CrossAttentionBlock
+    from Engine.Layers.Tensorflow.CrossAttentionLayer import CrossAttentionBlock
 
 except ImportError as error:
     print(error)

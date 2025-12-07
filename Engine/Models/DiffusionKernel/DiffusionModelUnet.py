@@ -49,10 +49,10 @@ try:
     from tensorflow.keras.layers import Concatenate
 
     from Engine.Activations.Activations import Activations
-    from Engine.Layers.ClusteringLayer import ClusteringLayer
+    from Engine.Layers.Tensorflow.ClusteringLayer import ClusteringLayer
 
-    from Engine.Layers.TimeEmbeddingLayer import TimeEmbedding
-    from Engine.Layers.AttentionBlockLayer import AttentionBlock
+    from Engine.Layers.Tensorflow.TimeEmbeddingLayer import TimeEmbedding
+    from Engine.Layers.Tensorflow.AttentionBlockLayer import AttentionBlock
 
 except ImportError as error:
     print(error)
