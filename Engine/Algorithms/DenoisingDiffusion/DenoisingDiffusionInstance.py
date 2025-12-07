@@ -49,7 +49,7 @@ try:
 
     from tensorflow.python.keras.losses import BinaryCrossentropy
 
-    from Engine.Algorithms.DenoisingDiffusion.AlgorithmDenoisingDiffusion import DenoisingDiffusionAlgorithm
+    from Engine.Algorithms.DenoisingDiffusion.AlgorithmDenoisingDiffusion import AlgorithmDenoisingDiffusion
     from Engine.Algorithms.DenoisingDiffusion.GaussianDenoisingDiffusion import GaussianDiffusion
     from Engine.Models.DenoisingDiffusion.DiffusionModelUnet import UNetDenoisingModel
 
@@ -246,7 +246,7 @@ class DenoisingDiffusionInstance:
             callbacks_list.append(self._callback_early_stop)
 
         # Initialize the final diffusion algorithm
-        self._denoising_diffusion_algorithm = DenoisingDiffusionAlgorithm(output_shape=input_shape,
+        self._denoising_diffusion_algorithm = AlgorithmDenoisingDiffusion(output_shape=input_shape,
                                                                           first_unet_model=self._denoising_first_unet_model,
                                                                           second_unet_model=self._denoising_second_unet_model,
                                                                           gdf_util=self._denoising_gaussian_diffusion_util,

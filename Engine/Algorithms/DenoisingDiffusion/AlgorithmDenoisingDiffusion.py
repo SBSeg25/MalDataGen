@@ -49,7 +49,7 @@ except ImportError as error:
 
 
 
-class DenoisingDiffusionAlgorithm(tensorflow.keras.Model):
+class AlgorithmDenoisingDiffusion(tensorflow.keras.Model):
     """
     Implements a diffusion process using UNet architectures for generating synthetic data.
     This model integrates an autoencoder and a diffusion network, enabling both data
@@ -99,7 +99,7 @@ class DenoisingDiffusionAlgorithm(tensorflow.keras.Model):
         Available at: https://arxiv.org/abs/2006.11239
 
     Example:
-        >>> diffusion_model = DenoisingDiffusionAlgorithm(
+        >>> diffusion_model = AlgorithmDenoisingDiffusion(
         ...     first_unet_model=primary_unet,
         ...     second_unet_model=ema_unet,
         ...     encoder_model_image=encoder,
