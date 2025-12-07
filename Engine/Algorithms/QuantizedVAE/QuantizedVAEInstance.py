@@ -47,7 +47,7 @@ try:
 
     from tensorflow.python.keras.losses import MeanSquaredError
     from Engine.Algorithms.QuantizedVAE.AlgorithmQuantizedVAE import QuantizedVAEAlgorithm
-    from Engine.Models.QuantizedVAE.ModelQuantizedVAE import QuantizedVAEModel
+    from Engine.Models.QuantizedVAE.Tensorflow.ModelQuantizedVAE import QuantizedVAEModel
 
 except ImportError as error:
     logging.error(error)

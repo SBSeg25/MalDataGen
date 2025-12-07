@@ -63,7 +63,7 @@ try:
     from Engine.Models.Autoencoder.Tensorflow.ModelAutoencoderTensorflow import AutoencoderModel
 
     from Engine.Models.WassersteinGP.ModelWassersteinGPGAN import WassersteinGPModel
-    from Engine.Models.QuantizedVAE.ModelQuantizedVAE import QuantizedVAEModel
+    from Engine.Models.QuantizedVAE.Tensorflow.ModelQuantizedVAE import QuantizedVAEModel
     from Engine.Models.DenoisingDiffusion.DiffusionModelUnet import UNetDenoisingModel
     from Engine.Algorithms.LatentDiffusion.GaussianLatentDiffusion import GaussianDiffusion
     from Engine.Models.DiffusionKernel.DiffusionModelUnet import UNetModelKernel

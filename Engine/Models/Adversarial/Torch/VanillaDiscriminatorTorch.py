@@ -186,7 +186,8 @@ class VanillaDiscriminatorTorch(nn.Module):
         self._discriminator_initializer_deviation = initializer_deviation
         self._discriminator_model_dense = None
 
-    def _add_activation_layer(self, activation_name: str) -> nn.Module:
+    @staticmethod
+    def _add_activation_layer(activation_name: str) -> nn.Module:
         """
         Returns the appropriate activation function module.
 

@@ -46,8 +46,8 @@ try:
 
     from Engine.Layers.VectorQuantizerLayer import VectorQuantizer
 
-    from Engine.Models.QuantizedVAE.QuantizedVAEVanillaDecoder import QuantizedVAEVanillaDecoder
-    from Engine.Models.QuantizedVAE.QuantizedVAEVanillaEncoder import QuantizedVAEVanillaEncoder
+    from Engine.Models.QuantizedVAE.Tensorflow.QuantizedVAEVanillaDecoder import QuantizedVAEVanillaDecoder
+    from Engine.Models.QuantizedVAE.Tensorflow.QuantizedVAEVanillaEncoder import QuantizedVAEVanillaEncoder
 
 
 except ImportError as error:
