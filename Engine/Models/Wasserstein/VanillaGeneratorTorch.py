@@ -86,26 +86,58 @@ class GeneratorWithLabelModule(nn.Module):
     """
 
     def __init__(self, latent_dimension: int, number_classes: int,
-                 dense_generator: nn.Module, activation_fn):
+                 dense_generator: nn.Module, activation_fn,
+                 initializer_mean: float, initializer_deviation: float):
         super(GeneratorWithLabelModule, self).__init__()
 
         self.dense_generator = dense_generator
         self.latent_dimension = latent_dimension
+        self.number_classes = number_classes
 
-        # Label embedding layer
+        # Label embedding layer - input size is latent_dimension + number_classes
         self.label_embedding = nn.Sequential(
             nn.Linear(latent_dimension + number_classes, latent_dimension),
             activation_fn
         )
 
+        # Initialize weights
+        for layer in self.label_embedding:
+            if isinstance(layer, nn.Linear):
+                nn.init.normal_(layer.weight, mean=initializer_mean, std=initializer_deviation)
+                nn.init.zeros_(layer.bias)
+
     def forward(self, latent_input, label_input):
         """
         Args:
             latent_input: (batch, latent_dimension)
-            label_input: (batch, number_classes)
+            label_input: (batch, number_classes) - one-hot encoded labels
+
+        Returns:
+            Generated output of shape (batch, output_shape)
         """
+        # Debug prints to check shapes
+        if torch.isnan(latent_input).any() or torch.isnan(label_input).any():
+            print(f"WARNING: NaN detected in inputs!")
+            print(f"Latent input shape: {latent_input.shape}, contains NaN: {torch.isnan(latent_input).any()}")
+            print(f"Label input shape: {label_input.shape}, contains NaN: {torch.isnan(label_input).any()}")
+
+        # Ensure label_input has the correct shape
+        if label_input.shape[1] != self.number_classes:
+            raise ValueError(
+                f"Label input has {label_input.shape[1]} classes but expected {self.number_classes}. "
+                f"Full shape: {label_input.shape}"
+            )
+
         # Concatenate latent and label
         concatenated = torch.cat([latent_input, label_input], dim=-1)
+
+        # Verify concatenated shape
+        expected_size = self.latent_dimension + self.number_classes
+        if concatenated.shape[1] != expected_size:
+            raise ValueError(
+                f"Concatenated tensor has shape {concatenated.shape} but expected "
+                f"(batch_size, {expected_size}). Latent: {latent_input.shape}, Label: {label_input.shape}"
+            )
 
         # Process through label embedding
         embedded = self.label_embedding(concatenated)
@@ -277,8 +309,8 @@ class VanillaGeneratorTorch(nn.Module):
             'selu': nn.SELU(),
             'gelu': nn.GELU(),
             'linear': nn.Identity(),  # Linear activation = no activation
-            'none': nn.Identity(),     # Alternative name for no activation
-            'identity': nn.Identity(), # Another alternative
+            'none': nn.Identity(),  # Alternative name for no activation
+            'identity': nn.Identity(),  # Another alternative
         }
 
         if activation_name in activation_map:
@@ -312,15 +344,15 @@ class VanillaGeneratorTorch(nn.Module):
             'selu': nn.SELU(),
             'gelu': nn.GELU(),
             'linear': nn.Identity(),  # Linear/no activation
-            'none': nn.Identity(),     # Alternative for no activation
-            'identity': nn.Identity(), # Another alternative
+            'none': nn.Identity(),  # Alternative for no activation
+            'identity': nn.Identity(),  # Another alternative
         }
 
         if activation_name in activation_map:
             return activation_map[activation_name]
         else:
             raise ValueError(f"Unsupported activation function: {activation_name}. "
-                           f"Supported activations: {list(activation_map.keys())}")
+                             f"Supported activations: {list(activation_map.keys())}")
 
     def get_generator(self) -> nn.Module:
         """
@@ -362,7 +394,9 @@ class VanillaGeneratorTorch(nn.Module):
             latent_dimension=self._generator_latent_dimension,
             number_classes=self._generator_number_samples_per_class["number_classes"],
             dense_generator=self._generator_model_dense,
-            activation_fn=activation_fn
+            activation_fn=activation_fn,
+            initializer_mean=self._generator_initializer_mean,
+            initializer_deviation=self._generator_initializer_deviation
         ).to(self.device)
 
         return self._generator_model_with_labels

@@ -5,7 +5,7 @@ __author__ = 'Synthetic Ocean AI - Team'
 __email__ = 'syntheticoceanai@gmail.com'
 __version__ = '{1}.{0}.{1}'
 __initial_data__ = '2022/06/01'
-__last_update__ = '2025/03/29'
+__last_update__ = '2025/12/07'
 __credits__ = ['Synthetic Ocean AI']
 
 from Engine.Algorithms.Wasserstein.AlgorithmWassersteinGANTorch import AlgorithmWassersteinModelTorch
@@ -33,78 +33,64 @@ from Engine.Models.Wasserstein.ModelWassersteinGANTorch import WassersteinModelT
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-
 try:
     import sys
-
-    import keras
+    import torch
+    import torch.optim as optim
     import numpy
-
     import logging
-    import tensorflow
-
-    from tensorflow.keras.optimizers import Adam
-
-    from tensorflow.keras.utils import to_categorical
-
-    from tensorflow.python.keras.losses import MeanSquaredError
-    from Engine.Callbacks.CallbackEarlyStop import EarlyStopping
-
-
-
 
 except ImportError as error:
     logging.error(error)
     sys.exit(-1)
 
 
-
 class WassersteinInstance:
     """
-     A class that implements a Wasserstein Generative Adversarial Network (WGAN).
-     This implementation follows the Wasserstein GAN framework with improved training stability.
+    A class that implements a Wasserstein Generative Adversarial Network (WGAN).
+    This implementation follows the Wasserstein GAN framework with improved training stability.
 
-     Key Components:
-     - Generator model for synthetic sample generation
-     - Critic/Discriminator model (with Wasserstein loss)
-     - Custom training loop with critic pre-training steps
-     - Flexible architecture configuration via arguments
+    Key Components:
+    - Generator model for synthetic sample generation
+    - Critic/Discriminator model (with Wasserstein loss)
+    - Custom training loop with critic pre-training steps
+    - Flexible architecture configuration via arguments
 
-     Attributes:
-         _wasserstein_algorithm: Orchestrates the WGAN-GP training process
-         _wasserstein_model: Stores the generator and critic/discriminator models
+    Attributes:
+        _wasserstein_algorithm: Orchestrates the WGAN-GP training process
+        _wasserstein_model: Stores the generator and critic/discriminator models
 
-         # WGAN Architecture Parameters
-         _wasserstein_latent_dimension: Dimensionality of the latent space
-         _wasserstein_training_algorithm: Type of training algorithm used
-         _wasserstein_activation_function: Activation function for hidden layers
-         _wasserstein_dropout_decay_rate_g: Dropout rate decay for generator
-         _wasserstein_dropout_decay_rate_d: Dropout rate decay for discriminator
-         _wasserstein_dense_layer_sizes_generator: Layer sizes for generator
-         _wasserstein_dense_layer_sizes_discriminator: Layer sizes for discriminator
-         _wasserstein_batch_size: Batch size for training
-         _wasserstein_number_epochs: Number of training epochs
-         _wasserstein_number_classes: Number of output classes
-         _wasserstein_loss_function: Loss function used for optimization
-         _wasserstein_momentum: Momentum parameter for optimizers
-         _wasserstein_last_activation_layer: Activation for final layer
-         _wasserstein_initializer_mean: Mean for weight initialization
-         _wasserstein_initializer_deviation: Std dev for weight initialization
+        # WGAN Architecture Parameters
+        _wasserstein_latent_dimension: Dimensionality of the latent space
+        _wasserstein_training_algorithm: Type of training algorithm used
+        _wasserstein_activation_function: Activation function for hidden layers
+        _wasserstein_dropout_decay_rate_g: Dropout rate decay for generator
+        _wasserstein_dropout_decay_rate_d: Dropout rate decay for discriminator
+        _wasserstein_dense_layer_sizes_generator: Layer sizes for generator
+        _wasserstein_dense_layer_sizes_discriminator: Layer sizes for discriminator
+        _wasserstein_batch_size: Batch size for training
+        _wasserstein_number_epochs: Number of training epochs
+        _wasserstein_number_classes: Number of output classes
+        _wasserstein_loss_function: Loss function used for optimization
+        _wasserstein_momentum: Momentum parameter for optimizers
+        _wasserstein_last_activation_layer: Activation for final layer
+        _wasserstein_initializer_mean: Mean for weight initialization
+        _wasserstein_initializer_deviation: Std dev for weight initialization
 
-         # Optimization Parameters
-         _wasserstein_optimizer_generator_learning_rate: Generator learning rate
-         _wasserstein_optimizer_discriminator_learning_rate: Discriminator learning rate
-         _wasserstein_optimizer_generator_beta: Beta parameter for generator optimizer
-         _wasserstein_optimizer_discriminator_beta: Beta parameter for discriminator optimizer
-         _wasserstein_discriminator_steps: Number of critic steps per generator step
+        # Optimization Parameters
+        _wasserstein_optimizer_generator_learning_rate: Generator learning rate
+        _wasserstein_optimizer_discriminator_learning_rate: Discriminator learning rate
+        _wasserstein_optimizer_generator_beta: Beta parameter for generator optimizer
+        _wasserstein_optimizer_discriminator_beta: Beta parameter for discriminator optimizer
+        _wasserstein_discriminator_steps: Number of critic steps per generator step
 
-         _wasserstein_smoothing_rate: Label smoothing rate
-         _wasserstein_latent_mean_distribution: Distribution type for latent space
-         _wasserstein_latent_stander_deviation: Std dev for latent distribution
-         _wasserstein_file_name_discriminator: Filename for saving critic
-         _wasserstein_file_name_generator: Filename for saving generator
-         _wasserstein_path_output_models: Path for saving models
-     """
+        _wasserstein_smoothing_rate: Label smoothing rate
+        _wasserstein_latent_mean_distribution: Distribution type for latent space
+        _wasserstein_latent_stander_deviation: Std dev for latent distribution
+        _wasserstein_file_name_discriminator: Filename for saving critic
+        _wasserstein_file_name_generator: Filename for saving generator
+        _wasserstein_path_output_models: Path for saving models
+    """
 
     def __init__(self, arguments):
         """
@@ -149,58 +135,60 @@ class WassersteinInstance:
         self._wasserstein_file_name_generator = arguments.wasserstein_file_name_generator
         self._wasserstein_path_output_models = arguments.wasserstein_path_output_models
 
+        # Initialize number_samples_per_class
+        self._number_samples_per_class = {"number_classes": arguments.wasserstein_number_classes}
 
     def _get_wasserstein(self, input_shape):
         """
         Initializes and sets up a Wasserstein GAN model.
 
-        This method sets up a Wasserstein Generative Adversarial Network (WGAN) by configuring the generator and discriminator
-        models using custom `WassersteinModel` and `WassersteinAlgorithm` classes. The generator and discriminator are created
-        and configured with their respective parameters, including latent dimensions, activation functions, loss functions,
-        and other hyperparameters specific to the WassersteinGP GAN architecture.
+        This method sets up a Wasserstein Generative Adversarial Network (WGAN) by configuring
+        the generator and discriminator models using custom WassersteinModelTorch class.
+        The generator and discriminator are created and configured with their respective parameters.
 
         Args:
-            input_shape (tuple): The shape of the input data, which determines the output shape for the models.
+            input_shape (int): The shape of the input data, which determines the output shape for the models.
 
         Initializes:
-            self._wasserstein_model: An instance of the `WassersteinModel` class, which includes the generator and discriminator
-                                     setup with configurations like latent dimension, activation functions, dropout rates,
-                                     and dense layer sizes.
-            self._wasserstein_algorithm: An instance of the `WassersteinAlgorithm` class that manages the training process
-                                         of the Wasserstein GAN, including generator and discriminator loss functions,
-                                         gradient penalty, and model parameters such as file names for saving and latent
-                                         distributions.
-
+            self._wasserstein_model: An instance of WassersteinModelTorch with generator and discriminator.
+            self._wasserstein_algorithm: An instance of AlgorithmWassersteinModelTorch that manages training.
         """
-
         # Wasserstein Model setup for the Generator and Discriminator
-        self._wasserstein_model = WassersteinModelTorch(latent_dimension=self._wasserstein_latent_dimension,
-                                                     output_shape=input_shape,
-                                                     activation_function=self._wasserstein_activation_function,
-                                                     initializer_mean=self._wasserstein_initializer_mean,
-                                                     initializer_deviation=self._wasserstein_initializer_deviation,
-                                                     dropout_decay_rate_g=self._wasserstein_dropout_decay_rate_g,
-                                                     dropout_decay_rate_d=self._wasserstein_dropout_decay_rate_d,
-                                                     last_layer_activation=self._wasserstein_last_activation_layer,
-                                                     dense_layer_sizes_g=self._wasserstein_dense_layer_sizes_generator,
-                                                     dense_layer_sizes_d=self._wasserstein_dense_layer_sizes_discriminator,
-                                                     dataset_type=numpy.float32,
-                                                     number_samples_per_class = self._number_samples_per_class)
+        self._wasserstein_model = WassersteinModelTorch(
+            latent_dimension=self._wasserstein_latent_dimension,
+            output_shape=input_shape,
+            activation_function=self._wasserstein_activation_function,
+            initializer_mean=self._wasserstein_initializer_mean,
+            initializer_deviation=self._wasserstein_initializer_deviation,
+            dropout_decay_rate_g=self._wasserstein_dropout_decay_rate_g,
+            dropout_decay_rate_d=self._wasserstein_dropout_decay_rate_d,
+            last_layer_activation=self._wasserstein_last_activation_layer,
+            dense_layer_sizes_g=self._wasserstein_dense_layer_sizes_generator,
+            dense_layer_sizes_d=self._wasserstein_dense_layer_sizes_discriminator,
+            dataset_type=torch.float32,
+            number_samples_per_class=self._number_samples_per_class
+        )
+
+        # Build the generator and discriminator models
+        generator_model = self._wasserstein_model.get_generator()
+        discriminator_model = self._wasserstein_model.get_discriminator()
 
         # Wasserstein Algorithm setup for training and model operations
-        self._wasserstein_algorithm = AlgorithmWassersteinModelTorch(generator_model=self._wasserstein_model.get_generator(),
-                                                                discriminator_model=self._wasserstein_model.get_discriminator(),
-                                                                latent_dimension=self._wasserstein_latent_dimension,
-                                                                generator_loss_fn=self._wasserstein_loss_function,
-                                                                discriminator_loss_fn=self._wasserstein_loss_function,
-                                                                file_name_discriminator=self._wasserstein_file_name_discriminator,
-                                                                file_name_generator=self._wasserstein_file_name_generator,
-                                                                models_saved_path=self._wasserstein_path_output_models,
-                                                                latent_mean_distribution=self._wasserstein_latent_mean_distribution,
-                                                                latent_standard_deviation=self._wasserstein_latent_stander_deviation,
-                                                                smoothing_rate=self._wasserstein_smoothing_rate,
-                                                                discriminator_steps=self._wasserstein_discriminator_steps,
-                                                                clip_value=0.01)
+        self._wasserstein_algorithm = AlgorithmWassersteinModelTorch(
+            generator_model=generator_model,
+            discriminator_model=discriminator_model,
+            latent_dimension=self._wasserstein_latent_dimension,
+            generator_loss_fn=None,  # Will use default Wasserstein loss
+            discriminator_loss_fn=None,  # Will use default Wasserstein loss
+            file_name_discriminator=self._wasserstein_file_name_discriminator,
+            file_name_generator=self._wasserstein_file_name_generator,
+            models_saved_path=self._wasserstein_path_output_models,
+            latent_mean_distribution=self._wasserstein_latent_mean_distribution,
+            latent_standard_deviation=self._wasserstein_latent_stander_deviation,
+            smoothing_rate=self._wasserstein_smoothing_rate,
+            discriminator_steps=self._wasserstein_discriminator_steps,
+            clip_value=0.01
+        )
 
     def _training_wasserstein_model(self, input_shape, arguments, x_real_samples, y_real_samples):
         """
@@ -208,13 +196,12 @@ class WassersteinInstance:
 
         Process:
         1. Initializes generator and critic models
-        2. Configures custom Wasserstein loss functions
-        3. Sets up optimizers with specified parameters
-        4. Trains using alternating critic/generator updates
-        5. Manages callbacks and monitoring
+        2. Configures optimizers with specified parameters
+        3. Trains using alternating critic/generator updates
+        4. Manages callbacks and monitoring
 
         Args:
-            input_shape (tuple): Input data shape
+            input_shape (int): Input data shape
             arguments (Namespace): Training configuration
             x_real_samples (ndarray): Training samples
             y_real_samples (ndarray): Corresponding labels
@@ -223,36 +210,94 @@ class WassersteinInstance:
         self._get_wasserstein(input_shape)
 
         # Print the model summaries for the generator and discriminator
-        self._wasserstein_model.get_generator().summary()
-        self._wasserstein_model.get_discriminator().summary()
+        print("\n" + "=" * 60)
+        print("GENERATOR ARCHITECTURE")
+        print("=" * 60)
+        print(self._wasserstein_model.generator)
+        print("\n" + "=" * 60)
+        print("DISCRIMINATOR/CRITIC ARCHITECTURE")
+        print("=" * 60)
+        print(self._wasserstein_model.critic)
+        print("=" * 60 + "\n")
 
-        # Define the custom loss functions for the discriminator and generator
-        def discriminator_loss(real_img, fake_img):
-            return tensorflow.reduce_mean(fake_img) - tensorflow.reduce_mean(real_img)
+        # Setup optimizers
+        generator_optimizer = optim.Adam(
+            self._wasserstein_model.generator.parameters(),
+            lr=self._wasserstein_optimizer_generator_learning_rate,
+            betas=(self._wasserstein_optimizer_generator_beta, 0.9)
+        )
 
-        def generator_loss(fake_img):
-            return -tensorflow.reduce_mean(fake_img)
-
-        generator_optimizer = keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5, beta_2=0.9)
-        discriminator_optimizer = keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5, beta_2=0.9)
+        discriminator_optimizer = optim.Adam(
+            self._wasserstein_model.critic.parameters(),
+            lr=self._wasserstein_optimizer_discriminator_learning_rate,
+            betas=(self._wasserstein_optimizer_discriminator_beta, 0.9)
+        )
 
         # Compile the Wasserstein GAN algorithm
-        self._wasserstein_algorithm.compile(generator_optimizer,
-                                            discriminator_optimizer,
-                                            generator_loss,
-                                            discriminator_loss)
+        self._wasserstein_algorithm.compile(
+            generator_optimizer,
+            discriminator_optimizer,
+            generator_loss_fn=None,  # Use default Wasserstein loss
+            discriminator_loss_fn=None  # Use default Wasserstein loss
+        )
 
-        callbacks_list = [self._callback_model_monitor]
+        # Prepare callbacks list with safety wrapper
+        callbacks_list = []
 
-        if arguments.use_early_stop:
-            callbacks_list.append(self._callback_early_stop)
+        # Add callbacks if they exist
+        if hasattr(self, '_callback_model_monitor') and self._callback_model_monitor:
+            callbacks_list.append(self._callback_model_monitor)
+
+        if hasattr(arguments, 'use_early_stop') and arguments.use_early_stop:
+            if hasattr(self, '_callback_early_stop') and self._callback_early_stop:
+                callbacks_list.append(self._callback_early_stop)
+
+        # Ensure callbacks have proper initialization
+        import time
+        for callback in callbacks_list:
+            if hasattr(callback, 'data'):
+                if callback.data is None:
+                    callback.data = {}
+                callback.data['start_time'] = time.time()
+
+        # Convert labels to one-hot if needed
+        num_classes = self._number_samples_per_class["number_classes"]
+
+        # Check if labels need conversion
+        if len(y_real_samples.shape) == 1 or y_real_samples.shape[1] == 1:
+            # Labels are in integer format or single column - convert to one-hot
+            if len(y_real_samples.shape) == 2 and y_real_samples.shape[1] == 1:
+                # Flatten from (N, 1) to (N,)
+                y_real_samples = y_real_samples.flatten()
+
+            # Convert to one-hot encoding
+            y_one_hot = numpy.zeros((y_real_samples.shape[0], num_classes))
+            y_one_hot[numpy.arange(y_real_samples.shape[0]), y_real_samples.astype(int)] = 1
+            y_real_samples = y_one_hot
+            print(f"Converted labels to one-hot encoding: shape {y_real_samples.shape}")
+        elif y_real_samples.shape[1] != num_classes:
+            raise ValueError(
+                f"Label shape mismatch: got {y_real_samples.shape} but expected "
+                f"either (N,) or (N, {num_classes}) for {num_classes} classes"
+            )
 
         # Fit the WassersteinGP GAN model
+        print(f"\nStarting training for {self._wasserstein_number_epochs} epochs...")
+        print(f"Batch size: {self._wasserstein_batch_size}")
+        print(f"Critic steps per generator step: {self._wasserstein_discriminator_steps}")
+        print(f"Training samples: {len(x_real_samples)}\n")
+
         self._wasserstein_algorithm.fit(
             x_real_samples,
-            to_categorical(y_real_samples, num_classes=self._number_samples_per_class["number_classes"]),
-            epochs=self._wasserstein_number_epochs, batch_size=self._wasserstein_batch_size,
-            callbacks=callbacks_list)
+            y_real_samples,
+            epochs=self._wasserstein_number_epochs,
+            batch_size=self._wasserstein_batch_size,
+            lambda_gp=10.0,
+            callbacks=callbacks_list if callbacks_list else None,
+            verbose=1
+        )
+
+        print("\nTraining completed successfully!")
 
     # Getter and setter for wasserstein_latent_dimension
     @property
@@ -478,4 +523,3 @@ class WassersteinInstance:
     @wasserstein_path_output_models.setter
     def wasserstein_path_output_models(self, value):
         self._wasserstein_path_output_models = value
-

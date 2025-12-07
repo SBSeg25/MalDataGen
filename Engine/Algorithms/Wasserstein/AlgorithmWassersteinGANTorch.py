@@ -8,9 +8,6 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/12/07'
 __credits__ = ['Synthetic Ocean AI']
 
-from Engine.Models.Wasserstein.VanillaDiscriminatorTorch import VanillaDiscriminatorTorch
-from Engine.Models.Wasserstein.VanillaGeneratorTorch import VanillaGeneratorTorch
-
 # MIT License
 #
 # Copyright (c) 2025 Synthetic Ocean AI
@@ -33,214 +30,172 @@ from Engine.Models.Wasserstein.VanillaGeneratorTorch import VanillaGeneratorTorc
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-
 try:
     import sys
+    import os
     import torch
     import torch.nn as nn
-    import numpy
-
-    from typing import List
-    from typing import Tuple
-    from typing import Union
-    from typing import Optional
-    from typing import Dict
+    import numpy as np
+    from typing import Optional, Callable, List, Any
+    from pathlib import Path
 
 except ImportError as error:
     print(error)
-    print()
     sys.exit(-1)
 
-DEFAULT_WASSERSTEIN_GAN_LATENT_DIMENSION = 128
-DEFAULT_WASSERSTEIN_GAN_ACTIVATION = "leaky_relu"
-DEFAULT_WASSERSTEIN_GAN_DROPOUT_DECAY_RATE_G = 0.2
-DEFAULT_WASSERSTEIN_GAN_DROPOUT_DECAY_RATE_D = 0.4
-DEFAULT_WASSERSTEIN_GAN_DENSE_LAYERS_SETTINGS_GENERATOR = [128]
-DEFAULT_WASSERSTEIN_GAN_DENSE_LAYERS_SETTINGS_DISCRIMINATOR = [128]
-DEFAULT_WASSERSTEIN_GAN_LAST_ACTIVATION_LAYER = "sigmoid"
-DEFAULT_WASSERSTEIN_GAN_INITIALIZER_MEAN = 0.0
-DEFAULT_WASSERSTEIN_GAN_INITIALIZER_DEVIATION = 0.125
 
-
-class AlgorithmWassersteinModelTorch(VanillaDiscriminatorTorch, VanillaGeneratorTorch):
+class AlgorithmWassersteinModelTorch:
     """
-    WassersteinGP Generative Adversarial Network (WGAN-GP) with Gradient Penalty (PyTorch version).
+    Training algorithm wrapper for Wasserstein GAN with Gradient Penalty (WGAN-GP).
 
-    This class implements a Wasserstein GAN, a type of Generative Adversarial
-    Network designed to improve training stability and provide a more meaningful
-    loss metric by approximating the Earth Mover's Distance (Wasserstein-1 Distance)
-    between real and generated data distributions.
+    This class manages the complete training process for a Wasserstein GAN, including:
+    - Alternating critic and generator training
+    - Gradient penalty computation
+    - Loss tracking and logging
+    - Model checkpointing
+    - Callback management
 
-    The model integrates both the **generator** (which synthesizes new data samples)
-    and the **critic** (which scores the realism of samples) into a single interface,
-    ensuring consistency across architectural configuration and training routines.
-
-    Unlike traditional GANs, the discriminator (referred to as "critic" in WGANs)
-    does not classify inputs as "real" or "fake." Instead, it assigns a scalar score,
-    which is optimized to approximate the Wasserstein distance between the true data
-    distribution and the distribution induced by the generator.
-
-    To enforce the Lipschitz continuity condition required by the WGAN framework,
-    this model supports **Gradient Penalty (GP)**, which penalizes deviations from
-    unit gradient norms during training, following the approach introduced in
-    Gulrajani et al., 2017.
-
-    References:
-        - Arjovsky, M., Chintala, S., & Bottou, L. (2017).
-          Wasserstein GAN. arXiv preprint arXiv:1701.07875.
-          Available at: https://arxiv.org/abs/1701.07875
-
-        - Gulrajani, I., Ahmed, F., Arjovsky, M., Dumoulin, V., & Courville, A. (2017).
-          Improved Training of Wasserstein GANs. arXiv preprint arXiv:1704.00028.
-          Available at: https://arxiv.org/abs/1704.00028
+    The algorithm implements the WGAN-GP framework as described in:
+    Gulrajani et al., "Improved Training of Wasserstein GANs" (2017)
 
     Attributes:
-        latent_dimension (int): Dimensionality of the latent space.
-        output_shape (int): Dimensionality of the generated samples.
-        activation_function (str): Activation function applied in hidden layers.
-        initializer_mean (float): Mean of the normal distribution for weight initialization.
-        initializer_deviation (float): Standard deviation for weight initialization.
-        dropout_decay_rate_g (float): Dropout rate for the generator's dense layers.
-        dropout_decay_rate_d (float): Dropout rate for the critic's dense layers.
-        last_layer_activation (str): Activation function for the generator's output layer.
-        dense_layer_sizes_g (List[int]): Sizes of dense layers in the generator.
-        dense_layer_sizes_d (List[int]): Sizes of dense layers in the critic.
-        dataset_type (torch.dtype): Data type for the training data.
-        number_samples_per_class (Optional[Dict[str, int]]): Number of samples per class.
-
-    Example:
-        >>> wgan = WassersteinModelTorch(
-        ...     latent_dimension=100,
-        ...     output_shape=784,
-        ...     activation_function='leaky_relu',
-        ...     dropout_decay_rate_g=0.2,
-        ...     dropout_decay_rate_d=0.4,
-        ...     dense_layer_sizes_g=[256, 512, 1024],
-        ...     dense_layer_sizes_d=[512, 256, 128],
-        ...     number_samples_per_class={"number_classes": 10}
-        ... )
-        >>> generator = wgan.get_generator()
-        >>> critic = wgan.get_discriminator()
+        generator_model: The generator network
+        discriminator_model: The critic/discriminator network
+        latent_dimension: Dimensionality of the latent space
+        generator_loss_fn: Loss function for generator (optional, uses Wasserstein loss by default)
+        discriminator_loss_fn: Loss function for discriminator (optional, uses Wasserstein loss by default)
+        file_name_discriminator: Filename for saving discriminator checkpoints
+        file_name_generator: Filename for saving generator checkpoints
+        models_saved_path: Directory path for saving model checkpoints
+        latent_mean_distribution: Mean of the latent distribution (default: 0.0)
+        latent_standard_deviation: Std dev of the latent distribution (default: 1.0)
+        smoothing_rate: Label smoothing rate (not used in WGAN-GP)
+        discriminator_steps: Number of critic updates per generator update
+        clip_value: Gradient clipping value (for numerical stability)
     """
 
-    def __init__(self, latent_dimension: int = DEFAULT_WASSERSTEIN_GAN_LATENT_DIMENSION,
-                 output_shape: int = 128,
-                 activation_function: str = DEFAULT_WASSERSTEIN_GAN_ACTIVATION,
-                 initializer_mean: float = DEFAULT_WASSERSTEIN_GAN_INITIALIZER_MEAN,
-                 initializer_deviation: float = DEFAULT_WASSERSTEIN_GAN_INITIALIZER_DEVIATION,
-                 dropout_decay_rate_g: float = DEFAULT_WASSERSTEIN_GAN_DROPOUT_DECAY_RATE_G,
-                 dropout_decay_rate_d: float = DEFAULT_WASSERSTEIN_GAN_DROPOUT_DECAY_RATE_D,
-                 last_layer_activation: str = DEFAULT_WASSERSTEIN_GAN_LAST_ACTIVATION_LAYER,
-                 dense_layer_sizes_g: Optional[List[int]] = None,
-                 dense_layer_sizes_d: Optional[List[int]] = None,
-                 dataset_type: torch.dtype = torch.float32,
-                 number_samples_per_class: Optional[Dict[str, int]] = None):
+    def __init__(self,
+                 generator_model: nn.Module,
+                 discriminator_model: nn.Module,
+                 latent_dimension: int,
+                 generator_loss_fn: Optional[Callable] = None,
+                 discriminator_loss_fn: Optional[Callable] = None,
+                 file_name_discriminator: str = "discriminator",
+                 file_name_generator: str = "generator",
+                 models_saved_path: str = "./models",
+                 latent_mean_distribution: float = 0.0,
+                 latent_standard_deviation: float = 1.0,
+                 smoothing_rate: float = 0.0,
+                 discriminator_steps: int = 5,
+                 clip_value: float = 0.01):
         """
-        Initializes a WassersteinModelTorch, combining the generator and critic components.
-
-        This constructor sets up both the generator and the critic networks, applying
-        the provided architectural and training configurations. The generator maps
-        random noise vectors into the data space, while the critic evaluates how
-        realistic those samples are relative to real data.
+        Initialize the Wasserstein GAN training algorithm.
 
         Args:
-            latent_dimension (int): Dimensionality of the latent space.
-            output_shape (int): Dimensionality of the generated samples.
-            activation_function (str): Activation function for hidden layers.
-            initializer_mean (float): Mean for weight initialization.
-            initializer_deviation (float): Standard deviation for weight initialization.
-            dropout_decay_rate_g (float): Dropout rate for the generator.
-            dropout_decay_rate_d (float): Dropout rate for the critic.
-            last_layer_activation (str): Activation for generator's final layer.
-            dense_layer_sizes_g (List[int]): Dense layer sizes in the generator.
-            dense_layer_sizes_d (List[int]): Dense layer sizes in the critic.
-            dataset_type (torch.dtype): Data type for the dataset.
-            number_samples_per_class (Optional[Dict[str, int]]): Samples per class.
-
-        Raises:
-            ValueError: If any provided argument is invalid.
+            generator_model: Generator neural network
+            discriminator_model: Discriminator/critic neural network
+            latent_dimension: Size of the latent space vector
+            generator_loss_fn: Custom generator loss function (optional)
+            discriminator_loss_fn: Custom discriminator loss function (optional)
+            file_name_discriminator: Base name for discriminator checkpoint files
+            file_name_generator: Base name for generator checkpoint files
+            models_saved_path: Directory to save model checkpoints
+            latent_mean_distribution: Mean for sampling latent vectors
+            latent_standard_deviation: Std dev for sampling latent vectors
+            smoothing_rate: Label smoothing (not used in WGAN-GP)
+            discriminator_steps: Critic updates per generator update
+            clip_value: Gradient clipping value
         """
-        if dense_layer_sizes_d is None:
-            dense_layer_sizes_d = DEFAULT_WASSERSTEIN_GAN_DENSE_LAYERS_SETTINGS_DISCRIMINATOR
+        self.generator = generator_model
+        self.discriminator = discriminator_model
+        self.latent_dimension = latent_dimension
 
-        if dense_layer_sizes_g is None:
-            dense_layer_sizes_g = DEFAULT_WASSERSTEIN_GAN_DENSE_LAYERS_SETTINGS_GENERATOR
+        # Loss functions (use Wasserstein loss if not provided)
+        self.generator_loss_fn = generator_loss_fn if generator_loss_fn else self._wasserstein_generator_loss
+        self.discriminator_loss_fn = discriminator_loss_fn if discriminator_loss_fn else self._wasserstein_discriminator_loss
 
-        if latent_dimension <= 0:
-            raise ValueError("Latent dimension must be a positive integer.")
+        # Model saving configuration
+        self.file_name_discriminator = file_name_discriminator
+        self.file_name_generator = file_name_generator
+        self.models_saved_path = Path(models_saved_path)
+        self.models_saved_path.mkdir(parents=True, exist_ok=True)
 
-        if not all(size > 0 for size in dense_layer_sizes_g):
-            raise ValueError("All generator dense layer sizes must be positive integers.")
+        # Latent space configuration
+        self.latent_mean = latent_mean_distribution
+        self.latent_std = latent_standard_deviation
 
-        if not all(size > 0 for size in dense_layer_sizes_d):
-            raise ValueError("All discriminator dense layer sizes must be positive integers.")
+        # Training configuration
+        self.smoothing_rate = smoothing_rate
+        self.discriminator_steps = discriminator_steps
+        self.clip_value = clip_value
 
-        if dropout_decay_rate_g < 0 or dropout_decay_rate_g > 1:
-            raise ValueError("Generator dropout decay rate must be between 0 and 1.")
+        # Optimizers (to be set in compile)
+        self.generator_optimizer = None
+        self.discriminator_optimizer = None
 
-        if dropout_decay_rate_d < 0 or dropout_decay_rate_d > 1:
-            raise ValueError("Discriminator dropout decay rate must be between 0 and 1.")
-
-        # CRITICAL FIX: Initialize ActivationsTorch (common parent) first
-        # This prevents the multiple inheritance MRO issue
-
-        # Manually set all discriminator attributes
-        self._discriminator_latent_dimension = latent_dimension
-        self._discriminator_output_shape = output_shape
-        self._discriminator_activation_function = activation_function
-        self._discriminator_last_layer_activation = last_layer_activation
-        self._discriminator_dropout_decay_rate_d = dropout_decay_rate_d
-        self._discriminator_dense_layer_sizes_d = dense_layer_sizes_d
-        self._discriminator_dataset_type = dataset_type
-        self._discriminator_initializer_mean = initializer_mean
-        self._discriminator_initializer_deviation = initializer_deviation
-        self._discriminator_number_samples_per_class = number_samples_per_class
-        self._discriminator_model_dense = None
-        self._discriminator_model_with_labels = None
-
-        # Manually set all generator attributes
-        self._generator_latent_dimension = latent_dimension
-        self._generator_output_shape = output_shape
-        self._generator_activation_function = activation_function
-        self._generator_last_layer_activation = last_layer_activation
-        self._generator_dropout_decay_rate_g = dropout_decay_rate_g
-        self._generator_dense_layer_sizes_g = dense_layer_sizes_g
-        self._generator_dataset_type = dataset_type
-        self._generator_initializer_mean = initializer_mean
-        self._generator_initializer_deviation = initializer_deviation
-        self._generator_number_samples_per_class = number_samples_per_class
-        self._generator_model_dense = None
-        self._generator_model_with_labels = None
-
-        # Set device
+        # Device
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.generator.to(self.device)
+        self.discriminator.to(self.device)
 
-    def compute_gradient_penalty(self, real_samples: torch.Tensor,
+        # Training history
+        self.history = {
+            'critic_loss': [],
+            'generator_loss': [],
+            'gradient_penalty': []
+        }
+
+    @staticmethod
+    def _wasserstein_discriminator_loss(real_validity: torch.Tensor,
+                                        fake_validity: torch.Tensor) -> torch.Tensor:
+        """
+        Wasserstein discriminator/critic loss.
+        Critic tries to maximize the difference between real and fake scores.
+
+        Args:
+            real_validity: Critic scores for real samples
+            fake_validity: Critic scores for fake samples
+
+        Returns:
+            Critic loss (to be minimized, so we use -(real - fake))
+        """
+        return fake_validity.mean() - real_validity.mean()
+
+    @staticmethod
+    def _wasserstein_generator_loss(fake_validity: torch.Tensor) -> torch.Tensor:
+        """
+        Wasserstein generator loss.
+        Generator tries to maximize the critic score for fake samples.
+
+        Args:
+            fake_validity: Critic scores for generated samples
+
+        Returns:
+            Generator loss (to be minimized, so we use -fake_validity)
+        """
+        return -fake_validity.mean()
+
+    def compute_gradient_penalty(self,
+                                 real_samples: torch.Tensor,
                                  fake_samples: torch.Tensor,
                                  labels: torch.Tensor,
                                  lambda_gp: float = 10.0) -> torch.Tensor:
         """
-        Computes the gradient penalty for WGAN-GP training.
-
-        The gradient penalty enforces the Lipschitz constraint by penalizing
-        the critic when the gradient norm deviates from 1 on interpolated samples.
+        Compute gradient penalty for WGAN-GP.
 
         Args:
-            real_samples: (batch, output_shape) real data samples
-            fake_samples: (batch, output_shape) generated samples
-            labels: (batch, number_classes) label conditioning
-            lambda_gp: Weight for the gradient penalty term
+            real_samples: Real data samples
+            fake_samples: Generated samples
+            labels: Class labels (one-hot encoded)
+            lambda_gp: Gradient penalty weight
 
         Returns:
-            Gradient penalty loss value
+            Gradient penalty value
         """
-        if self._discriminator_model_with_labels is None:
-            raise ValueError("Critic has not been built. Call get_discriminator() first.")
-
         batch_size = real_samples.size(0)
         device = real_samples.device
 
-        # Random weight for interpolation
+        # Random interpolation weight
         alpha = torch.rand(batch_size, 1, device=device)
         alpha = alpha.expand_as(real_samples)
 
@@ -249,7 +204,7 @@ class AlgorithmWassersteinModelTorch(VanillaDiscriminatorTorch, VanillaGenerator
         interpolates.requires_grad_(True)
 
         # Critic scores for interpolated samples
-        critic_interpolates = self._discriminator_model_with_labels(interpolates, labels)
+        critic_interpolates = self.discriminator(interpolates, labels)
 
         # Compute gradients
         gradients = torch.autograd.grad(
@@ -270,42 +225,74 @@ class AlgorithmWassersteinModelTorch(VanillaDiscriminatorTorch, VanillaGenerator
 
         return gradient_penalty
 
-    def train_step(self, real_samples: torch.Tensor, labels: torch.Tensor,
-                   optimizer_g: torch.optim.Optimizer,
-                   optimizer_d: torch.optim.Optimizer,
-                   n_critic: int = 5,
-                   lambda_gp: float = 10.0) -> Tuple[float, float, float]:
+    def compile(self,
+                generator_optimizer: torch.optim.Optimizer,
+                discriminator_optimizer: torch.optim.Optimizer,
+                generator_loss_fn: Optional[Callable] = None,
+                discriminator_loss_fn: Optional[Callable] = None):
         """
-        Performs one training step for the WGAN-GP.
+        Compile the WGAN with optimizers and loss functions.
 
         Args:
-            real_samples: (batch, output_shape) real data samples
-            labels: (batch, number_classes) label conditioning
-            optimizer_g: Optimizer for the generator
-            optimizer_d: Optimizer for the critic
-            n_critic: Number of critic updates per generator update
-            lambda_gp: Weight for gradient penalty
+            generator_optimizer: Optimizer for generator
+            discriminator_optimizer: Optimizer for discriminator
+            generator_loss_fn: Custom generator loss (optional)
+            discriminator_loss_fn: Custom discriminator loss (optional)
+        """
+        self.generator_optimizer = generator_optimizer
+        self.discriminator_optimizer = discriminator_optimizer
+
+        if generator_loss_fn is not None:
+            self.generator_loss_fn = generator_loss_fn
+        if discriminator_loss_fn is not None:
+            self.discriminator_loss_fn = discriminator_loss_fn
+
+    def _sample_latent(self, batch_size: int) -> torch.Tensor:
+        """
+        Sample random vectors from the latent space.
+
+        Args:
+            batch_size: Number of samples to generate
 
         Returns:
-            Tuple of (critic_loss, generator_loss, gradient_penalty)
+            Latent vectors of shape (batch_size, latent_dimension)
+        """
+        return torch.randn(batch_size, self.latent_dimension, device=self.device) * self.latent_std + self.latent_mean
+
+    def train_step(self,
+                   real_samples: torch.Tensor,
+                   labels: torch.Tensor,
+                   lambda_gp: float = 10.0) -> dict:
+        """
+        Perform one training step (multiple critic updates + one generator update).
+
+        Args:
+            real_samples: Batch of real data
+            labels: Batch of labels (one-hot encoded)
+            lambda_gp: Gradient penalty weight
+
+        Returns:
+            Dictionary with loss values
         """
         batch_size = real_samples.size(0)
-        device = real_samples.device
 
-        # Train Critic
-        for _ in range(n_critic):
-            optimizer_d.zero_grad()
+        # Train Critic/Discriminator for multiple steps
+        critic_losses = []
+        gradient_penalties = []
+
+        for _ in range(self.discriminator_steps):
+            self.discriminator_optimizer.zero_grad()
 
             # Generate fake samples
-            z = torch.randn(batch_size, self._generator_latent_dimension, device=device)
-            fake_samples = self._generator_model_with_labels(z, labels)
+            z = self._sample_latent(batch_size)
+            fake_samples = self.generator(z, labels)
 
             # Critic scores
-            real_validity = self._discriminator_model_with_labels(real_samples, labels)
-            fake_validity = self._discriminator_model_with_labels(fake_samples.detach(), labels)
+            real_validity = self.discriminator(real_samples, labels)
+            fake_validity = self.discriminator(fake_samples.detach(), labels)
 
             # Wasserstein loss
-            critic_loss = fake_validity.mean() - real_validity.mean()
+            critic_loss = self.discriminator_loss_fn(real_validity, fake_validity)
 
             # Gradient penalty
             gp = self.compute_gradient_penalty(real_samples, fake_samples, labels, lambda_gp)
@@ -313,130 +300,221 @@ class AlgorithmWassersteinModelTorch(VanillaDiscriminatorTorch, VanillaGenerator
             # Total critic loss
             total_critic_loss = critic_loss + gp
             total_critic_loss.backward()
-            optimizer_d.step()
+
+            # Gradient clipping for stability
+            torch.nn.utils.clip_grad_norm_(self.discriminator.parameters(), self.clip_value)
+
+            self.discriminator_optimizer.step()
+
+            critic_losses.append(critic_loss.item())
+            gradient_penalties.append(gp.item())
 
         # Train Generator
-        optimizer_g.zero_grad()
+        self.generator_optimizer.zero_grad()
 
         # Generate fake samples
-        z = torch.randn(batch_size, self._generator_latent_dimension, device=device)
-        fake_samples = self._generator_model_with_labels(z, labels)
+        z = self._sample_latent(batch_size)
+        fake_samples = self.generator(z, labels)
 
-        # Generator loss (maximize critic score for fake samples)
-        fake_validity = self._discriminator_model_with_labels(fake_samples, labels)
-        generator_loss = -fake_validity.mean()
+        # Generator loss
+        fake_validity = self.discriminator(fake_samples, labels)
+        generator_loss = self.generator_loss_fn(fake_validity)
 
         generator_loss.backward()
-        optimizer_g.step()
 
-        return critic_loss.item(), generator_loss.item(), gp.item()
+        # Gradient clipping
+        torch.nn.utils.clip_grad_norm_(self.generator.parameters(), self.clip_value)
 
-    def generate_samples(self, num_samples: int, labels: Optional[torch.Tensor] = None) -> torch.Tensor:
+        self.generator_optimizer.step()
+
+        return {
+            'critic_loss': np.mean(critic_losses),
+            'generator_loss': generator_loss.item(),
+            'gradient_penalty': np.mean(gradient_penalties)
+        }
+
+    def fit(self,
+            x_train: np.ndarray,
+            y_train: np.ndarray,
+            epochs: int,
+            batch_size: int,
+            lambda_gp: float = 10.0,
+            callbacks: Optional[List[Any]] = None,
+            verbose: int = 1):
         """
-        Generates samples using the trained generator.
+        Train the WGAN-GP model.
+
+        Args:
+            x_train: Training data
+            y_train: Training labels (one-hot encoded)
+            epochs: Number of training epochs
+            batch_size: Batch size
+            lambda_gp: Gradient penalty weight
+            callbacks: List of callback objects
+            verbose: Verbosity level (0=silent, 1=progress bar, 2=one line per epoch)
+        """
+        if self.generator_optimizer is None or self.discriminator_optimizer is None:
+            raise ValueError("Model must be compiled before training. Call compile() first.")
+
+        num_samples = len(x_train)
+        num_batches = num_samples // batch_size
+
+        # Initialize callbacks
+        if callbacks:
+            for callback in callbacks:
+                # Initialize params if needed
+                if hasattr(callback, 'params'):
+                    if callback.params is None:
+                        callback.params = {}
+                    callback.params.update({
+                        'epochs': epochs,
+                        'batch_size': batch_size,
+                        'steps': num_batches,
+                        'samples': num_samples
+                    })
+
+                # Call on_train_begin
+                if hasattr(callback, 'on_train_begin'):
+                    callback.on_train_begin()
+
+        for epoch in range(epochs):
+            epoch_critic_loss = 0.0
+            epoch_gen_loss = 0.0
+            epoch_gp = 0.0
+
+            # Shuffle data
+            indices = np.random.permutation(num_samples)
+            x_shuffled = x_train[indices]
+            y_shuffled = y_train[indices]
+
+            for batch_idx in range(num_batches):
+                # Get batch
+                start_idx = batch_idx * batch_size
+                end_idx = start_idx + batch_size
+
+                batch_x = torch.tensor(x_shuffled[start_idx:end_idx],
+                                       dtype=torch.float32, device=self.device)
+                batch_y = torch.tensor(y_shuffled[start_idx:end_idx],
+                                       dtype=torch.float32, device=self.device)
+
+                # Train step
+                losses = self.train_step(batch_x, batch_y, lambda_gp)
+
+                epoch_critic_loss += losses['critic_loss']
+                epoch_gen_loss += losses['generator_loss']
+                epoch_gp += losses['gradient_penalty']
+
+            # Average losses
+            avg_critic_loss = epoch_critic_loss / num_batches
+            avg_gen_loss = epoch_gen_loss / num_batches
+            avg_gp = epoch_gp / num_batches
+
+            # Store history
+            self.history['critic_loss'].append(avg_critic_loss)
+            self.history['generator_loss'].append(avg_gen_loss)
+            self.history['gradient_penalty'].append(avg_gp)
+
+            # Verbose output
+            if verbose > 0:
+                print(f"Epoch {epoch + 1}/{epochs} - "
+                      f"Critic Loss: {avg_critic_loss:.4f}, "
+                      f"Gen Loss: {avg_gen_loss:.4f}, "
+                      f"GP: {avg_gp:.4f}")
+
+            # Callbacks
+            if callbacks:
+                for callback in callbacks:
+                    if hasattr(callback, 'on_epoch_end'):
+                        logs = {
+                            'epoch': epoch,
+                            'critic_loss': avg_critic_loss,
+                            'generator_loss': avg_gen_loss,
+                            'gradient_penalty': avg_gp,
+                            'loss': avg_critic_loss + avg_gen_loss  # Total loss for compatibility
+                        }
+                        callback.on_epoch_end(epoch, logs)
+
+            # Save checkpoints periodically
+            if (epoch + 1) % 10 == 0:
+                self.save_models(epoch + 1)
+
+        # Call on_train_end for callbacks
+        if callbacks:
+            for callback in callbacks:
+                if hasattr(callback, 'on_train_end'):
+                    callback.on_train_end()
+
+    def save_models(self, epoch: int):
+        """
+        Save generator and discriminator models.
+
+        Args:
+            epoch: Current epoch number
+        """
+        gen_path = self.models_saved_path / f"{self.file_name_generator}_epoch_{epoch}.pt"
+        disc_path = self.models_saved_path / f"{self.file_name_discriminator}_epoch_{epoch}.pt"
+
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': self.generator.state_dict(),
+            'optimizer_state_dict': self.generator_optimizer.state_dict(),
+        }, gen_path)
+
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': self.discriminator.state_dict(),
+            'optimizer_state_dict': self.discriminator_optimizer.state_dict(),
+        }, disc_path)
+
+        print(f"Models saved at epoch {epoch}")
+
+    def load_models(self, epoch: int):
+        """
+        Load generator and discriminator models.
+
+        Args:
+            epoch: Epoch number to load
+        """
+        gen_path = self.models_saved_path / f"{self.file_name_generator}_epoch_{epoch}.pt"
+        disc_path = self.models_saved_path / f"{self.file_name_discriminator}_epoch_{epoch}.pt"
+
+        if gen_path.exists():
+            checkpoint = torch.load(gen_path)
+            self.generator.load_state_dict(checkpoint['model_state_dict'])
+            if self.generator_optimizer:
+                self.generator_optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            print(f"Generator loaded from epoch {epoch}")
+
+        if disc_path.exists():
+            checkpoint = torch.load(disc_path)
+            self.discriminator.load_state_dict(checkpoint['model_state_dict'])
+            if self.discriminator_optimizer:
+                self.discriminator_optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            print(f"Discriminator loaded from epoch {epoch}")
+
+    def generate_samples(self, num_samples: int, labels: Optional[torch.Tensor] = None) -> np.ndarray:
+        """
+        Generate samples using the trained generator.
 
         Args:
             num_samples: Number of samples to generate
-            labels: (num_samples, number_classes) label conditioning (optional)
+            labels: Optional labels for conditional generation
 
         Returns:
-            Generated samples of shape (num_samples, output_shape)
+            Generated samples as numpy array
         """
-        if self._generator_model_with_labels is None:
-            raise ValueError("Generator has not been built. Call get_generator() first.")
+        self.generator.eval()
 
-        device = self.device
-
-        # Generate random latent vectors
-        z = torch.randn(num_samples, self._generator_latent_dimension, device=device)
-
-        # If no labels provided, generate random labels
-        if labels is None:
-            if self._generator_number_samples_per_class is not None:
-                num_classes = self._generator_number_samples_per_class["number_classes"]
-                random_labels = torch.randint(0, num_classes, (num_samples,), device=device)
-                labels = torch.eye(num_classes, device=device)[random_labels]
-            else:
-                raise ValueError("Labels must be provided if number_samples_per_class is not set.")
-
-        # Generate samples
-        self._generator_model_with_labels.eval()
         with torch.no_grad():
-            generated = self._generator_model_with_labels(z, labels)
+            z = self._sample_latent(num_samples)
 
-        return generated
+            if labels is None:
+                # Generate random labels if not provided
+                # Assumes binary classification if no info available
+                labels = torch.randint(0, 2, (num_samples,), device=self.device)
+                labels = torch.eye(2, device=self.device)[labels]
 
-    # Unified setters for both generator and critic
-    def set_latent_dimension(self, latent_dimension: int) -> None:
-        """Sets the latent dimension for both the discriminator and generator."""
-        if latent_dimension <= 0:
-            raise ValueError("Latent dimension must be a positive integer.")
+            generated = self.generator(z, labels)
 
-        self._discriminator_latent_dimension = latent_dimension
-        self._generator_latent_dimension = latent_dimension
-
-    def set_output_shape(self, output_shape: int) -> None:
-        """Sets the output shape for both the discriminator and generator."""
-        if output_shape <= 0:
-            raise ValueError("Output shape must be a positive integer.")
-
-        self._discriminator_output_shape = output_shape
-        self._generator_output_shape = output_shape
-
-    def set_activation_function(self, activation_function: str) -> None:
-        """Sets the activation function for both the discriminator and generator."""
-        if not isinstance(activation_function, str):
-            raise ValueError("Activation function must be a string.")
-
-        self._discriminator_activation_function = activation_function
-        self._generator_activation_function = activation_function
-
-    def set_last_layer_activation(self, last_layer_activation: str) -> None:
-        """Sets the last layer activation for both the discriminator and generator."""
-        if not isinstance(last_layer_activation, str):
-            raise ValueError("Last layer activation must be a string.")
-
-        self._discriminator_last_layer_activation = last_layer_activation
-        self._generator_last_layer_activation = last_layer_activation
-
-    def set_dataset_type(self, dataset_type: torch.dtype) -> None:
-        """Sets the data type for the input dataset for both networks."""
-        self._discriminator_dataset_type = dataset_type
-        self._generator_dataset_type = dataset_type
-
-    def set_initializer_mean(self, initializer_mean: float) -> None:
-        """Sets the mean value for the weights initializer for both networks."""
-        if not isinstance(initializer_mean, (int, float)):
-            raise ValueError("Initializer mean must be a numerical value.")
-
-        self._discriminator_initializer_mean = initializer_mean
-        self._generator_initializer_mean = initializer_mean
-
-    def set_initializer_deviation(self, initializer_deviation: float) -> None:
-        """Sets the deviation for the weights initializer for both networks."""
-        if not isinstance(initializer_deviation, (int, float)) or initializer_deviation <= 0:
-            raise ValueError("Initializer deviation must be a positive numerical value.")
-
-        self._discriminator_initializer_deviation = initializer_deviation
-        self._generator_initializer_deviation = initializer_deviation
-
-    # Properties
-    @property
-    def generator(self) -> Optional[nn.Module]:
-        """Returns the generator model."""
-        return self._generator_model_with_labels
-
-    @property
-    def critic(self) -> Optional[nn.Module]:
-        """Returns the critic (discriminator) model."""
-        return self._discriminator_model_with_labels
-
-    @property
-    def wgan_latent_dimension(self) -> int:
-        """Returns the latent dimension."""
-        return self._generator_latent_dimension
-
-    @property
-    def wgan_output_shape(self) -> int:
-        """Returns the output shape."""
-        return self._generator_output_shape
+        self.generator.train()
+        return generated.cpu().numpy()

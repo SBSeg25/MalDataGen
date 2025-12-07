@@ -11,24 +11,6 @@ __credits__ = ['Synthetic Ocean AI']
 # MIT License
 #
 # Copyright (c) 2025 Synthetic Ocean AI
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
 
 try:
     import sys
@@ -95,8 +77,9 @@ class DiscriminatorWithLabelModule(nn.Module):
 
         self.dense_discriminator = dense_discriminator
         self.output_shape = output_shape
+        self.number_classes = number_classes
 
-        # Label embedding layer
+        # Label embedding layer - input size is output_shape + number_classes
         self.label_embedding = nn.Linear(output_shape + number_classes, output_shape)
         nn.init.normal_(self.label_embedding.weight, mean=initializer_mean, std=initializer_deviation)
         nn.init.zeros_(self.label_embedding.bias)
@@ -105,10 +88,35 @@ class DiscriminatorWithLabelModule(nn.Module):
         """
         Args:
             discriminator_input: (batch, output_shape)
-            label_input: (batch, number_classes)
+            label_input: (batch, number_classes) - one-hot encoded labels
+
+        Returns:
+            Validity scores of shape (batch, 1)
         """
+        # Debug prints to check shapes
+        if torch.isnan(discriminator_input).any() or torch.isnan(label_input).any():
+            print(f"WARNING: NaN detected in discriminator inputs!")
+            print(
+                f"Discriminator input shape: {discriminator_input.shape}, contains NaN: {torch.isnan(discriminator_input).any()}")
+            print(f"Label input shape: {label_input.shape}, contains NaN: {torch.isnan(label_input).any()}")
+
+        # Ensure label_input has the correct shape
+        if label_input.shape[1] != self.number_classes:
+            raise ValueError(
+                f"Label input has {label_input.shape[1]} classes but expected {self.number_classes}. "
+                f"Full shape: {label_input.shape}"
+            )
+
         # Concatenate input and label
         concatenated = torch.cat([discriminator_input, label_input], dim=-1)
+
+        # Verify concatenated shape
+        expected_size = self.output_shape + self.number_classes
+        if concatenated.shape[1] != expected_size:
+            raise ValueError(
+                f"Concatenated tensor has shape {concatenated.shape} but expected "
+                f"(batch_size, {expected_size}). Input: {discriminator_input.shape}, Label: {label_input.shape}"
+            )
 
         # Process through label embedding
         embedded = self.label_embedding(concatenated)
@@ -195,7 +203,6 @@ class VanillaDiscriminatorTorch(nn.Module):
             dense_layer_sizes_d: List[int],
             dataset_type: torch.dtype = torch.float32,
             number_samples_per_class: Optional[Dict[str, int]] = None) -> None:
-        print("[DEBUG LOADED FILE] Discriminator loaded from:", __file__)
 
         """
         Initializes the VanillaDiscriminatorTorch.
@@ -209,7 +216,7 @@ class VanillaDiscriminatorTorch(nn.Module):
             output_shape (int): Dimensionality of the output data.
             activation_function (str): Activation function for all hidden layers.
             initializer_mean (float): Mean of the normal distribution used to initialize weights.
-            
+
             initializer_deviation (float): Standard deviation of the normal distribution.
             dropout_decay_rate_d (float): Dropout rate applied to dense layers (0 to 1).
             last_layer_activation (str): Activation function applied to the final output layer.
@@ -277,8 +284,8 @@ class VanillaDiscriminatorTorch(nn.Module):
             'selu': nn.SELU(),
             'gelu': nn.GELU(),
             'linear': nn.Identity(),  # Linear activation = no activation
-            'none': nn.Identity(),     # Alternative name for no activation
-            'identity': nn.Identity(), # Another alternative
+            'none': nn.Identity(),  # Alternative name for no activation
+            'identity': nn.Identity(),  # Another alternative
         }
 
         if activation_name in activation_map:
@@ -301,7 +308,6 @@ class VanillaDiscriminatorTorch(nn.Module):
         Raises:
             ValueError: If the activation function is not supported.
         """
-        print(f"[DEBUG] Activation received: {repr(activation_name)}")
         activation_name = activation_name.strip().lower().replace('_', '')
 
         activation_map = {
@@ -323,6 +329,7 @@ class VanillaDiscriminatorTorch(nn.Module):
         else:
             raise ValueError(f"Unsupported activation function: {activation_name}. "
                              f"Supported activations: {list(activation_map.keys())}")
+
     def get_discriminator(self) -> nn.Module:
         """
         Constructs the discriminator model using dense layers, dropout, and activation functions.
