@@ -8,6 +8,8 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
+from Engine.Algorithms.Autoencoder.AutoencoderAlgorithmTorch import AutoencoderAlgorithmTorch
+from Engine.Models.Autoencoder.ModelAutoencoderTorch import AutoencoderModelTorch
 
 # MIT License
 #
@@ -148,7 +150,7 @@ class AutoencoderInstance:
         """
 
         # Autoencoder Model setup for Encoder and Decoder
-        self._autoencoder_model = AutoencoderModel(latent_dimension=self._autoencoder_latent_dimension,
+        self._autoencoder_model = AutoencoderModelTorch(latent_dimension=self._autoencoder_latent_dimension,
                                                    output_shape=input_shape,
                                                    activation_function=self._autoencoder_activation_function,
                                                    initializer_mean=self._autoencoder_initializer_mean,
@@ -162,7 +164,7 @@ class AutoencoderInstance:
                                                    number_samples_per_class = self._number_samples_per_class)
 
         # Autoencoder Algorithm setup for training and model operations
-        self._autoencoder_algorithm = AutoencoderAlgorithm(encoder_model=self._autoencoder_model.get_encoder(input_shape),
+        self._autoencoder_algorithm = AutoencoderAlgorithmTorch(encoder_model=self._autoencoder_model.get_encoder(input_shape),
                                                            decoder_model=self._autoencoder_model.get_decoder(input_shape),
                                                            loss_function=self._autoencoder_loss_function,
                                                            file_name_encoder=self._autoencoder_file_name_encoder,
@@ -193,8 +195,8 @@ class AutoencoderInstance:
         self._get_autoencoder(input_shape)
 
         # Print the model summaries for the encoder and decoder
-        self._autoencoder_model.get_encoder(input_shape).summary()
-        self._autoencoder_model.get_decoder(input_shape).summary()
+        self._autoencoder_model.get_encoder(input_shape)
+        self._autoencoder_model.get_decoder(input_shape)
 
         # Compile the autoencoder algorithm with the specified loss function
         self._autoencoder_algorithm.compile(loss=arguments.autoencoder_loss_function)
