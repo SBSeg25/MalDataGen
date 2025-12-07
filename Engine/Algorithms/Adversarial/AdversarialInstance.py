@@ -10,8 +10,8 @@ __credits__ = ['Synthetic Ocean AI']
 
 from Engine.Algorithms.Adversarial.AdversarialAlgorithm import AdversarialAlgorithm
 from Engine.Algorithms.Adversarial.AdversarialAlgorithmTorch import AdversarialAlgorithmTorch
-from Engine.Models.Adversarial.AdversarialModel import AdversarialModel
-from Engine.Models.Adversarial.AdversarialModelTorch import AdversarialModelTorch
+from Engine.Models.Adversarial.Tensorflow.AdversarialModelTensorflow import AdversarialModel
+from Engine.Models.Adversarial.Torch.AdversarialModelTorch import AdversarialModelTorch
 
 # MIT License
 #

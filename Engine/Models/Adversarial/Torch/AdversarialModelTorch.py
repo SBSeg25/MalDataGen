@@ -36,8 +36,8 @@ try:
     from typing import Optional, List, Dict
     import torch
 
-    from Engine.Models.Adversarial.VanillaGeneratorTorch import VanillaGeneratorTorch
-    from Engine.Models.Adversarial.VanillaDiscriminatorTorch import VanillaDiscriminatorTorch
+    from Engine.Models.Adversarial.Torch.VanillaGeneratorTorch import VanillaGeneratorTorch
+    from Engine.Models.Adversarial.Torch.VanillaDiscriminatorTorch import VanillaDiscriminatorTorch
 
 except ImportError as error:
     print(error)

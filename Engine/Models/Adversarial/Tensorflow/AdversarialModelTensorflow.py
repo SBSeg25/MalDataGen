@@ -34,8 +34,8 @@ try:
     import sys
     import numpy
 
-    from Engine.Models.Adversarial.VanillaGenerator import VanillaGenerator
-    from Engine.Models.Adversarial.VanillaDiscriminator import VanillaDiscriminator
+    from Engine.Models.Adversarial.Tensorflow.VanillaGeneratorTensorflow import VanillaGenerator
+    from Engine.Models.Adversarial.Tensorflow.VanillaDiscriminatorTensorflow import VanillaDiscriminator
 
 except ImportError as error:
     print(error)
