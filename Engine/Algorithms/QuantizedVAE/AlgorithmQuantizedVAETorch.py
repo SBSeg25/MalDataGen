@@ -34,6 +34,7 @@ try:
     import os
     import sys
     import json
+    import time
     import numpy
     import torch
     import torch.nn as nn
@@ -268,6 +269,30 @@ class QuantizedVAEAlgorithmTorch:
         dataset = TensorDataset(input_data, labels, y)
         dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
+        # Initialize callbacks before training
+        if callbacks:
+            for callback in callbacks:
+                # Initialize params attribute with training configuration
+                if not hasattr(callback, 'params') or callback.params is None:
+                    callback.params = {
+                        "epochs": epochs,
+                        "batch_size": batch_size,
+                        "steps": len(dataloader),
+                        "samples": len(dataset),
+                        "verbose": 1,
+                        "metrics": ["loss", "reconstruction_loss", "vqvae_loss"]
+                    }
+
+                # Initialize data attribute
+                if not hasattr(callback, 'data') or callback.data is None:
+                    callback.data = {"start_time": time.time()}
+                elif "start_time" not in callback.data:
+                    callback.data["start_time"] = time.time()
+
+                # Call on_train_begin if it exists
+                if hasattr(callback, 'on_train_begin'):
+                    callback.on_train_begin()
+
         # Training loop
         self._quantized_vae_model.train()
 
@@ -296,9 +321,30 @@ class QuantizedVAEAlgorithmTorch:
             # Execute callbacks
             if callbacks:
                 for callback in callbacks:
-                    if hasattr(callback, 'on_epoch_end'):
-                        callback.on_epoch_end(epoch, {"loss": avg_loss})
+                    # Ensure callback params and data are still initialized (defensive)
+                    if not hasattr(callback, 'params') or callback.params is None:
+                        callback.params = {
+                            "epochs": epochs,
+                            "batch_size": batch_size,
+                            "steps": len(dataloader),
+                            "samples": len(dataset)
+                        }
 
+                    if not hasattr(callback, 'data') or callback.data is None:
+                        callback.data = {"start_time": time.time()}
+
+                    if hasattr(callback, 'on_epoch_end'):
+                        callback.on_epoch_end(epoch, {
+                            "loss": avg_loss,
+                            "reconstruction_loss": avg_recon,
+                            "vqvae_loss": avg_vq
+                        })
+
+        # Call on_train_end if it exists
+        if callbacks:
+            for callback in callbacks:
+                if hasattr(callback, 'on_train_end'):
+                    callback.on_train_end()
     def get_samples(self, number_samples_per_class):
         """
         Generates samples from the latent space using the decoder.

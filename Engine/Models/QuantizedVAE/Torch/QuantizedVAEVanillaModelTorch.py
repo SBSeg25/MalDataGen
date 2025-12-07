@@ -156,7 +156,7 @@ class QuantizedVAEModelTorch(QuantizedVAEVanillaEncoderTorch, QuantizedVAEVanill
         self._encoder_model = self.get_encoder_model(self.output_shape_encoder)
         self._decoder_model = self.get_decoder_model(self.output_shape_encoder)
 
-        return QuantizedVAEModelTorch(
+        return VQVAEModule(  # Changed from QuantizedVAEModelTorch
             encoder=self._encoder_model,
             decoder=self._decoder_model,
             vector_quantizer=self._vector_quantizer_layer
@@ -233,11 +233,11 @@ class QuantizedVAEModelTorch(QuantizedVAEVanillaEncoderTorch, QuantizedVAEVanill
         self._decoder_last_layer_activation = last_layer_activation
 
 
-class QuantizedVAEModelTorch(nn.Module):
+class VQVAEModule(nn.Module):
     """Complete VQ-VAE model combining encoder, quantizer, and decoder"""
 
     def __init__(self, encoder, decoder, vector_quantizer):
-        super(QuantizedVAEModelTorch, self).__init__()
+        super(VQVAEModule, self).__init__()
         self.encoder = encoder
         self.decoder = decoder
         self.vector_quantizer = vector_quantizer

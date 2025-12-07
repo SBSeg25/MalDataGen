@@ -122,7 +122,7 @@ class QuantizedVAEVanillaDecoderTorch(ActivationsTorch, nn.Module):
         Raises:
             ValueError: If any of the provided parameters are invalid.
         """
-        Activations.__init__(self)
+        ActivationsTorch.__init__(self)
         nn.Module.__init__(self)
 
         if not isinstance(latent_dimension, int) or latent_dimension <= 0:

@@ -204,7 +204,7 @@ class QuantizedVAEInstance:
         # Convert labels to one-hot encoding
         num_classes = self._number_samples_per_class["number_classes"]
         y_one_hot = numpy.zeros((len(y_real_samples), num_classes))
-        y_one_hot[numpy.arange(len(y_real_samples)), y_real_samples] = 1
+        y_one_hot[numpy.arange(len(y_real_samples)), y_real_samples.astype(int)] = 1
 
         # Fit the variational autoencoder model
         self._quantized_vae_algorithm.fit(

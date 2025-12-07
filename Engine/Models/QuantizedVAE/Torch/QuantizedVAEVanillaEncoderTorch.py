@@ -118,7 +118,7 @@ class QuantizedVAEVanillaEncoderTorch(ActivationsTorch, nn.Module):
             dataset_type (dtype, optional): The data type of the input dataset. Defaults to numpy.float32.
             number_samples_per_class (dict, optional): Specifies the number of samples per class.
         """
-        Activations.__init__(self)
+        ActivationsTorch.__init__(self)
         nn.Module.__init__(self)
 
         if not isinstance(latent_dimension, int) or latent_dimension <= 0:
