@@ -10,7 +10,6 @@ __credits__ = ['Synthetic Ocean AI']
 
 from Engine.Models.Adversarial.VanillaDiscriminatorTorch import VanillaDiscriminatorTorch
 from Engine.Models.Adversarial.VanillaGeneratorTorch import VanillaGeneratorTorch
-from Engine.Activations.ActivationsTorch import ActivationsTorch
 
 # MIT License
 #
@@ -184,7 +183,6 @@ class AlgorithmWassersteinModelTorch(VanillaDiscriminatorTorch, VanillaGenerator
 
         # CRITICAL FIX: Initialize ActivationsTorch (common parent) first
         # This prevents the multiple inheritance MRO issue
-        ActivationsTorch.__init__(self)
 
         # Manually set all discriminator attributes
         self._discriminator_latent_dimension = latent_dimension

@@ -181,31 +181,39 @@ class WassersteinModelTorch(VanillaDiscriminatorTorch, VanillaGeneratorTorch):
         if dropout_decay_rate_d < 0 or dropout_decay_rate_d > 1:
             raise ValueError("Discriminator dropout decay rate must be between 0 and 1.")
 
-        # Initialize the discriminator (critic)
-        VanillaDiscriminatorTorch.__init__(self,
-                                           latent_dimension,
-                                           output_shape,
-                                           activation_function,
-                                           initializer_mean,
-                                           initializer_deviation,
-                                           dropout_decay_rate_d,
-                                           last_layer_activation,
-                                           dense_layer_sizes_d,
-                                           dataset_type,
-                                           number_samples_per_class)
+        # CRITICAL FIX: Initialize nn.Module first to avoid MRO issues
+        nn.Module.__init__(self)
 
-        # Initialize the generator
-        VanillaGeneratorTorch.__init__(self,
-                                       latent_dimension,
-                                       output_shape,
-                                       activation_function,
-                                       initializer_mean,
-                                       initializer_deviation,
-                                       dropout_decay_rate_g,
-                                       last_layer_activation,
-                                       dense_layer_sizes_g,
-                                       dataset_type,
-                                       number_samples_per_class)
+        # Manually set all discriminator attributes
+        self._discriminator_latent_dimension = latent_dimension
+        self._discriminator_output_shape = output_shape
+        self._discriminator_activation_function = activation_function
+        self._discriminator_last_layer_activation = last_layer_activation
+        self._discriminator_dropout_decay_rate_d = dropout_decay_rate_d
+        self._discriminator_dense_layer_sizes_d = dense_layer_sizes_d
+        self._discriminator_dataset_type = dataset_type
+        self._discriminator_initializer_mean = initializer_mean
+        self._discriminator_initializer_deviation = initializer_deviation
+        self._discriminator_number_samples_per_class = number_samples_per_class
+        self._discriminator_model_dense = None
+        self._discriminator_model_with_labels = None
+
+        # Manually set all generator attributes
+        self._generator_latent_dimension = latent_dimension
+        self._generator_output_shape = output_shape
+        self._generator_activation_function = activation_function
+        self._generator_last_layer_activation = last_layer_activation
+        self._generator_dropout_decay_rate_g = dropout_decay_rate_g
+        self._generator_dense_layer_sizes_g = dense_layer_sizes_g
+        self._generator_dataset_type = dataset_type
+        self._generator_initializer_mean = initializer_mean
+        self._generator_initializer_deviation = initializer_deviation
+        self._generator_number_samples_per_class = number_samples_per_class
+        self._generator_model_dense = None
+        self._generator_model_with_labels = None
+
+        # Set device
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     def compute_gradient_penalty(self, real_samples: torch.Tensor,
                                  fake_samples: torch.Tensor,

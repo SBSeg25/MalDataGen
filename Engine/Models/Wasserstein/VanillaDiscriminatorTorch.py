@@ -41,8 +41,6 @@ try:
     from typing import Tuple
     from typing import Optional
 
-    from Engine.Activations.ActivationsTorch import ActivationsTorch
-
 except ImportError as error:
     print(error)
     sys.exit(-1)
@@ -121,7 +119,7 @@ class DiscriminatorWithLabelModule(nn.Module):
         return validity
 
 
-class VanillaDiscriminatorTorch(ActivationsTorch):
+class VanillaDiscriminatorTorch(nn.Module):
     """
     VanillaDiscriminatorTorch (PyTorch version)
 
@@ -252,6 +250,75 @@ class VanillaDiscriminatorTorch(ActivationsTorch):
         self._discriminator_model_with_labels: Optional[nn.Module] = None
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+    @staticmethod
+    def get_activation(activation_name: str, alpha: float = 0.2) -> nn.Module:
+        """
+        Returns the appropriate activation function module.
+
+        Args:
+            activation_name (str): Name of the activation function.
+            alpha (float): Alpha parameter for LeakyReLU (default: 0.2).
+
+        Returns:
+            nn.Module: PyTorch activation module.
+        """
+        activation_name = activation_name.lower().replace('_', '')
+
+        activation_map = {
+            'relu': nn.ReLU(),
+            'leakyrelu': nn.LeakyReLU(alpha),
+            'tanh': nn.Tanh(),
+            'sigmoid': nn.Sigmoid(),
+            'softmax': nn.Softmax(dim=1),
+            'elu': nn.ELU(),
+            'selu': nn.SELU(),
+            'gelu': nn.GELU(),
+            'linear': nn.Identity(),  # Linear activation = no activation
+            'none': nn.Identity(),     # Alternative name for no activation
+            'identity': nn.Identity(), # Another alternative
+        }
+
+        if activation_name in activation_map:
+            return activation_map[activation_name]
+        else:
+            raise ValueError(f"Unsupported activation function: {activation_name}")
+
+    @staticmethod
+    def _add_activation_layer(activation_name: str, alpha: float = 0.2):
+        """
+        Returns the appropriate activation layer for the given activation name.
+
+        Args:
+            activation_name (str): Name of the activation function.
+            alpha (float): Alpha parameter for LeakyReLU (default: 0.2).
+
+        Returns:
+            nn.Module: PyTorch activation module.
+
+        Raises:
+            ValueError: If the activation function is not supported.
+        """
+        activation_name = activation_name.lower().replace('_', '')
+
+        activation_map = {
+            'relu': nn.ReLU(),
+            'leakyrelu': nn.LeakyReLU(alpha),
+            'tanh': nn.Tanh(),
+            'sigmoid': nn.Sigmoid(),
+            'softmax': nn.Softmax(dim=1),
+            'elu': nn.ELU(),
+            'selu': nn.SELU(),
+            'gelu': nn.GELU(),
+            'linear': nn.Identity(),  # Linear/no activation
+            'none': nn.Identity(),  # Alternative for no activation
+            'identity': nn.Identity(),  # Another alternative
+        }
+
+        if activation_name in activation_map:
+            return activation_map[activation_name]
+        else:
+            raise ValueError(f"Unsupported activation function: {activation_name}. "
+                             f"Supported activations: {list(activation_map.keys())}")
     def get_discriminator(self) -> nn.Module:
         """
         Constructs the discriminator model using dense layers, dropout, and activation functions.
@@ -269,7 +336,7 @@ class VanillaDiscriminatorTorch(ActivationsTorch):
         # Get activation functions
         activation_fn = self.get_activation(
             self._discriminator_activation_function,
-            alpha=0.2  # Default alpha for LeakyReLU
+            alpha=0.2
         )
         last_activation_fn = self.get_activation(
             self._discriminator_last_layer_activation,
