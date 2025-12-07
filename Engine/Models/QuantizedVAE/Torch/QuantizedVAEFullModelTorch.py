@@ -8,6 +8,10 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
+from Engine.Models.QuantizedVAE.Torch.QuantizedVAEVanillaDecoderTorch import QuantizedVAEVanillaDecoderTorch
+from Engine.Models.QuantizedVAE.Torch.QuantizedVAEVanillaEncoderTorch import QuantizedVAEVanillaEncoderTorch
+from Engine.Models.QuantizedVAE.Torch.VectorQuantizerTorch import VectorQuantizerTorch
+
 # MIT License
 #
 # Copyright (c) 2025 Synthetic Ocean AI
@@ -40,9 +44,6 @@ try:
     from typing import Tuple
     from typing import Optional
 
-    from Engine.Layers.VectorQuantizerLayer import VectorQuantizer
-    from Engine.Models.QuantizedVAE.QuantizedVAEVanillaDecoder import QuantizedVAEVanillaDecoder
-    from Engine.Models.QuantizedVAE.QuantizedVAEVanillaEncoder import QuantizedVAEVanillaEncoder
 
 except ImportError as error:
     print(error)
@@ -60,7 +61,7 @@ DEFAULT_QUANTIZED_VAE_INITIALIZER_MEAN = 0
 DEFAULT_QUANTIZED_VAE_INITIALIZER_DEVIATION = 0.125
 
 
-class QuantizedVAEModelTorch(QuantizedVAEVanillaEncoder, QuantizedVAEVanillaDecoder):
+class QuantizedVAEModelTorch(QuantizedVAEVanillaEncoderTorch, QuantizedVAEVanillaDecoderTorch):
 
     def __init__(self,
                  latent_dimension: int = DEFAULT_QUANTIZED_VAE_LATENT_DIMENSION,
@@ -110,7 +111,7 @@ class QuantizedVAEModelTorch(QuantizedVAEVanillaEncoder, QuantizedVAEVanillaDeco
         if not isinstance(number_neurons_decoder, list) or not all(isinstance(x, int) for x in number_neurons_decoder):
             raise ValueError("number_neurons_decoder must be a list of integers.")
 
-        QuantizedVAEVanillaDecoder.__init__(self,
+        QuantizedVAEVanillaDecoderTorch.__init__(self,
                                             latent_dimension,
                                             output_shape,
                                             activation_function,
@@ -122,7 +123,7 @@ class QuantizedVAEModelTorch(QuantizedVAEVanillaEncoder, QuantizedVAEVanillaDeco
                                             dataset_type,
                                             number_samples_per_class)
 
-        QuantizedVAEVanillaEncoder.__init__(self,
+        QuantizedVAEVanillaEncoderTorch.__init__(self,
                                             latent_dimension,
                                             output_shape,
                                             activation_function,
@@ -135,7 +136,7 @@ class QuantizedVAEModelTorch(QuantizedVAEVanillaEncoder, QuantizedVAEVanillaDeco
                                             number_samples_per_class)
         self.output_shape_encoder = output_shape
         self._latent_dimension = latent_dimension
-        self._vector_quantizer_layer = VectorQuantizer(number_embeddings, latent_dimension, name="vector_quantizer")
+        self._vector_quantizer_layer = VectorQuantizerTorch(number_embeddings, latent_dimension, name="vector_quantizer")
         self._encoder_model = None
         self._decoder_model = None
 

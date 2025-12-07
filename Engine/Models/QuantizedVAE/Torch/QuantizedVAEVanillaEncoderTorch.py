@@ -8,6 +8,8 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
+from Engine.Models.QuantizedVAE.Torch.ActivationTorch import ActivationsTorch
+
 # MIT License
 #
 # Copyright (c) 2025 Synthetic Ocean AI
@@ -36,14 +38,13 @@ try:
     import torch
     import torch.nn as nn
     from typing import Any, Dict, Optional
-    from Engine.Activations.Activations import Activations
 
 except ImportError as error:
     print(error)
     sys.exit(-1)
 
 
-class QuantizedVAEVanillaEncoderTorch(Activations, nn.Module):
+class QuantizedVAEVanillaEncoderTorch(ActivationsTorch, nn.Module):
     """
     VanillaEncoder
 
