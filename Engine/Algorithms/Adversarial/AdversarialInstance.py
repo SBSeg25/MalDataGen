@@ -8,6 +8,8 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
+from Engine.Algorithms.Adversarial.AdversarialAlgorithm import AdversarialAlgorithm
+from Engine.Models.Adversarial.AdversarialModel import AdversarialModel
 
 # MIT License
 #
@@ -49,8 +51,6 @@ try:
 
     from tensorflow.python.keras.losses import BinaryCrossentropy
 
-    from Engine.Algorithms.Adversarial.AdversarialAlgorithm import AdversarialAlgorithm
-    from Engine.Models.Adversarial.AdversarialModel import AdversarialModel
 
 except ImportError as error:
     logging.error(error)
