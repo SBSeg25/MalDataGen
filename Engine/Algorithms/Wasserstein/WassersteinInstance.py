@@ -8,6 +8,9 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
+from Engine.Algorithms.Wasserstein.AlgorithmWassersteinGANTorch import AlgorithmWassersteinModelTorch
+from Engine.Models.Wasserstein.ModelWassersteinGANTorch import WassersteinModelTorch
+
 # MIT License
 #
 # Copyright (c) 2025 Synthetic Ocean AI
@@ -209,7 +212,7 @@ class WassersteinInstance:
         """
 
         # Wasserstein Model setup for the Generator and Discriminator
-        self._wasserstein_model = WassersteinModel(latent_dimension=self._wasserstein_latent_dimension,
+        self._wasserstein_model = WassersteinModelTorch(latent_dimension=self._wasserstein_latent_dimension,
                                                      output_shape=input_shape,
                                                      activation_function=self._wasserstein_activation_function,
                                                      initializer_mean=self._wasserstein_initializer_mean,
@@ -223,7 +226,7 @@ class WassersteinInstance:
                                                      number_samples_per_class = self._number_samples_per_class)
 
         # Wasserstein Algorithm setup for training and model operations
-        self._wasserstein_algorithm = WassersteinAlgorithm(generator_model=self._wasserstein_model.get_generator(),
+        self._wasserstein_algorithm = AlgorithmWassersteinModelTorch(generator_model=self._wasserstein_model.get_generator(),
                                                                 discriminator_model=self._wasserstein_model.get_discriminator(),
                                                                 latent_dimension=self._wasserstein_latent_dimension,
                                                                 generator_loss_fn=self._wasserstein_loss_function,
