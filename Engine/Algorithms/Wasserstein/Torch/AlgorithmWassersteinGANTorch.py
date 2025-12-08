@@ -44,7 +44,7 @@ except ImportError as error:
     sys.exit(-1)
 
 
-class AlgorithmWassersteinModelTorch:
+class WassersteinAlgorithmTorch:
     """
     Training algorithm wrapper for Wasserstein GAN with Gradient Penalty (WGAN-GP).
 

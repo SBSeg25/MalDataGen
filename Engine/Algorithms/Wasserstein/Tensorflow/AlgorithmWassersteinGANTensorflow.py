@@ -56,7 +56,7 @@ except ImportError as error:
     sys.exit(-1)
 
 
-class WassersteinAlgorithm(Model):
+class WassersteinAlgorithmTensorflow(Model):
     """
     Implementation of the original Wasserstein Generative Adversarial Network (WGAN) algorithm.
     This class extends the Keras Model class to create a trainable WGAN model.

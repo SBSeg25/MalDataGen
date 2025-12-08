@@ -8,7 +8,7 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/12/07'
 __credits__ = ['Synthetic Ocean AI']
 
-from Engine.Algorithms.Wasserstein.AlgorithmWassersteinGANTorch import AlgorithmWassersteinModelTorch
+from Engine.Algorithms.Wasserstein.WassersteinAlgorithm import WassersteinAlgorithm
 from Engine.Models.Wasserstein.Torch.ModelWassersteinGANTorch import WassersteinModelTorch
 
 # MIT License
@@ -174,7 +174,7 @@ class WassersteinInstance:
         discriminator_model = self._wasserstein_model.get_discriminator()
 
         # Wasserstein Algorithm setup for training and model operations
-        self._wasserstein_algorithm = AlgorithmWassersteinModelTorch(
+        self._wasserstein_algorithm = WassersteinAlgorithm(
             generator_model=generator_model,
             discriminator_model=discriminator_model,
             latent_dimension=self._wasserstein_latent_dimension,
