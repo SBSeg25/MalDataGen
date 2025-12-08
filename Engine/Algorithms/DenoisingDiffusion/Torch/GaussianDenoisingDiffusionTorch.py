@@ -5,7 +5,7 @@ __author__ = 'Kayuã Oleques Paim'
 __email__ = 'kayuaolequesp@gmail.com'
 __version__ = '{1}.{0}.{1}'
 __initial_data__ = '2022/06/01'
-__last_update__ = '2025/12/07'
+__last_update__ = '2025/03/29'
 __credits__ = ['Kayuã Oleques']
 
 # MIT License
@@ -30,11 +30,11 @@ __credits__ = ['Kayuã Oleques']
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+
 try:
     import sys
-    import numpy as np
+    import numpy
     import torch
-    import torch.nn as nn
 
 except ImportError as error:
     print(error)
@@ -46,11 +46,10 @@ DEFAULT_DIFFUSION_GAUSSIAN_TIME_STEPS = 1000
 DEFAULT_DIFFUSION_GAUSSIAN_CLIP_MIN = -1.0
 DEFAULT_DIFFUSION_GAUSSIAN_CLIP_MAX = 1.0
 
-
-class GaussianDiffusionTorch:
+class GaussianDiffusion:
     """
-    A PyTorch implementation of the Gaussian diffusion process used in diffusion models
-    for denoising and generative tasks.
+    A class representing the Gaussian diffusion process used in diffusion models for denoising
+    and generative tasks.
 
     This implementation follows the method proposed by Ho et al. (2020), where a sequence of
     Gaussian noise is applied iteratively to a data sample, and a neural network is trained
@@ -58,8 +57,9 @@ class GaussianDiffusionTorch:
 
     Reference:
     ----------
-        Ho, J., Jain, A., & Abbeel, P. (2020). "Denoising Diffusion Probabilistic Models."
+        Ho, J., Jain, A., & Abbeel, P. (2020). "Denoising LatentDiffusion Probabilistic Models."
         Advances in Neural Information Processing Systems (NeurIPS).
+
 
     Mathematical Formalism:
     -----------------------
@@ -82,6 +82,11 @@ class GaussianDiffusionTorch:
             μ̃_t(x_t,x_0) = (√ᾱ_{t-1}β_t)/(1-ᾱ_t)x_0 + (√α_t(1-ᾱ_{t-1}))/(1-ᾱ_t)x_t
             β̃_t = (1-ᾱ_{t-1})/(1-ᾱ_t)β_t
 
+        This implementation follows the method proposed by Ho et al. (2020), where a sequence of
+        Gaussian noise is applied iteratively to a data sample, and a neural network is trained
+        to reverse this process, allowing the generation of high-quality synthetic samples.
+
+
     Attributes:
     -----------
         @beta_start: float
@@ -94,8 +99,6 @@ class GaussianDiffusionTorch:
             The minimum value to clip the output during denoising, ensuring numerical stability.
         @clip_max: float
             The maximum value to clip the output during denoising.
-        @device: torch.device
-            Device on which tensors are stored (CPU or CUDA).
 
     Derived Attributes:
     -------------------
@@ -107,12 +110,12 @@ class GaussianDiffusionTorch:
             The cumulative product of (1 - beta) for the previous time step.
         @posterior_variance: torch.Tensor
             Variance of the posterior distribution for each time step, used in reverse diffusion.
-        @posterior_log_variance_clipped: torch.Tensor
-            Logarithm of the posterior variance, clipped to avoid numerical instability.
-        @posterior_mean_first_coefficient: torch.Tensor
-            Coefficient for the first term in the posterior mean computation.
-        @posterior_mean_second_coefficient: torch.Tensor
-            Coefficient for the second term in the posterior mean computation.
+        @posterior_log_variance_clipped:
+            torch.Tensor Logarithm of the posterior variance, clipped to avoid numerical instability.
+        @posterior_mean_first_coefficient:
+            torch.Tensor Coefficient for the first term in the posterior mean computation.
+        @posterior_mean_second_coefficient:
+            torch.Tensor Coefficient for the second term in the posterior mean computation.
 
     Methods:
     --------
@@ -132,30 +135,21 @@ class GaussianDiffusionTorch:
             Samples from the model's posterior distribution at time step t.
 
     Example:
-        >>> device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        >>> diffusion = GaussianDiffusionTorch(
-        ...     beta_start=0.0001,
-        ...     beta_end=0.02,
-        ...     time_steps=1000,
-        ...     clip_min=-1.0,
-        ...     clip_max=1.0,
-        ...     device=device
-        ... )
-        >>> noise = torch.randn(1, 32, 32, 3, device=device)
-        >>> t = torch.tensor([10], device=device)
-        >>> x_t = diffusion.q_sample(x_start=noise, t=t, noise=noise)
-        >>> print(x_t.shape)  # Expected output: torch.Size([1, 32, 32, 3])
-    """
+        >>> diffusion = GaussianDiffusion(beta_start=0.0001, beta_end=0.02, time_steps=1000, clip_min=-1.0, clip_max=1.0)
+        ...     noise = torch.randn(1, 32, 32, 3)
+        ...     t = torch.tensor([10], dtype=torch.long)
+        ...     x_t = diffusion.q_sample(x_start=noise, t=t, noise=noise)
+        >>>     print(x_t.shape)  # Expected output: torch.Size([1, 32, 32, 3])
 
+    """
     def __init__(self,
                  beta_start: float = DEFAULT_DIFFUSION_GAUSSIAN_BETA_START,
                  beta_end: float = DEFAULT_DIFFUSION_GAUSSIAN_BETA_END,
-                 time_steps: int = DEFAULT_DIFFUSION_GAUSSIAN_TIME_STEPS,
+                 time_steps: float = DEFAULT_DIFFUSION_GAUSSIAN_TIME_STEPS,
                  clip_min: float = DEFAULT_DIFFUSION_GAUSSIAN_CLIP_MIN,
-                 clip_max: float = DEFAULT_DIFFUSION_GAUSSIAN_CLIP_MAX,
-                 device: torch.device = None):
+                 clip_max: float = DEFAULT_DIFFUSION_GAUSSIAN_CLIP_MAX):
         """
-        Initializes the GaussianDiffusionTorch class with the given beta schedule and clipping values.
+        Initializes the GaussianDiffusion class with the given beta schedule and clipping values.
 
         Parameters:
         -----------
@@ -169,8 +163,6 @@ class GaussianDiffusionTorch:
                 Minimum value for clipping the denoised output.
             clip_max : float
                 Maximum value for clipping the denoised output.
-            device : torch.device, optional
-                Device for tensor storage (CPU or CUDA). If None, uses CUDA if available.
         """
 
         self._beta_start = beta_start
@@ -179,85 +171,78 @@ class GaussianDiffusionTorch:
         self._clip_min = clip_min
         self._clip_max = clip_max
 
-        # Set device
-        if device is None:
-            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        else:
-            self.device = device
-
         # Generate linearly spaced beta values from beta_start to beta_end
-        betas = np.linspace(
-            beta_start,
-            beta_end,
-            time_steps,
-            dtype=np.float32
+        # These values control the noise schedule in the diffusion process
+        self._betas = betas = numpy.linspace(
+            beta_start,  # Starting value of beta (typically small, e.g., 0.0001)
+            beta_end,  # Ending value of beta (typically larger, e.g., 0.02)
+            time_steps,  # Number of discrete time steps in the diffusion process
+            dtype=numpy.float32  # Use float32 for numerical stability
         )
 
-        self._number_time_steps = int(time_steps)
+        self._number_time_steps = int(time_steps)   # Store total number of time steps
 
-        # Calculate alpha values (1 - beta)
+        # Calculate alpha values (1 - beta) which represent the noise retention at each step
         alphas = 1.0 - betas
 
         # Compute cumulative product of alphas (ᾱ_t = ∏_{s=1}^t α_s)
-        alphas_cumulative_product = np.cumprod(alphas, axis=0)
+        # This represents the total noise retention after t steps
+        alphas_cumulative_product = numpy.cumprod(alphas, axis=0)
 
         # Compute cumulative product of alphas shifted by one time step (ᾱ_{t-1})
-        alphas_cumulative_product_previous = np.append(1.0, alphas_cumulative_product[:-1])
+        # Used for posterior calculations, with initial value 1.0 (ᾱ_0 = 1)
+        alphas_cumulative_product_previous = numpy.append(1.0, alphas_cumulative_product[:-1])
 
-        # Convert all numpy arrays to PyTorch tensors and move to device
-        self._betas = torch.tensor(betas, dtype=torch.float32, device=self.device)
+        # Convert all numpy arrays to PyTorch tensors for GPU acceleration
+        # and to ensure they're available during computation
 
-        self._alphas_cumulative_product = torch.tensor(
-            alphas_cumulative_product, dtype=torch.float32, device=self.device
-        )
+        # Raw beta values (noise schedule)
+        self._betas = torch.from_numpy(betas).float()
 
-        self._alphas_cumulative_product_previous = torch.tensor(
-            alphas_cumulative_product_previous, dtype=torch.float32, device=self.device
-        )
+        # Cumulative product of alphas (ᾱ_t)
+        self._alphas_cumulative_product = torch.from_numpy(alphas_cumulative_product).float()
 
-        self._sqrt_alphas_cumulative_product = torch.tensor(
-            np.sqrt(alphas_cumulative_product), dtype=torch.float32, device=self.device
-        )
+        # Previous step's cumulative product (ᾱ_{t-1})
+        self._alphas_cumulative_product_previous = torch.from_numpy(alphas_cumulative_product_previous).float()
 
-        self._sqrt_one_minus_alphas_cumulative_product = torch.tensor(
-            np.sqrt(1.0 - alphas_cumulative_product), dtype=torch.float32, device=self.device
-        )
+        # Square root of cumulative alphas (√ᾱ_t) - used in forward process
+        self._sqrt_alphas_cumulative_product = torch.from_numpy(numpy.sqrt(alphas_cumulative_product)).float()
 
-        self._log_one_minus_alphas_cumulative_product = torch.tensor(
-            np.log(1.0 - alphas_cumulative_product), dtype=torch.float32, device=self.device
-        )
+        # Square root of (1 - ᾱ_t) - represents noise component
+        self._sqrt_one_minus_alphas_cumulative_product = torch.from_numpy(numpy.sqrt(1.0 - alphas_cumulative_product)).float()
 
-        self._sqrt_recip_alphas_cumulative_product = torch.tensor(
-            np.sqrt(1.0 / alphas_cumulative_product), dtype=torch.float32, device=self.device
-        )
+        # Log of (1 - ᾱ_t) - used in some loss calculations
+        self._log_one_minus_alphas_cumulative_product = torch.from_numpy(numpy.log(1.0 - alphas_cumulative_product)).float()
 
-        self._sqrt_recipm1_alphas_cumulative_product = torch.tensor(
-            np.sqrt(1.0 / alphas_cumulative_product - 1), dtype=torch.float32, device=self.device
-        )
+        # Square root of reciprocal of ᾱ_t (√(1/ᾱ_t)) - used in reverse process
+        self._sqrt_recip_alphas_cumulative_product = torch.from_numpy(numpy.sqrt(1.0 / alphas_cumulative_product)).float()
 
-        # Calculate posterior distribution parameters
-        _posterior_variance = (
-                betas * (1.0 - alphas_cumulative_product_previous) / (1.0 - alphas_cumulative_product)
-        )
-        self._posterior_variance = torch.tensor(
-            _posterior_variance, dtype=torch.float32, device=self.device
-        )
+        # Square root of (1/ᾱ_t - 1) - used in some parameterization
+        self._sqrt_recipm1_alphas_cumulative_product = torch.from_numpy(
+            numpy.sqrt(1.0 / alphas_cumulative_product - 1)).float()
 
-        self._posterior_log_variance_clipped = torch.tensor(
-            np.log(np.maximum(_posterior_variance, 1e-20)), dtype=torch.float32, device=self.device
-        )
+        # Calculate parameters for the posterior distribution q(x_{t-1}|x_t,x_0)
+        # This is the true denoising distribution we're trying to approximate
 
-        self._posterior_mean_first_coefficient = torch.tensor(
-            betas * np.sqrt(alphas_cumulative_product_previous) / (1.0 - alphas_cumulative_product),
-            dtype=torch.float32, device=self.device
-        )
+        # Posterior variance (σ_t^2) - variance of the reverse process
+        _posterior_variance = (betas * (1.0 - alphas_cumulative_product_previous) / (1.0 - alphas_cumulative_product))
+        self._posterior_variance = torch.from_numpy(_posterior_variance).float()
 
-        self._posterior_mean_second_coefficient = torch.tensor(
-            (1.0 - alphas_cumulative_product_previous) * np.sqrt(alphas) / (1.0 - alphas_cumulative_product),
-            dtype=torch.float32, device=self.device
-        )
+        # Clipped log variance (log(σ_t^2)) with numerical stability
+        self._posterior_log_variance_clipped = torch.from_numpy(numpy.log(numpy.maximum(_posterior_variance, 1e-20))).float()
 
-    def _extract(self, a: torch.Tensor, t: torch.Tensor, x_shape: torch.Size) -> torch.Tensor:
+        # First coefficient for posterior mean (μ_t) calculation:
+        # β_t * √ᾱ_{t-1} / (1 - ᾱ_t)
+        self._posterior_mean_first_coefficient = torch.from_numpy(
+            betas * numpy.sqrt(alphas_cumulative_product_previous) / (1.0 - alphas_cumulative_product)).float()
+
+        # Second coefficient for posterior mean (μ_t) calculation:
+        # (1 - ᾱ_{t-1}) * √α_t / (1 - ᾱ_t)
+        self._posterior_mean_second_coefficient = torch.from_numpy(
+            (1.0 - alphas_cumulative_product_previous) * numpy.sqrt(alphas) / (1.0 - alphas_cumulative_product)).float()
+
+    @staticmethod
+    def _extract(a, t, x_shape):
         """
         Extracts values from a tensor based on the time index and reshapes them to match the input batch.
 
@@ -276,10 +261,10 @@ class GaussianDiffusionTorch:
                 Extracted and reshaped values.
         """
         batch_size = x_shape[0]
-        out = a.gather(0, t)
-        return out.reshape(batch_size, *((1,) * (len(x_shape) - 1)))
+        out = a.to(t.device)[t]
+        return out.view(batch_size, 1, 1)
 
-    def q_mean_variance(self, x_start: torch.Tensor, t: torch.Tensor):
+    def q_mean_variance(self, x_start, t):
         """
         Computes the mean, variance, and log variance of the forward diffusion process at a given time step.
 
@@ -295,13 +280,20 @@ class GaussianDiffusionTorch:
             tuple of torch.Tensor
                 Mean, variance, and log variance of the forward process.
         """
-        mean = self._extract(self._sqrt_alphas_cumulative_product, t, x_start.shape) * x_start
-        variance = self._extract(1.0 - self._alphas_cumulative_product, t, x_start.shape)
-        log_variance = self._extract(self._log_one_minus_alphas_cumulative_product, t, x_start.shape)
+        x_start_shape = x_start.shape
+
+        mean = self._extract(self._sqrt_alphas_cumulative_product,
+                             t, x_start_shape) * x_start
+
+        variance = self._extract(1.0 - self._alphas_cumulative_product,
+                                 t, x_start_shape)
+
+        log_variance = self._extract(self._log_one_minus_alphas_cumulative_product,
+                                     t, x_start_shape)
 
         return mean, variance, log_variance
 
-    def q_sample(self, x_start: torch.Tensor, t: torch.Tensor, noise: torch.Tensor) -> torch.Tensor:
+    def q_sample(self, x_start, t, noise):
         """
         Samples a noisy version of the input at a given time step.
 
@@ -319,12 +311,12 @@ class GaussianDiffusionTorch:
             torch.Tensor
                 Noisy sample at time step t.
         """
-        return (
-                self._extract(self._sqrt_alphas_cumulative_product, t, x_start.shape) * x_start +
-                self._extract(self._sqrt_one_minus_alphas_cumulative_product, t, x_start.shape) * noise
-        )
+        x_start_shape = x_start.shape
 
-    def predict_start_from_noise(self, x_t: torch.Tensor, t: torch.Tensor, noise: torch.Tensor) -> torch.Tensor:
+        return (self._extract(self._sqrt_alphas_cumulative_product, t, x_start_shape) * x_start
+                + self._extract(self._sqrt_one_minus_alphas_cumulative_product, t, x_start_shape) * noise)
+
+    def predict_start_from_noise(self, x_t, t, noise):
         """
         Predicts the original input x_start given a noisy sample x_t and noise.
 
@@ -342,12 +334,12 @@ class GaussianDiffusionTorch:
             torch.Tensor
                 Predicted x_start.
         """
-        return (
-                self._extract(self._sqrt_recip_alphas_cumulative_product, t, x_t.shape) * x_t -
-                self._extract(self._sqrt_recipm1_alphas_cumulative_product, t, x_t.shape) * noise
-        )
+        x_t_shape = x_t.shape
 
-    def q_posterior(self, x_start: torch.Tensor, x_t: torch.Tensor, t: torch.Tensor):
+        return (self._extract(self._sqrt_recip_alphas_cumulative_product, t, x_t_shape) * x_t
+                - self._extract(self._sqrt_recipm1_alphas_cumulative_product, t, x_t_shape) * noise)
+
+    def q_posterior(self, x_start, x_t, t):
         """
         Computes the posterior mean and variance for the reverse diffusion process.
 
@@ -365,17 +357,17 @@ class GaussianDiffusionTorch:
             tuple of torch.Tensor
                 Posterior mean, variance, and log variance.
         """
-        posterior_mean = (
-                self._extract(self._posterior_mean_first_coefficient, t, x_t.shape) * x_start +
-                self._extract(self._posterior_mean_second_coefficient, t, x_t.shape) * x_t
-        )
-        posterior_variance = self._extract(self._posterior_variance, t, x_t.shape)
-        posterior_log_variance_clipped = self._extract(self._posterior_log_variance_clipped, t, x_t.shape)
+        x_t_shape = x_t.shape
+        posterior_mean = (self._extract(self._posterior_mean_first_coefficient, t, x_t_shape) * x_start
+                          + self._extract(self._posterior_mean_second_coefficient, t, x_t_shape) * x_t)
+
+        posterior_variance = self._extract(self._posterior_variance, t, x_t_shape)
+
+        posterior_log_variance_clipped = self._extract(self._posterior_log_variance_clipped, t, x_t_shape)
 
         return posterior_mean, posterior_variance, posterior_log_variance_clipped
 
-    def p_mean_variance(self, predicted_noise: torch.Tensor, x: torch.Tensor,
-                        t: torch.Tensor, clip_denoised: bool = True):
+    def p_mean_variance(self, predicted_noise, x, t, clip_denoised=True):
         """
         Predicts the mean and variance of the model's posterior distribution at time step t.
 
@@ -400,14 +392,11 @@ class GaussianDiffusionTorch:
         if clip_denoised:
             x_recon = torch.clamp(x_recon, self._clip_min, self._clip_max)
 
-        model_mean, posterior_variance, posterior_log_variance = self.q_posterior(
-            x_start=x_recon, x_t=x, t=t
-        )
+        model_mean, posterior_variance, posterior_log_variance = self.q_posterior(x_start=x_recon, x_t=x, t=t)
 
         return model_mean, posterior_variance, posterior_log_variance
 
-    def p_sample(self, predicted_noise: torch.Tensor, x: torch.Tensor,
-                 t: torch.Tensor, clip_denoised: bool = True) -> torch.Tensor:
+    def p_sample(self, predicted_noise, x, t, clip_denoised=True):
         """
         Samples from the model's posterior distribution at a given time step.
 
@@ -427,106 +416,143 @@ class GaussianDiffusionTorch:
             torch.Tensor
                 Sampled output at time step t.
         """
-        model_mean, _, model_log_variance = self.p_mean_variance(
-            predicted_noise, x=x, t=t, clip_denoised=clip_denoised
-        )
+        model_mean, _, model_log_variance = self.p_mean_variance(predicted_noise,
+                                                                 x=x,
+                                                                 t=t,
+                                                                 clip_denoised=clip_denoised)
 
         noise = torch.randn_like(x)
 
-        # No noise when t == 0
-        nonzero_mask = (t != 0).float().view(-1, *([1] * (len(x.shape) - 1)))
+        nonzero_mask = (t != 0).float().view(x.shape[0], 1, 1)
 
         return model_mean + nonzero_mask * torch.exp(0.5 * model_log_variance) * noise
 
-    # Properties with getters and setters
     @property
     def beta_start(self) -> float:
-        """Get the starting value of beta for the noise schedule."""
+        """Get the starting value of beta for the noise schedule.
+
+        Returns:
+            The initial beta value for the diffusion process.
+        """
         return self._beta_start
 
     @beta_start.setter
     def beta_start(self, value: float) -> None:
-        """Set the starting value of beta for the noise schedule."""
+        """Set the starting value of beta for the noise schedule.
+
+        Args:
+            value: The initial beta value (must be positive and <= beta_end).
+
+        Raises:
+            ValueError: If value is not positive or is greater than beta_end.
+        """
         if value <= 0:
             raise ValueError("beta_start must be positive")
+
         if hasattr(self, '_beta_end') and value > self._beta_end:
             raise ValueError("beta_start must be less than or equal to beta_end")
+
         self._beta_start = value
 
     @property
     def beta_end(self) -> float:
-        """Get the ending value of beta for the noise schedule."""
+        """Get the ending value of beta for the noise schedule.
+
+        Returns:
+            The final beta value for the diffusion process.
+        """
         return self._beta_end
 
     @beta_end.setter
     def beta_end(self, value: float) -> None:
-        """Set the ending value of beta for the noise schedule."""
+        """Set the ending value of beta for the noise schedule.
+
+        Args:
+            value: The final beta value (must be positive and >= beta_start).
+
+        Raises:
+            ValueError: If value is not positive or is less than beta_start.
+        """
+
         if value <= 0:
             raise ValueError("beta_end must be positive")
+
         if hasattr(self, '_beta_start') and value < self._beta_start:
             raise ValueError("beta_end must be greater than or equal to beta_start")
+
         self._beta_end = value
 
     @property
     def time_steps(self) -> int:
-        """Get the number of diffusion time steps."""
+        """Get the number of diffusion time steps.
+
+        Returns:
+            The number of time steps in the diffusion process.
+        """
         return self._time_steps
 
     @time_steps.setter
     def time_steps(self, value: int) -> None:
-        """Set the number of diffusion time steps."""
+        """Set the number of diffusion time steps.
+
+        Args:
+            value: The number of time steps (must be positive integer).
+
+        Raises:
+            ValueError: If value is not a positive integer.
+        """
+
         if not isinstance(value, int) or value <= 0:
             raise ValueError("time_steps must be a positive integer")
+
         self._time_steps = value
 
     @property
     def clip_min(self) -> float:
-        """Get the minimum clipping value for the output."""
+        """Get the minimum clipping value for the output.
+
+        Returns:
+            The minimum value to clip outputs to.
+        """
         return self._clip_min
 
     @clip_min.setter
     def clip_min(self, value: float) -> None:
-        """Set the minimum clipping value for the output."""
+        """Set the minimum clipping value for the output.
+
+        Args:
+            value: The minimum clip value (must be < clip_max).
+
+        Raises:
+            ValueError: If value is not less than clip_max.
+        """
+
         if hasattr(self, '_clip_max') and value >= self._clip_max:
             raise ValueError("clip_min must be less than clip_max")
+
         self._clip_min = value
 
     @property
     def clip_max(self) -> float:
-        """Get the maximum clipping value for the output."""
+        """Get the maximum clipping value for the output.
+
+        Returns:
+            The maximum value to clip outputs to.
+        """
         return self._clip_max
 
     @clip_max.setter
     def clip_max(self, value: float) -> None:
-        """Set the maximum clipping value for the output."""
-        if hasattr(self, '_clip_min') and value <= self._clip_min:
-            raise ValueError("clip_max must be greater than clip_min")
-        self._clip_max = value
-
-    def to(self, device: torch.device):
-        """
-        Move all tensors to the specified device.
+        """Set the maximum clipping value for the output.
 
         Args:
-            device: Target device (e.g., 'cuda' or 'cpu').
+            value: The maximum clip value (must be > clip_min).
 
-        Returns:
-            self: Returns self for method chaining.
+        Raises:
+            ValueError: If value is not greater than clip_min.
         """
-        self.device = device
 
-        # Move all tensor attributes to the new device
-        self._betas = self._betas.to(device)
-        self._alphas_cumulative_product = self._alphas_cumulative_product.to(device)
-        self._alphas_cumulative_product_previous = self._alphas_cumulative_product_previous.to(device)
-        self._sqrt_alphas_cumulative_product = self._sqrt_alphas_cumulative_product.to(device)
-        self._sqrt_one_minus_alphas_cumulative_product = self._sqrt_one_minus_alphas_cumulative_product.to(device)
-        self._log_one_minus_alphas_cumulative_product = self._log_one_minus_alphas_cumulative_product.to(device)
-        self._sqrt_recip_alphas_cumulative_product = self._sqrt_recip_alphas_cumulative_product.to(device)
-        self._sqrt_recipm1_alphas_cumulative_product = self._sqrt_recipm1_alphas_cumulative_product.to(device)
-        self._posterior_variance = self._posterior_variance.to(device)
-        self._posterior_log_variance_clipped = self._posterior_log_variance_clipped.to(device)
-        self._posterior_mean_first_coefficient = self._posterior_mean_first_coefficient.to(device)
-        self._posterior_mean_second_coefficient = self._posterior_mean_second_coefficient.to(device)
+        if hasattr(self, '_clip_min') and value <= self._clip_min:
+            raise ValueError("clip_max must be greater than clip_min")
 
-        return self
+        self._clip_max = value

@@ -10,7 +10,7 @@ __credits__ = ['Synthetic Ocean AI']
 
 from Framework.Instances.Adversarial import AdversarialInstance
 from Framework.Instances.Autoencoder import AutoencoderInstance
-from Engine.Algorithms.DenoisingDiffusion.DenoisingDiffusionInstance import DenoisingDiffusionInstance
+from Engine.Algorithms.DenoisingDiffusion.Tensorflow.DenoisingDiffusionInstanceTensorflow import DenoisingDiffusionInstance
 from Engine.Algorithms.LatentDiffusion.LatentDiffusionInstance import LatentDiffusionInstance
 from Framework.Instances.QuantizedVAE import QuantizedVAEInstance
 from Engine.Algorithms.RandomNoise.AlgorithmRandomNoise import RandomNoiseAlgorithm

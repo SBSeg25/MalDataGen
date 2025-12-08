@@ -49,8 +49,8 @@ try:
 
     from tensorflow.python.keras.losses import BinaryCrossentropy
 
-    from Engine.Algorithms.DenoisingDiffusion.AlgorithmDenoisingDiffusion import AlgorithmDenoisingDiffusion
-    from Engine.Algorithms.DenoisingDiffusion.GaussianDenoisingDiffusion import GaussianDiffusion
+    from Engine.Algorithms.DenoisingDiffusion.Tensorflow.AlgorithmDenoisingDiffusionTensorflow import AlgorithmDenoisingDiffusion
+    from Engine.Algorithms.DenoisingDiffusion.Tensorflow.GaussianDenoisingDiffusionTensorflow import GaussianDiffusion
     from Engine.Models.DenoisingDiffusion.DiffusionModelUnet import UNetDenoisingModel
 
 except ImportError as error:
