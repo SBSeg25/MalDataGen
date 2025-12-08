@@ -56,7 +56,7 @@ except ImportError as error:
     sys.exit(-1)
 
 
-class WassersteinGPAlgorithm(Model):
+class WassersteinGPAlgorithmTensorflow(Model):
     """
     A WassersteinGP Generative Adversarial Network (WassersteinGP GAN) model.
 
