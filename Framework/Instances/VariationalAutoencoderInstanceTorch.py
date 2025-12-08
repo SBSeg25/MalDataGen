@@ -8,7 +8,7 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Kayuã Oleques']
 
-from Engine.Algorithms.VariationalAutoencoder.Torch.AlgorithmVariationalAutoencoderTorch import VariationalAlgorithmTorch
+from Engine.Algorithms.VariationalAutoencoder.VariationalAutoencoderAlgorithm import VariationalAutoencoderAlgorithm
 from Engine.Models.VariationalAutoencoder.Torch.VariationalAutoencoderModelTorch import VariationalModelTorch
 
 try:
@@ -115,7 +115,7 @@ class VariationalAutoencoderInstance:
         )
 
         # Variational Algorithm setup for training and model operations
-        self._variational_algorithm = VariationalAlgorithmTorch(
+        self._variational_algorithm = VariationalAutoencoderAlgorithm(
             encoder_model=self._variational_model.get_encoder(input_shape),
             decoder_model=self._variational_model.get_decoder(input_shape),
             loss_function=self._variational_loss_function,
@@ -166,6 +166,7 @@ class VariationalAutoencoderInstance:
             batch_size=self._variational_batch_size,
             callbacks=callbacks_list
         )
+
     def _one_hot_encode(self, labels, num_classes):
         """
         One-hot encode labels for PyTorch compatibility.

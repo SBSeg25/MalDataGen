@@ -53,7 +53,7 @@ except ImportError as error:
     logging.error(error)
     sys.exit(-1)
 
-class WassersteinAlgorithm(VariationalAutoencoderAlgorithmBase):
+class VariationalAutoencoderAlgorithm(VariationalAutoencoderAlgorithmBase):
     def __init__(self, *args, **kwargs):
 
         super().__init__(*args, **kwargs)
