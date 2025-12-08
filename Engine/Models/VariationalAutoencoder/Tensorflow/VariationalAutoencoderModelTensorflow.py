@@ -53,7 +53,7 @@ DEFAULT_VARIATIONAL_AUTOENCODER_INITIALIZER_MEAN = 0
 DEFAULT_VARIATIONAL_AUTOENCODER_INITIALIZER_DEVIATION = 0.125
 
 
-class VariationalModelTorch(VanillaDecoder, VanillaEncoder):
+class VariationalModelTensorflow(VanillaDecoder, VanillaEncoder):
     """
     A Variational Model that integrates both VanillaEncoder and VanillaDecoder
     functionalities. This class enables flexible configuration of encoder and

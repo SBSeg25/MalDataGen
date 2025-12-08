@@ -8,8 +8,8 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
-from Engine.Algorithms.VariationalAutoencoder.AlgorithmVariationalAutoencoder import VariationalAlgorithm
-from Engine.Models.VariationalAutoencoder.Tensorflow.VariationalAutoencoderModelTensorflow import VariationalModel
+from Engine.Algorithms.VariationalAutoencoder.AlgorithmVariationalAutoencoderTorch import VariationalAlgorithmTorch
+from Engine.Models.VariationalAutoencoder.Tensorflow.VariationalAutoencoderModelTensorflow import VariationalModelTorch
 
 # MIT License
 #
@@ -36,22 +36,15 @@ from Engine.Models.VariationalAutoencoder.Tensorflow.VariationalAutoencoderModel
 
 try:
     import sys
-
-    import keras
     import numpy
-
     import logging
-    import tensorflow
-
-    from tensorflow.keras.optimizers import Adam
-
-    from tensorflow.keras.utils import to_categorical
-
-    from tensorflow.python.keras.losses import MeanSquaredError
+    import torch
+    import torch.nn as nn
 
 except ImportError as error:
     logging.error(error)
     sys.exit(-1)
+
 
 class VariationalAutoencoderInstance:
     """
@@ -137,7 +130,6 @@ class VariationalAutoencoderInstance:
         self._variational_autoencoder_file_name_decoder = arguments.variational_autoencoder_file_name_decoder
         self._variational_autoencoder_path_output_models = arguments.variational_autoencoder_path_output_models
 
-
     def _get_variational_autoencoder(self, input_shape):
         """
         Initializes and sets up a Variational Autoencoder (VAE) model.
@@ -161,7 +153,7 @@ class VariationalAutoencoderInstance:
         """
 
         # Variational Model setup for the VAE's encoder and decoder
-        self._variation_model = VariationalModel(latent_dimension=self._variational_autoencoder_latent_dimension,
+        self._variation_model = VariationalModelTorch(latent_dimension=self._variational_autoencoder_latent_dimension,
                                                  output_shape=input_shape,
                                                  activation_function=self._variational_autoencoder_activation_function,
                                                  initializer_mean=self._variational_autoencoder_initializer_mean,
@@ -171,20 +163,20 @@ class VariationalAutoencoderInstance:
                                                  last_layer_activation=self._variational_autoencoder_last_activation_layer,
                                                  number_neurons_encoder=self._variational_autoencoder_dense_layer_sizes_encoder,
                                                  number_neurons_decoder=self._variational_autoencoder_dense_layer_sizes_decoder,
-                                                 dataset_type=numpy.float32, number_samples_per_class = self._number_samples_per_class)
+                                                 dataset_type=numpy.float32,
+                                                 number_samples_per_class=self._number_samples_per_class)
 
         # Variational Algorithm setup for training and model operations
-        self._variational_algorithm = VariationalAlgorithm(encoder_model=self._variation_model.get_encoder(),
+        self._variational_algorithm = VariationalAlgorithmTorch(encoder_model=self._variation_model.get_encoder(),
                                                            decoder_model=self._variation_model.get_decoder(),
                                                            loss_function=self._variational_autoencoder_loss_function,
                                                            latent_dimension=self._variational_autoencoder_latent_dimension,
-                                                           decoder_latent_dimension = self._variational_autoencoder_latent_dimension,
+                                                           decoder_latent_dimension=self._variational_autoencoder_latent_dimension,
                                                            latent_mean_distribution=self._variational_autoencoder_mean_distribution,
                                                            latent_stander_deviation=self._variational_autoencoder_stander_deviation,
                                                            file_name_encoder=self._variational_autoencoder_file_name_encoder,
                                                            file_name_decoder=self._variational_autoencoder_file_name_decoder,
                                                            models_saved_path=self._variational_autoencoder_path_output_models)
-
 
     def _training_variational_autoencoder_model(self, input_shape, arguments, x_real_samples, y_real_samples):
         """
@@ -207,10 +199,13 @@ class VariationalAutoencoderInstance:
         self._get_variational_autoencoder(input_shape)
 
         # Print the model summaries for the encoder and decoder
-        self._variation_model.get_encoder().summary()
-        self._variation_model.get_decoder().summary()
+        print("Encoder Summary:")
+        print(self._variation_model.get_encoder())
+        print("\nDecoder Summary:")
+        print(self._variation_model.get_decoder())
 
-        variational_optimizer = keras.optimizers.Adam()
+        variational_optimizer = torch.optim.Adam(self._variational_algorithm.parameters())
+
         # Compile the variational autoencoder algorithm with the specified loss function
         self._variational_algorithm.compile(loss=self._variational_autoencoder_loss_function,
                                             optimizer=variational_optimizer)
@@ -221,13 +216,18 @@ class VariationalAutoencoderInstance:
         if arguments.use_early_stop:
             callbacks_list.append(self._callback_early_stop)
 
+        # Convert labels to one-hot encoding
+        num_classes = self._number_samples_per_class["number_classes"]
+        y_real_samples_one_hot = numpy.zeros((y_real_samples.shape[0], num_classes))
+        for i, label in enumerate(y_real_samples):
+            y_real_samples_one_hot[i, int(label)] = 1
+
         # Fit the variational autoencoder model
-        self._variational_algorithm.fit((x_real_samples, to_categorical(y_real_samples,
-                                           num_classes=self._number_samples_per_class["number_classes"])),
-                                        x_real_samples, epochs=self._variational_autoencoder_number_epochs,
+        self._variational_algorithm.fit((x_real_samples, y_real_samples_one_hot),
+                                        x_real_samples,
+                                        epochs=self._variational_autoencoder_number_epochs,
                                         batch_size=self._variational_autoencoder_batch_size,
                                         callbacks=callbacks_list)
-
 
     # Getter and setter for variational_autoencoder_latent_dimension
     @property

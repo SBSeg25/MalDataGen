@@ -60,7 +60,7 @@ except ImportError as error:
     sys.exit(-1)
 
 
-class VanillaEncoderTorch(Activations, LayerSampling):
+class VanillaEncoderTensorflow(Activations, LayerSampling):
     """
     VanillaEncoder
 

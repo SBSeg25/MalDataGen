@@ -8,6 +8,9 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
+from Engine.Models.Autoencoder.Torch.VanillaDecoderTorch import VanillaDecoderTorch
+from Engine.Models.Autoencoder.Torch.VanillaEncoderTorch import VanillaEncoderTorch
+
 # MIT License
 #
 # Copyright (c) 2025 Synthetic Ocean AI
@@ -33,8 +36,6 @@ __credits__ = ['Synthetic Ocean AI']
 try:
     import sys
     import numpy
-    from Engine.Models.VariationalAutoencoder.VanillaDecoder import VanillaDecoder
-    from Engine.Models.VariationalAutoencoder.VanillaEncoder import VanillaEncoder
 
 except ImportError as error:
     print(error)
@@ -52,7 +53,7 @@ DEFAULT_VARIATIONAL_AUTOENCODER_INITIALIZER_MEAN = 0
 DEFAULT_VARIATIONAL_AUTOENCODER_INITIALIZER_DEVIATION = 0.125
 
 
-class VariationalModelTorch(VanillaDecoder, VanillaEncoder):
+class VariationalModelTorch(VanillaDecoderTorch, VanillaEncoderTorch):
     """
     A Variational Model that integrates both VanillaEncoder and VanillaDecoder
     functionalities. This class enables flexible configuration of encoder and
