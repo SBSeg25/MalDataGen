@@ -8,118 +8,103 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
-# MIT License
-#
-# Copyright (c) 2025 Synthetic Ocean AI
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
+from Engine.Models.QuantizedVAE.Torch.ActivationTorch import ActivationsTorch
+
+# MIT License - Copyright (c) 2025 Synthetic Ocean AI
 
 try:
     import sys
     import numpy
     import torch
     import torch.nn as nn
-    from Engine.Activations.Activations import Activations
 
 except ImportError as error:
     print(error)
     sys.exit(-1)
 
 
-class VanillaDecoderTorch(nn.Module, Activations):
+class DecoderNetwork(nn.Module):
+    """Neural network implementation for the decoder."""
+
+    def __init__(self, parent):
+        super().__init__()
+        self.parent = parent
+
+        # Label embedding layer
+        self.label_embedding = nn.Linear(
+            parent._decoder_number_samples_per_class["number_classes"],
+            8
+        )
+        parent._init_weights(self.label_embedding, parent._decoder_initializer_mean,
+                             parent._decoder_initializer_deviation)
+
+        # First layer after concatenation
+        input_size = parent._decoder_latent_dimension + 8
+        layers = []
+
+        # First layer
+        first_layer = nn.Linear(input_size, parent._decoder_number_neurons_decoder[0])
+        parent._init_weights(first_layer, parent._decoder_initializer_mean,
+                             parent._decoder_initializer_deviation)
+        layers.append(first_layer)
+        layers.append(parent._get_activation(parent._decoder_intermediary_activation_function))
+        layers.append(nn.Dropout(parent._decoder_dropout_decay_rate_decoder))
+
+        # Hidden layers
+        for i in range(1, len(parent._decoder_number_neurons_decoder)):
+            layer = nn.Linear(
+                parent._decoder_number_neurons_decoder[i - 1],
+                parent._decoder_number_neurons_decoder[i]
+            )
+            parent._init_weights(layer, parent._decoder_initializer_mean,
+                                 parent._decoder_initializer_deviation)
+            layers.append(layer)
+            layers.append(nn.Dropout(parent._decoder_dropout_decay_rate_decoder))
+            layers.append(parent._get_activation(parent._decoder_intermediary_activation_function))
+
+        self.decoder_layers = nn.Sequential(*layers)
+
+        # Output layer
+        self.output_layer = nn.Linear(
+            parent._decoder_number_neurons_decoder[-1],
+            parent._decoder_output_shape
+        )
+        parent._init_weights(self.output_layer, parent._decoder_initializer_mean,
+                             parent._decoder_initializer_deviation)
+
+    def forward(self, latent, label):
+        """
+        Forward pass through the decoder.
+
+        Args:
+            latent: Latent vector
+            label: One-hot encoded labels
+
+        Returns:
+            Reconstructed output
+        """
+        # Embed labels
+        label_embedded = torch.relu(self.label_embedding(label))
+
+        # Concatenate latent and embedded labels
+        combined = torch.cat([latent, label_embedded], dim=1)
+
+        # Pass through decoder layers
+        decoded = self.decoder_layers(combined)
+
+        # Output layer
+        output = self.output_layer(decoded)
+        output = self.parent._get_activation(self.parent._decoder_last_layer_activation)(output)
+
+        return output
+
+
+class VanillaDecoderTorch(nn.Module, ActivationsTorch):
     """
-      VanillaDecoder
+    VanillaDecoder
 
-      This class implements a conditional fully connected decoder network, which reconstructs data from a
-      latent representation. It extends from the `Activations` base class to inherit common activation
-      utilities. The decoder can be conditioned on class labels or other side information, making it
-      suitable for use in conditional autoencoders or conditional generative models.
-
-      The architecture consists of a sequence of fully connected layers, each followed by an
-      activation function and optional dropout for regularization. The final output layer can use
-      a customizable activation function (e.g., sigmoid, tanh) depending on the desired output format.
-
-      Attributes
-      ----------
-      @decoder_latent_dimension : int
-          Dimensionality of the latent space (input to the decoder).
-      @decoder_output_shape : int
-          Dimensionality of the output data (reconstructed data).
-      @decoder_intermediary_activation_function : Callable
-          Activation function applied to intermediate layers.
-      @decoder_last_layer_activation : Callable
-          Activation function applied to the final layer.
-      @decoder_dropout_decay_rate_decoder : float
-          Dropout rate applied to the dense layers for regularization.
-      @decoder_dataset_type : type
-          Data type for inputs and outputs (default: numpy.float32).
-      @decoder_initializer_mean : float
-          Mean of the normal distribution used for weight initialization.
-      @decoder_initializer_deviation : float
-          Standard deviation of the normal distribution used for weight initialization.
-      @decoder_number_neurons_decoder : List[int]
-          List specifying the number of neurons in each dense layer.
-      @decoder_number_samples_per_class : Optional[Dict[str, int]]
-          Dictionary containing class metadata (e.g., number of samples per class). This allows
-          the decoder to incorporate label conditioning if provided.
-      @decoder_model : Optional[nn.Module]
-          The actual decoder network.
-
-      Methods
-      -------
-      (The methods are defined elsewhere in the class and would typically include model building,
-      forward pass, and any required conditional logic for class conditioning.)
-
-      Notes
-      -----
-      This decoder is typically used in conditional autoencoder architectures, where the input
-      to the decoder includes both a latent vector (encoding the data) and optional class
-      information (one-hot encoded). This allows the decoder to reconstruct samples that
-      match a particular class, improving generative flexibility.
-
-      Raises
-      ------
-      ValueError
-          Raised during initialization if any of the provided hyperparameters (e.g., layer sizes,
-          dropout rates) are invalid.
-
-      Examples
-      --------
-      >>> decoder = VanillaDecoderTorch(
-      ...     latent_dimension=128,
-      ...     output_shape=784,
-      ...     activation_function='relu',
-      ...     initializer_mean=0.0,
-      ...     initializer_deviation=0.02,
-      ...     dropout_decay_decoder=0.3,
-      ...     last_layer_activation='sigmoid',
-      ...     number_neurons_decoder=[256, 128, 64],
-      ...     dataset_type=numpy.float32,
-      ...     number_samples_per_class={"number_classes": 10}
-      ... )
-      >>> decoder.build_model()
-
-      References
-      ----------
-      Kingma, D.P., & Welling, M. (2013). Auto-Encoding Variational Bayes.
-      https://arxiv.org/abs/1312.6114
-      """
+    This class implements a conditional fully connected decoder network.
+    """
 
     def __init__(self,
                  latent_dimension,
@@ -134,28 +119,9 @@ class VanillaDecoderTorch(nn.Module, Activations):
                  number_samples_per_class=None):
         """
         Initializes the VanillaDecoder with the given hyperparameters.
-
-        Parameters
-        ----------
-        @latent_dimension : int Dimensionality of the input latent space.
-        @output_shape : int Dimensionality of the output (typically the same as the input to the encoder).
-        @activation_function : str or callable Activation function for intermediate layers.
-        @initializer_mean : float Mean of the normal distribution for weight initialization.
-        @initializer_deviation : float Standard deviation of the normal distribution for weight initialization.
-        @dropout_decay_decoder : float Dropout rate applied to intermediate layers.
-        @last_layer_activation : str or callable Activation function for the final layer (e.g., 'sigmoid' for normalized outputs).
-        @number_neurons_decoder : list of int Number of neurons in each fully connected layer.
-        @dataset_type : type, optional Data type for inputs and outputs (default: numpy.float32).
-        @number_samples_per_class : dict, optional Optional metadata dictionary containing information about class counts
-
-        Raises
-        ------
-        ValueError
-            If any provided parameter has an invalid value (e.g., non-positive layer sizes,
-            invalid dropout rates).
         """
         nn.Module.__init__(self)
-        Activations.__init__(self)
+        ActivationsTorch.__init__(self)
 
         if not isinstance(latent_dimension, int) or latent_dimension <= 0:
             raise ValueError("latent_dimension must be a positive integer.")
@@ -203,107 +169,41 @@ class VanillaDecoderTorch(nn.Module, Activations):
         self._decoder_number_samples_per_class = number_samples_per_class
         self._decoder_model = None
 
-    def get_decoder(self):
+    def _init_weights(self, layer, mean, std):
+        """Initialize layer weights with normal distribution."""
+        nn.init.normal_(layer.weight, mean=mean, std=std)
+        if layer.bias is not None:
+            nn.init.zeros_(layer.bias)
+
+    def _get_activation(self, activation_name):
+        """Get activation function by name."""
+        if callable(activation_name):
+            return activation_name
+
+        activations = {
+            'relu': nn.ReLU(),
+            'tanh': nn.Tanh(),
+            'sigmoid': nn.Sigmoid(),
+            'leaky_relu': nn.LeakyReLU(),
+            'swish': nn.SiLU(),
+            'linear': nn.Identity()
+        }
+        return activations.get(activation_name.lower(), nn.ReLU())
+
+    def get_decoder(self, input_shape=None):
         """
         Builds and returns the decoder model.
 
-        The model is a fully connected neural network that accepts both latent vectors and conditional inputs
-        (e.g., class labels). It uses dropout and specified activation functions for regularization and non-linearity.
+        Args:
+            input_shape: Optional input shape (for API compatibility, not used)
 
         Returns:
             nn.Module: The decoder model.
         """
+        # FIX: Create and cache the decoder network instance
+        if self._decoder_model is None:
+            self._decoder_model = DecoderNetwork(self)
 
-        class DecoderNetwork(nn.Module):
-            def __init__(self, parent):
-                super().__init__()
-                self.parent = parent
-
-                # Label embedding layer
-                self.label_embedding = nn.Linear(
-                    parent._decoder_number_samples_per_class["number_classes"],
-                    8
-                )
-
-                # First layer after concatenation
-                input_size = parent._decoder_latent_dimension + 8
-                layers = []
-
-                # First layer
-                layers.append(nn.Linear(input_size, parent._decoder_number_neurons_decoder[0]))
-                self._init_weights(layers[-1], parent._decoder_initializer_mean, parent._decoder_initializer_deviation)
-                layers.append(self._get_activation(parent._decoder_intermediary_activation_function))
-                layers.append(nn.Dropout(parent._decoder_dropout_decay_rate_decoder))
-
-                # Hidden layers
-                for i in range(1, len(parent._decoder_number_neurons_decoder)):
-                    layers.append(nn.Linear(
-                        parent._decoder_number_neurons_decoder[i - 1],
-                        parent._decoder_number_neurons_decoder[i]
-                    ))
-                    self._init_weights(layers[-1], parent._decoder_initializer_mean,
-                                       parent._decoder_initializer_deviation)
-                    layers.append(nn.Dropout(parent._decoder_dropout_decay_rate_decoder))
-                    layers.append(self._get_activation(parent._decoder_intermediary_activation_function))
-
-                self.decoder_layers = nn.Sequential(*layers)
-
-                # Output layer
-                self.output_layer = nn.Linear(
-                    parent._decoder_number_neurons_decoder[-1],
-                    parent._decoder_output_shape
-                )
-                self._init_weights(self.output_layer, parent._decoder_initializer_mean,
-                                   parent._decoder_initializer_deviation)
-
-            def _init_weights(self, layer, mean, std):
-                """Initialize layer weights with normal distribution."""
-                nn.init.normal_(layer.weight, mean=mean, std=std)
-                if layer.bias is not None:
-                    nn.init.zeros_(layer.bias)
-
-            def _get_activation(self, activation_name):
-                """Get activation function by name."""
-                if callable(activation_name):
-                    return activation_name
-
-                activations = {
-                    'relu': nn.ReLU(),
-                    'tanh': nn.Tanh(),
-                    'sigmoid': nn.Sigmoid(),
-                    'leaky_relu': nn.LeakyReLU(),
-                    'swish': nn.SiLU(),
-                    'linear': nn.Identity()
-                }
-                return activations.get(activation_name.lower(), nn.ReLU())
-
-            def forward(self, latent, label):
-                """
-                Forward pass through the decoder.
-
-                Args:
-                    latent: Latent vector
-                    label: One-hot encoded labels
-
-                Returns:
-                    Reconstructed output
-                """
-                # Embed labels
-                label_embedded = torch.relu(self.label_embedding(label))
-
-                # Concatenate latent and embedded labels
-                combined = torch.cat([latent, label_embedded], dim=1)
-
-                # Pass through decoder layers
-                decoded = self.decoder_layers(combined)
-
-                # Output layer
-                output = self.output_layer(decoded)
-                output = self._get_activation(self.parent._decoder_last_layer_activation)(output)
-
-                return output
-
-        self._decoder_model = DecoderNetwork(self)
         return self._decoder_model
 
     @property

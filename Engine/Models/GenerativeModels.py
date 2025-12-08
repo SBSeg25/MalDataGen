@@ -432,7 +432,7 @@ class GenerativeModels(AdversarialInstance,
 
         elif self.arguments.model_type == 'variational':
             # Generate samples using the Variational algorithm
-            self._latent_variational_algorithm_diffusion.get_samples(number_samples_per_class)
+            self._latent_variational_algorithm.get_samples(number_samples_per_class)
             pass
 
         elif self.arguments.model_type == 'autoencoder':

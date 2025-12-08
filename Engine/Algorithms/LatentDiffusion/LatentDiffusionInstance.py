@@ -8,6 +8,10 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
+from Engine.Algorithms.LatentDiffusion.AlgorithmLatentDiffusion import LatentDiffusionAlgorithm
+from Engine.Algorithms.VariationalAutoencoder.AlgorithmVariationalAutoencoder import VariationalAlgorithm
+from Engine.Algorithms.VariationalAutoencoder.AlgorithmVariationalAutoencoderTorch import VariationalAlgorithmTorch
+from Engine.Models.VariationalAutoencoder.Torch.VariationalAutoencoderModelTorch import VariationalModelTorch
 
 # MIT License
 #
@@ -53,7 +57,7 @@ try:
     from Engine.Algorithms.LatentDiffusion.GaussianLatentDiffusion import GaussianDiffusion
     from Engine.Models.LatentDiffusion.DiffusionModelUnet import UNetModel
     from Engine.Models.LatentDiffusion.VariationalAutoencoderModel import VariationalModelDiffusion
-    from Engine.Models.VariationalAutoencoder.Tensorflow.VariationalAutoencoderModelTensorflow import VariationalModel
+    from Engine.Models.VariationalAutoencoder.Tensorflow.VariationalAutoencoderModelTensorflow import VariationalModelTensorflow
 
 except ImportError as error:
     logging.error(error)
@@ -76,7 +80,7 @@ class LatentDiffusionInstance:
     - Highly configurable architecture via arguments for research experimentation
 
     Attributes:
-        _latent_variational_algorithm_diffusion: Orchestrates training of the VAE within the diffusion context
+        _latent_variational_algorithm: Orchestrates training of the VAE within the diffusion context
         _latent_variation_model_diffusion: Stores the encoder and decoder of the VAE
         _latent_autoencoder_diffusion: Core autoencoder used for latent embedding and reconstruction
         _latent_gaussian_diffusion_util: Utility object for beta schedules and diffusion parameters
@@ -145,7 +149,7 @@ class LatentDiffusionInstance:
                 - Model saving paths
         """
 
-        self._latent_variational_algorithm_diffusion = None
+        self._latent_variational_algorithm = None
         self._latent_variation_model_diffusion = None
 
         self._latent_autoencoder_diffusion = None
@@ -287,16 +291,16 @@ class LatentDiffusionInstance:
                                                                            number_samples_per_class = self._number_samples_per_class)
 
         # Initialize the VariationalAlgorithmDiffusion for the training and diffusion process
-        self._latent_variational_algorithm_diffusion = VAELatentDiffusionAlgorithm(encoder_model=self._latent_variation_model_diffusion.get_encoder(),
-                                                                                   decoder_model=self._latent_variation_model_diffusion.get_decoder(),
-                                                                                   loss_function=self._latent_diffusion_VAE_loss_function,
-                                                                                   latent_dimension=self._latent_diffusion_latent_dimension,
-                                                                                   decoder_latent_dimension = self._latent_diffusion_latent_dimension,
-                                                                                   latent_mean_distribution=self._latent_diffusion_VAE_mean_distribution,
-                                                                                   latent_stander_deviation=self._latent_diffusion_VAE_stander_deviation,
-                                                                                   file_name_encoder=self._latent_diffusion_VAE_file_name_encoder,
-                                                                                   file_name_decoder=self._latent_diffusion_VAE_file_name_decoder,
-                                                                                   models_saved_path=self._latent_diffusion_VAE_path_output_models)
+        self._latent_variational_algorithm = VAELatentDiffusionAlgorithm(encoder_model=self._latent_variation_model_diffusion.get_encoder(),
+                                                                         decoder_model=self._latent_variation_model_diffusion.get_decoder(),
+                                                                         loss_function=self._latent_diffusion_VAE_loss_function,
+                                                                         latent_dimension=self._latent_diffusion_latent_dimension,
+                                                                         decoder_latent_dimension = self._latent_diffusion_latent_dimension,
+                                                                         latent_mean_distribution=self._latent_diffusion_VAE_mean_distribution,
+                                                                         latent_stander_deviation=self._latent_diffusion_VAE_stander_deviation,
+                                                                         file_name_encoder=self._latent_diffusion_VAE_file_name_encoder,
+                                                                         file_name_decoder=self._latent_diffusion_VAE_file_name_decoder,
+                                                                         models_saved_path=self._latent_diffusion_VAE_path_output_models)
 
     def _get_variational_autoencoder(self, input_shape):
         """
@@ -321,7 +325,7 @@ class LatentDiffusionInstance:
         """
 
         # Variational Model setup for the VAE's encoder and decoder
-        self._variation_model = VariationalModel(latent_dimension=self._latent_diffusion_VAE_latent_dimension,
+        self._variation_model = VariationalModelTorch(latent_dimension=self._latent_diffusion_VAE_latent_dimension,
                                                  output_shape=input_shape,
                                                  activation_function=self._latent_diffusion_VAE_intermediary_activation_function,
                                                  initializer_mean=self._latent_diffusion_VAE_initializer_mean,
@@ -333,18 +337,18 @@ class LatentDiffusionInstance:
                                                  number_neurons_decoder=self._latent_diffusion_VAE_decoder_filters,
                                                  dataset_type=numpy.float32,
                                                  number_samples_per_class = self._number_samples_per_class)
-
+        print("---------------------------------------------------------")
         # Variational Algorithm setup for training and model operations
-        self._variational_algorithm = VariationalAlgorithm(encoder_model=self._variation_model.get_encoder(),
-                                                           decoder_model=self._variation_model.get_decoder(),
-                                                           loss_function=self._latent_diffusion_VAE_loss_function,
-                                                           latent_dimension=self._latent_diffusion_VAE_latent_dimension,
-                                                           decoder_latent_dimension = self._latent_diffusion_VAE_latent_dimension,
-                                                           latent_mean_distribution=self._latent_diffusion_VAE_mean_distribution,
-                                                           latent_stander_deviation=self._latent_diffusion_VAE_stander_deviation,
-                                                           file_name_encoder=self._latent_diffusion_VAE_file_name_encoder,
-                                                           file_name_decoder=self._latent_diffusion_VAE_file_name_decoder,
-                                                           models_saved_path=self._latent_diffusion_VAE_path_output_models)
+        # self._variational_algorithm = VariationalAlgorithmTorch(encoder_model=self._variation_model.get_encoder(),
+        #                                                    decoder_model=self._variation_model.get_decoder(),
+        #                                                    loss_function=self._latent_diffusion_VAE_loss_function,
+        #                                                    latent_dimension=self._latent_diffusion_VAE_latent_dimension,
+        #                                                    decoder_latent_dimension = self._latent_diffusion_VAE_latent_dimension,
+        #                                                    latent_mean_distribution=self._latent_diffusion_VAE_mean_distribution,
+        #                                                    latent_stander_deviation=self._latent_diffusion_VAE_stander_deviation,
+        #                                                    file_name_encoder=self._latent_diffusion_VAE_file_name_encoder,
+        #                                                    file_name_decoder=self._latent_diffusion_VAE_file_name_decoder,
+        #                                                    models_saved_path=self._latent_diffusion_VAE_path_output_models)
 
 
 
@@ -365,6 +369,7 @@ class LatentDiffusionInstance:
             x_real_samples (ndarray): Training samples
             y_real_samples (ndarray): Corresponding labels
         """
+        print("---------------------------------------------------------")
         # Initialize the diffusion model
         self._get_latent_diffusion(input_shape)
 
@@ -379,7 +384,7 @@ class LatentDiffusionInstance:
         self._latent_variation_model_diffusion.get_decoder().summary()
 
         # Compile the variational algorithm for diffusion
-        self._latent_variational_algorithm_diffusion.compile(loss=self._latent_diffusion_VAE_loss_function)
+        self._latent_variational_algorithm.compile(loss=self._latent_diffusion_VAE_loss_function)
 
         # callbacks_list = [self._callback_resources_monitor, self._callback_model_monitor]
         callbacks_list = [self._callback_model_monitor]
@@ -388,7 +393,7 @@ class LatentDiffusionInstance:
             callbacks_list.append(self._callback_early_stop)
 
         # Fit the diffusion model with the training data
-        self._latent_variational_algorithm_diffusion.fit((
+        self._latent_variational_algorithm.fit((
             x_real_samples,
             to_categorical(y_real_samples, num_classes=self._number_samples_per_class["number_classes"])),
             x_real_samples, epochs=self._latent_diffusion_VAE_epochs,
@@ -396,8 +401,8 @@ class LatentDiffusionInstance:
             callbacks=callbacks_list)
 
         # Retrieve the trained encoder and decoder from the variational algorithm
-        self._encoder_latent_diffusion = self._latent_variational_algorithm_diffusion.get_encoder_trained()
-        self._decoder_latent_diffusion = self._latent_variational_algorithm_diffusion.get_decoder_trained()
+        self._encoder_latent_diffusion = self._latent_variational_algorithm.get_encoder_trained()
+        self._decoder_latent_diffusion = self._latent_variational_algorithm.get_decoder_trained()
 
         # Print summaries of the trained encoder and decoder
         self._encoder_latent_diffusion.summary()
@@ -420,7 +425,7 @@ class LatentDiffusionInstance:
         self._latent_diffusion_algorithm.compile(loss=MeanSquaredError(), optimizer=Adam(learning_rate=0.0001))
 
         # Prepare the data embedding and train the diffusion model
-        data_embedding = self._latent_variational_algorithm_diffusion.create_embedding([
+        data_embedding = self._latent_variational_algorithm.create_embedding([
             x_real_samples,
             to_categorical(y_real_samples, num_classes=self._number_samples_per_class["number_classes"])])
 

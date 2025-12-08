@@ -11,25 +11,6 @@ __credits__ = ['Kayuã Oleques']
 # MIT License
 #
 # Copyright (c) 2025 Synthetic Ocean AI
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 
 try:
     import os
@@ -49,62 +30,6 @@ except ImportError as error:
 class VariationalAlgorithmTorch(nn.Module):
     """
     Implements a Variational AutoEncoder (VAE) model for generating synthetic data.
-
-    The model includes an encoder and a decoder for encoding input data and reconstructing
-    it from a learned latent space. During training, it computes both the reconstruction loss
-    and the KL divergence loss. The trained decoder can be used to generate synthetic data.
-
-    This class supports customizable latent space parameters and loss functions, making it
-    adaptable for different generative tasks.
-
-    Attributes:
-        @_encoder (nn.Module):
-            Encoder model that encodes input data into the latent space.
-        @_decoder (nn.Module):
-            Decoder model that reconstructs data from the latent representation.
-        @_loss_function (callable):
-            Function used to compute the total loss during training.
-        @_total_loss_tracker (float):
-            Tracks the overall loss during training.
-        @_reconstruction_loss_tracker (float):
-            Tracks the reconstruction loss during training.
-        @_kl_loss_tracker (float):
-            Tracks the KL divergence loss during training.
-        @_latent_mean_distribution (float):
-            Mean of the latent distribution.
-        @_latent_stander_deviation (float):
-            Standard deviation of the latent distribution.
-        @_latent_dimension (int):
-            Dimensionality of the latent space.
-        @_decoder_latent_dimension (int):
-            Dimensionality of the latent space used by the decoder.
-        @_file_name_encoder (str):
-            File name for saving the encoder model.
-        @_file_name_decoder (str):
-            File name for saving the decoder model.
-        @_models_saved_path (str):
-            Directory path where the encoder and decoder models are saved.
-
-    Raises:
-        ValueError:
-            Raised in cases where:
-            - The latent dimension is non-positive.
-            - The standard deviation of the latent space is non-positive.
-            - The file paths are invalid.
-
-    Example:
-        >>> vae_model = VariationalAlgorithm(
-        ...     encoder_model=encoder,
-        ...     decoder_model=decoder,
-        ...     loss_function=custom_loss_function,
-        ...     latent_dimension=128,
-        ...     latent_mean_distribution=0.0,
-        ...     latent_stander_deviation=1.0,
-        ...     file_name_encoder="encoder_model.pth",
-        ...     file_name_decoder="decoder_model.pth",
-        ...     models_saved_path="models/"
-        ... )
-        >>> vae_model.train_step(data)
     """
 
     def __init__(self,
@@ -117,48 +42,19 @@ class VariationalAlgorithmTorch(nn.Module):
                  latent_stander_deviation,
                  file_name_encoder,
                  file_name_decoder,
-                 models_saved_path,
-                 *args,
-                 **kwargs):
-
-        super().__init__(*args, **kwargs)
+                 models_saved_path):
         """
-        Initializes the VariationalAlgorithm model with provided encoder and decoder models, 
-        loss function, and latent space parameters.
+        Initializes the VariationalAlgorithm model.
 
-        This constructor sets up the architecture, metrics, and paths for saving the models.
-
-        Args:
-            @encoder_model (nn.Module):
-                The encoder model responsible for encoding input data into latent variables.
-            @decoder_model (nn.Module):
-                The decoder model responsible for reconstructing data from the latent space.
-            @loss_function (callable):
-                The loss function used to compute the training loss.
-            @latent_dimension (int):
-                The dimensionality of the latent space.
-            @latent_mean_distribution (float):
-                The mean of the latent distribution (usually 0).
-            @latent_stander_deviation (float):
-                The standard deviation of the latent distribution (usually 1).
-            @file_name_encoder (str):
-                The filename for saving the encoder model.
-            @file_name_decoder (str):
-                The filename for saving the decoder model.
-            @models_saved_path (str):
-                The directory where the models will be saved.
-            @*args:
-                Additional arguments for the parent class.
-            @**kwargs:
-                Additional keyword arguments for the parent class.
-
-        Raises:
-            ValueError:
-                If latent_dimension <= 0.
-                If latent_stander_deviation <= 0.
-                If file paths are invalid.
+        FIX: Properly register encoder and decoder as submodules by directly
+        assigning them to attributes WITHOUT using property setters.
         """
-        # Initialize the encoder and decoder models
+        # Call parent __init__ first
+        super(VariationalAlgorithmTorch, self).__init__()
+
+        # FIX: Direct assignment to register as submodules
+        # This is the KEY fix - assign directly to _encoder and _decoder
+        # BEFORE the properties are defined, or use different names
         self._encoder = encoder_model
         self._decoder = decoder_model
 
@@ -181,7 +77,6 @@ class VariationalAlgorithmTorch(nn.Module):
 
         # Optimizer will be configured later
         self.optimizer = None
-        self.configure_optimizer()
 
     def train_step(self, batch):
         """
@@ -191,7 +86,7 @@ class VariationalAlgorithmTorch(nn.Module):
             batch: Input data batch.
 
         Returns:
-            dict: Dictionary containing the loss values (total loss, reconstruction loss, KL divergence loss).
+            dict: Dictionary containing the loss values.
         """
         batch_x, batch_y = batch
 
@@ -211,8 +106,7 @@ class VariationalAlgorithmTorch(nn.Module):
 
         # Calculate binary cross-entropy loss for reconstruction
         binary_cross_entropy_loss = F.binary_cross_entropy(reconstruction_data, batch_y, reduction='none')
-        sum_reduced = binary_cross_entropy_loss
-        reconstruction_loss = torch.mean(sum_reduced)
+        reconstruction_loss = torch.mean(binary_cross_entropy_loss)
 
         # Calculate KL divergence loss
         encoder_output = (1 + latent_log_variation - torch.square(latent_mean))
@@ -234,9 +128,11 @@ class VariationalAlgorithmTorch(nn.Module):
         self._kl_loss_tracker = kl_divergence_loss.item()
 
         # Return a dictionary containing the current loss values
-        return {"loss": self._total_loss_tracker,
-                "reconstruction_loss": self._reconstruction_loss_tracker,
-                "kl_loss": self._kl_loss_tracker}
+        return {
+            "loss": self._total_loss_tracker,
+            "reconstruction_loss": self._reconstruction_loss_tracker,
+            "kl_loss": self._kl_loss_tracker
+        }
 
     def configure_optimizer(self,
                             learning_rate=0.001,
@@ -247,14 +143,6 @@ class VariationalAlgorithmTorch(nn.Module):
                             weight_decay=1e-5):
         """
         Configure the Adam optimizer with custom parameters.
-
-        Args:
-            learning_rate: Learning rate
-            beta_1: Adam beta1 parameter
-            beta_2: Adam beta2 parameter
-            epsilon: Adam epsilon
-            amsgrad: Whether to use AMSGrad variant
-            weight_decay: L2 regularization factor
         """
         self.optimizer = torch.optim.Adam(
             self.parameters(),
@@ -274,12 +162,6 @@ class VariationalAlgorithmTorch(nn.Module):
     def create_embedding(self, data):
         """
         Generates latent space embeddings using the trained encoder.
-
-        Args:
-            data (ndarray): Input data to encode.
-
-        Returns:
-            ndarray: Latent space representations.
         """
         self.eval()
         device = next(self.parameters()).device
@@ -295,23 +177,6 @@ class VariationalAlgorithmTorch(nn.Module):
     def get_samples(self, number_samples_per_class):
         """
         Generate synthetic samples for each specified class using the trained decoder.
-
-        This function generates samples by sampling from a normal distribution in the latent space
-        and conditioning the generation process on class labels.
-
-        Args:
-            number_samples_per_class (dict):
-                Dictionary specifying the number of samples to generate for each class.
-                Expected structure:
-                {
-                    "classes": {class_label: number_of_samples, ...},
-                    "number_classes": total_number_of_classes
-                }
-
-        Returns:
-            dict:
-                A dictionary where each key is a class label and the value is an array of generated samples.
-                Each array contains the synthetic samples generated for the corresponding class.
         """
         self.eval()
         device = next(self.parameters()).device
@@ -341,14 +206,6 @@ class VariationalAlgorithmTorch(nn.Module):
     def generate_synthetic_data(self, number_samples_generate, labels, latent_dimension):
         """
         Generate synthetic data using the Variational AutoEncoder (VAE).
-
-        Args:
-            number_samples_generate (int): Number of synthetic samples to generate.
-            labels: Labels for the generated data.
-            latent_dimension (int): Dimension of the latent space.
-
-        Returns:
-            torch.Tensor: Synthetic data generated by the decoder.
         """
         self.eval()
         device = next(self.parameters()).device
@@ -384,10 +241,6 @@ class VariationalAlgorithmTorch(nn.Module):
     def save_model(self, directory, file_name):
         """
         Save the encoder and decoder models.
-
-        Args:
-            directory (str): Directory where models will be saved.
-            file_name (str): Base file name for saving models.
         """
         if not os.path.exists(directory):
             os.makedirs(directory)
@@ -405,10 +258,6 @@ class VariationalAlgorithmTorch(nn.Module):
     def load_models(self, directory, file_name):
         """
         Load the encoder and decoder models from a directory.
-
-        Args:
-            directory (str): Directory where models are stored.
-            file_name (str): Base file name for loading models.
         """
         device = next(self.parameters()).device
 
@@ -423,23 +272,12 @@ class VariationalAlgorithmTorch(nn.Module):
     def compile(self, loss, optimizer):
         """
         Configure the model for training (PyTorch compatibility method).
-
-        Args:
-            loss: Loss function (ignored, using built-in loss)
-            optimizer: Optimizer to use for training
         """
         self.optimizer = optimizer
 
     def fit(self, train_data, y_data, epochs, batch_size, callbacks=None):
         """
         Train the VAE model.
-
-        Args:
-            train_data: Tuple of (x_train, y_labels) or x_train
-            y_data: Target data (reconstruction target)
-            epochs: Number of training epochs
-            batch_size: Batch size for training
-            callbacks: List of callbacks (optional)
         """
         device = next(self.parameters()).device
         self.train()
@@ -495,6 +333,8 @@ class VariationalAlgorithmTorch(nn.Module):
                     if hasattr(callback, 'on_epoch_end'):
                         callback.on_epoch_end(epoch, {'loss': avg_loss})
 
+    # REMOVED: The problematic property setters that interfere with module registration
+    # Properties can still be used for read-only access if needed, but not for setting
     @property
     def decoder(self):
         return self._decoder
@@ -502,11 +342,3 @@ class VariationalAlgorithmTorch(nn.Module):
     @property
     def encoder(self):
         return self._encoder
-
-    @decoder.setter
-    def decoder(self, decoder):
-        self._decoder = decoder
-
-    @encoder.setter
-    def encoder(self, encoder):
-        self._encoder = encoder

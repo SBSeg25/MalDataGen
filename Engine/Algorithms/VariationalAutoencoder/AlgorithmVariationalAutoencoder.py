@@ -131,7 +131,7 @@ class VariationalAlgorithm(Model):
 
         super().__init__(*args, **kwargs)
         """
-        Initializes the VariationalAlgorithm model with provided encoder and decoder models, 
+        Initializes the VariationalAlgorithm model with provided encoder and decoder models,
         loss function, and latent space parameters.
 
         This constructor sets up the architecture, metrics, and paths for saving the models.
@@ -235,18 +235,18 @@ class VariationalAlgorithm(Model):
                 "reconstruction_loss": self._reconstruction_loss_tracker.result(),
                 "kl_loss": self._kl_loss_tracker.result()}
 
-     
 
-    def configure_optimizer(self, 
-                        learning_rate=0.001, 
-                        beta_1=0.9, 
+
+    def configure_optimizer(self,
+                        learning_rate=0.001,
+                        beta_1=0.9,
                         beta_2=0.999,
                         epsilon=1e-7,
                         amsgrad=False,
                         weight_decay=1e-5):
         """
         Configure the Adam optimizer with custom parameters.
-        
+
         Args:
             learning_rate: Learning rate
             beta_1: Adam beta1 parameter

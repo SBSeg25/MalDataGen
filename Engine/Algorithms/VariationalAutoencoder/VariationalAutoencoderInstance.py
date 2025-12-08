@@ -1,45 +1,21 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-__author__ = 'Synthetic Ocean AI - Team'
-__email__ = 'syntheticoceanai@gmail.com'
+__author__ = 'Kayuã Oleques Paim'
+__email__ = 'kayuaolequesp@gmail.com'
 __version__ = '{1}.{0}.{1}'
 __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
-__credits__ = ['Synthetic Ocean AI']
+__credits__ = ['Kayuã Oleques']
 
 from Engine.Algorithms.VariationalAutoencoder.AlgorithmVariationalAutoencoderTorch import VariationalAlgorithmTorch
-from Engine.Models.VariationalAutoencoder.Tensorflow.VariationalAutoencoderModelTensorflow import VariationalModelTorch
-
-# MIT License
-#
-# Copyright (c) 2025 Synthetic Ocean AI
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
+from Engine.Models.VariationalAutoencoder.Torch.VariationalAutoencoderModelTorch import VariationalModelTorch
 
 try:
     import sys
     import numpy
     import logging
-    import torch
-    import torch.nn as nn
+
 
 except ImportError as error:
     logging.error(error)
@@ -48,354 +24,339 @@ except ImportError as error:
 
 class VariationalAutoencoderInstance:
     """
-    A class that implements a Variational Autoencoder (VAE) for probabilistic generative modeling.
-    This implementation combines an encoder-decoder architecture with variational inference to learn
-    a compressed latent representation of input data while enabling efficient sampling and generation.
-
-    Key Components:
-    - Encoder network that maps inputs to a latent distribution
-    - Decoder network that reconstructs inputs from latent samples
-    - KL divergence regularization for latent space structure
-    - Flexible architecture configuration via arguments
-    - Complete training pipeline with monitoring
+    A class that instantiates and manages a Variational Autoencoder (VAE) model.
+    This implementation provides complete configuration, training, and management capabilities
+    for variational autoencoder-based learning tasks.
 
     Attributes:
-        _variation_model: Contains the encoder and decoder networks
-        _variational_algorithm: Manages the VAE training process
+        _variational_model (VariationalModelTorch): Contains encoder and decoder components
+        _variational_algorithm (VariationalAlgorithmTorch): Manages the VAE training process
 
-        # VAE Architecture Parameters
-        _variational_autoencoder_latent_dimension: Dimensionality of latent space
-        _variational_autoencoder_training_algorithm: Training methodology
-        _variational_autoencoder_activation_function: Activation for hidden layers
-        _variational_autoencoder_dropout_decay_rate_encoder: Dropout rate for encoder
-        _variational_autoencoder_dropout_decay_rate_decoder: Dropout rate for decoder
-        _variational_autoencoder_dense_layer_sizes_encoder: Layer sizes for encoder
-        _variational_autoencoder_dense_layer_sizes_decoder: Layer sizes for decoder
-        _variational_autoencoder_batch_size: Training batch size
-        _variational_autoencoder_number_classes: Number of output classes
-        _variational_autoencoder_loss_function: Composite loss (reconstruction + KL)
-        _variational_autoencoder_momentum: Optimizer momentum parameter
-        _variational_autoencoder_number_epochs: Training epochs
-        _variational_autoencoder_last_activation_layer: Output layer activation
-        _variational_autoencoder_initializer_mean: Weight init mean
-        _variational_autoencoder_initializer_deviation: Weight init std dev
-
-        # Latent Space Parameters
-        _variational_autoencoder_mean_distribution: Distribution type for latent mean
-        _variational_autoencoder_stander_deviation: Std dev for latent distribution
-
-        # Model Persistence
-        _variational_autoencoder_file_name_encoder: Encoder save filename
-        _variational_autoencoder_file_name_decoder: Decoder save filename
-        _variational_autoencoder_path_output_models: Model save directory
+    Configuration Parameters (with getters/setters):
+        _variational_latent_dimension (int): Size of the latent space
+        _variational_activation_function (str): Activation function for hidden layers
+        _variational_dropout_decay_rate_encoder (float): Encoder dropout rate
+        _variational_dropout_decay_rate_decoder (float): Decoder dropout rate
+        _variational_dense_layer_sizes_encoder (list): Encoder layer sizes
+        _variational_dense_layer_sizes_decoder (list): Decoder layer sizes
+        _variational_batch_size (int): Size of training batches
+        _variational_number_epochs (int): Number of training epochs
+        _variational_loss_function (str): Loss function for reconstruction
+        _variational_last_activation_layer (str): Last layer activation function
+        _variational_initializer_mean (float): Mean for weight initialization
+        _variational_initializer_deviation (float): Std dev for weight initialization
+        _variational_latent_mean_distribution (float): Latent space mean
+        _variational_latent_stander_deviation (float): Latent space std dev
+        _variational_file_name_encoder (str): Encoder model filename
+        _variational_file_name_decoder (str): Decoder model filename
+        _variational_path_output_models (str): Path for saving models
     """
 
     def __init__(self, arguments):
         """
-        Initializes the VAE instance with configuration parameters.
+        Initializes the variational autoencoder instance with configuration parameters.
 
         Args:
-            arguments (Namespace): Configuration object containing:
-                - Encoder/decoder architecture parameters
-                - Training hyperparameters
-                - Latent space configuration
-                - Model persistence settings
+            arguments (Namespace): Configuration object containing all required parameters.
         """
-        self._variation_model = None
         self._variational_algorithm = None
+        self._variational_model = None
 
-        # ** Variational Autoencoder (VAE) Configuration Parameters **
-        self._variational_autoencoder_latent_dimension = arguments.variational_autoencoder_latent_dimension
-        self._variational_autoencoder_training_algorithm = arguments.variational_autoencoder_training_algorithm
-        self._variational_autoencoder_activation_function = arguments.variational_autoencoder_activation_function
-        self._variational_autoencoder_dropout_decay_rate_encoder = arguments.variational_autoencoder_dropout_decay_rate_encoder
-        self._variational_autoencoder_dropout_decay_rate_decoder = arguments.variational_autoencoder_dropout_decay_rate_decoder
-        self._variational_autoencoder_dense_layer_sizes_encoder = arguments.variational_autoencoder_dense_layer_sizes_encoder
-        self._variational_autoencoder_dense_layer_sizes_decoder = arguments.variational_autoencoder_dense_layer_sizes_decoder
-        self._variational_autoencoder_batch_size = arguments.variational_autoencoder_batch_size
-        self._variational_autoencoder_number_classes = arguments.variational_autoencoder_number_classes
-        self._variational_autoencoder_loss_function = arguments.variational_autoencoder_loss_function
-        self._variational_autoencoder_momentum = arguments.variational_autoencoder_momentum
-        self._variational_autoencoder_number_epochs = arguments.variational_autoencoder_number_epochs
-        self._variational_autoencoder_last_activation_layer = arguments.variational_autoencoder_last_activation_layer
+        # ** Variational Autoencoder Model Configuration Parameters **
+        # Removidos argumentos não utilizados:
+        # - variational_training_algorithm (não usado em lugar algum)
+        # - variational_number_classes (não usado - obtido de number_samples_per_class)
+        # - variational_momentum (não usado no algoritmo PyTorch)
+        self._variational_latent_dimension = arguments.variational_autoencoder_latent_dimension
+        self._variational_activation_function = 'relu'
+        self._variational_dropout_decay_rate_encoder = arguments.variational_dropout_decay_rate_encoder
+        self._variational_dropout_decay_rate_decoder = arguments.variational_dropout_decay_rate_decoder
+        self._variational_dense_layer_sizes_encoder = arguments.variational_dense_layer_sizes_encoder
+        self._variational_dense_layer_sizes_decoder = arguments.variational_dense_layer_sizes_decoder
+        self._variational_batch_size = arguments.variational_batch_size
+        self._variational_number_epochs = arguments.variational_number_epochs
+        self._variational_loss_function = arguments.variational_loss_function
+        self._variational_last_activation_layer = arguments.variational_last_activation_layer
+        self._variational_initializer_mean = arguments.variational_initializer_mean
+        self._variational_initializer_deviation = arguments.variational_initializer_deviation
+        self._variational_latent_mean_distribution = arguments.variational_latent_mean_distribution
+        self._variational_latent_stander_deviation = arguments.variational_latent_stander_deviation
+        self._variational_file_name_encoder = arguments.variational_file_name_encoder
+        self._variational_file_name_decoder = arguments.variational_file_name_decoder
+        self._variational_path_output_models = arguments.variational_path_output_models
 
-        # Latent Space Parameters
-        self._variational_autoencoder_initializer_mean = arguments.variational_autoencoder_initializer_mean
-        self._variational_autoencoder_initializer_deviation = arguments.variational_autoencoder_initializer_deviation
-        self._variational_autoencoder_mean_distribution = arguments.variational_autoencoder_mean_distribution
-        self._variational_autoencoder_stander_deviation = arguments.variational_autoencoder_stander_deviation
+        # Get number_samples_per_class from arguments if available
+        self._number_samples_per_class = getattr(arguments, 'number_samples_per_class', None)
 
-        # Model Persistence
-        self._variational_autoencoder_file_name_encoder = arguments.variational_autoencoder_file_name_encoder
-        self._variational_autoencoder_file_name_decoder = arguments.variational_autoencoder_file_name_decoder
-        self._variational_autoencoder_path_output_models = arguments.variational_autoencoder_path_output_models
-
-    def _get_variational_autoencoder(self, input_shape):
+    def _get_variational(self, input_shape):
         """
-        Initializes and sets up a Variational Autoencoder (VAE) model.
-
-        This method creates an instance of a Variational Autoencoder (VAE) by configuring its encoder and decoder
-        components. It uses a custom `VariationalModel` class to define and manage these components, and a `VariationalAlgorithm`
-        to handle the training and operations of the VAE model. The VAE is designed for probabilistic inference and data generation.
+        Initialize and configure the Variational Autoencoder model.
 
         Args:
             input_shape (tuple):
-                The shape of the input data, which is used to define the output shape of the model.
-
-        Initializes:
-            self._variation_model:
-                An instance of the `VariationalModel` class that includes the encoder and decoder setup with
-                configurations like latent dimension, activation functions, dropout rates, and neural network sizes.
-            self._variational_algorithm:
-                An instance of the `VariationalAlgorithm` class that handles the VAE's training process, loss function,
-                and model parameters, including latent mean and standard deviation distributions.
-
+                The shape of the input data, which determines the output shape for the models.
         """
-
-        # Variational Model setup for the VAE's encoder and decoder
-        self._variation_model = VariationalModelTorch(latent_dimension=self._variational_autoencoder_latent_dimension,
-                                                 output_shape=input_shape,
-                                                 activation_function=self._variational_autoencoder_activation_function,
-                                                 initializer_mean=self._variational_autoencoder_initializer_mean,
-                                                 initializer_deviation=self._variational_autoencoder_initializer_deviation,
-                                                 dropout_decay_encoder=self._variational_autoencoder_dropout_decay_rate_encoder,
-                                                 dropout_decay_decoder=self._variational_autoencoder_dropout_decay_rate_decoder,
-                                                 last_layer_activation=self._variational_autoencoder_last_activation_layer,
-                                                 number_neurons_encoder=self._variational_autoencoder_dense_layer_sizes_encoder,
-                                                 number_neurons_decoder=self._variational_autoencoder_dense_layer_sizes_decoder,
-                                                 dataset_type=numpy.float32,
-                                                 number_samples_per_class=self._number_samples_per_class)
+        # Variational Model setup for Encoder and Decoder
+        self._variational_model = VariationalModelTorch(
+            latent_dimension=self._variational_latent_dimension,
+            output_shape=input_shape[0] if isinstance(input_shape, tuple) else input_shape,
+            activation_function=self._variational_activation_function,
+            initializer_mean=self._variational_initializer_mean,
+            initializer_deviation=self._variational_initializer_deviation,
+            dropout_decay_encoder=self._variational_dropout_decay_rate_encoder,
+            dropout_decay_decoder=self._variational_dropout_decay_rate_decoder,
+            last_layer_activation=self._variational_last_activation_layer,
+            number_neurons_encoder=self._variational_dense_layer_sizes_encoder,
+            number_neurons_decoder=self._variational_dense_layer_sizes_decoder,
+            dataset_type=numpy.float32,
+            number_samples_per_class=self._number_samples_per_class
+        )
 
         # Variational Algorithm setup for training and model operations
-        self._variational_algorithm = VariationalAlgorithmTorch(encoder_model=self._variation_model.get_encoder(),
-                                                           decoder_model=self._variation_model.get_decoder(),
-                                                           loss_function=self._variational_autoencoder_loss_function,
-                                                           latent_dimension=self._variational_autoencoder_latent_dimension,
-                                                           decoder_latent_dimension=self._variational_autoencoder_latent_dimension,
-                                                           latent_mean_distribution=self._variational_autoencoder_mean_distribution,
-                                                           latent_stander_deviation=self._variational_autoencoder_stander_deviation,
-                                                           file_name_encoder=self._variational_autoencoder_file_name_encoder,
-                                                           file_name_decoder=self._variational_autoencoder_file_name_decoder,
-                                                           models_saved_path=self._variational_autoencoder_path_output_models)
+        self._variational_algorithm = VariationalAlgorithmTorch(
+            encoder_model=self._variational_model.get_encoder(input_shape),
+            decoder_model=self._variational_model.get_decoder(input_shape),
+            loss_function=self._variational_loss_function,
+            latent_dimension=self._variational_latent_dimension,
+            decoder_latent_dimension=self._variational_decoder_latent_dimension,
+            latent_mean_distribution=self._variational_latent_mean_distribution,
+            latent_stander_deviation=self._variational_latent_stander_deviation,
+            file_name_encoder=self._variational_file_name_encoder,
+            file_name_decoder=self._variational_file_name_decoder,
+            models_saved_path=self._variational_path_output_models
+        )
 
     def _training_variational_autoencoder_model(self, input_shape, arguments, x_real_samples, y_real_samples):
         """
-        Executes the complete VAE training pipeline.
-
-        The training process:
-        1. Initializes encoder and decoder models
-        2. Configures the composite loss (reconstruction + KL divergence)
-        3. Sets up optimizer with specified parameters
-        4. Trains using minibatch gradient descent
-        5. Manages training callbacks and monitoring
+        Executes the complete variational autoencoder training process.
 
         Args:
-            input_shape (tuple): Input data dimensions
-            arguments (Namespace): Training configuration parameters
-            x_real_samples (ndarray): Training dataset samples
-            y_real_samples (ndarray): Corresponding sample labels
+            input_shape (tuple): Shape of input data samples
+            arguments (Namespace): Configuration parameters
+            x_real_samples (ndarray): Training data samples
+            y_real_samples (ndarray): Corresponding class labels
         """
         # Initialize the variational autoencoder model
-        self._get_variational_autoencoder(input_shape)
+        self._get_variational(input_shape)
 
         # Print the model summaries for the encoder and decoder
-        print("Encoder Summary:")
-        print(self._variation_model.get_encoder())
-        print("\nDecoder Summary:")
-        print(self._variation_model.get_decoder())
+        encoder = self._variational_model.get_encoder(input_shape)
+        decoder = self._variational_model.get_decoder(input_shape)
 
-        variational_optimizer = torch.optim.Adam(self._variational_algorithm.parameters())
+        print(f"Encoder model: {encoder}")
+        print(f"Decoder model: {decoder}")
 
-        # Compile the variational autoencoder algorithm with the specified loss function
-        self._variational_algorithm.compile(loss=self._variational_autoencoder_loss_function,
-                                            optimizer=variational_optimizer)
+        # Configure optimizer
+        self._variational_algorithm.configure_optimizer(
+            learning_rate=arguments.variational_learning_rate if hasattr(arguments,
+                                                                         'variational_learning_rate') else 0.001,
+            beta_1=arguments.variational_beta_1 if hasattr(arguments, 'variational_beta_1') else 0.9,
+            beta_2=arguments.variational_beta_2 if hasattr(arguments, 'variational_beta_2') else 0.999
+        )
 
-        # callbacks_list = [self._callback_resources_monitor, self._callback_model_monitor]
-        callbacks_list = [self._callback_model_monitor]
+        # Prepare callbacks list
+        callbacks_list = []
 
-        if arguments.use_early_stop:
-            callbacks_list.append(self._callback_early_stop)
-
-        # Convert labels to one-hot encoding
-        num_classes = self._number_samples_per_class["number_classes"]
-        y_real_samples_one_hot = numpy.zeros((y_real_samples.shape[0], num_classes))
-        for i, label in enumerate(y_real_samples):
-            y_real_samples_one_hot[i, int(label)] = 1
+        # Note: You'll need to adapt or create Torch-compatible callbacks
+        # For now, we'll pass an empty list or basic print callbacks
 
         # Fit the variational autoencoder model
-        self._variational_algorithm.fit((x_real_samples, y_real_samples_one_hot),
-                                        x_real_samples,
-                                        epochs=self._variational_autoencoder_number_epochs,
-                                        batch_size=self._variational_autoencoder_batch_size,
-                                        callbacks=callbacks_list)
+        self._variational_algorithm.fit(
+            (x_real_samples, self._one_hot_encode(y_real_samples, self._number_samples_per_class["number_classes"])),
+            x_real_samples,
+            epochs=self._variational_number_epochs,
+            batch_size=self._variational_batch_size,
+            callbacks=callbacks_list
+        )
 
-    # Getter and setter for variational_autoencoder_latent_dimension
+    def _one_hot_encode(self, labels, num_classes):
+        """
+        One-hot encode labels for PyTorch compatibility.
+
+        Args:
+            labels (ndarray): Integer labels
+            num_classes (int): Number of classes
+
+        Returns:
+            ndarray: One-hot encoded labels
+        """
+        import torch
+        if isinstance(labels, numpy.ndarray):
+            labels = torch.from_numpy(labels).long()
+
+        return torch.nn.functional.one_hot(labels, num_classes).float()
+
+    # Property getters and setters
+
     @property
-    def variational_autoencoder_latent_dimension(self):
-        return self._variational_autoencoder_latent_dimension
+    def variational_latent_dimension(self):
+        return self._variational_latent_dimension
 
-    @variational_autoencoder_latent_dimension.setter
-    def variational_autoencoder_latent_dimension(self, value):
-        self._variational_autoencoder_latent_dimension = value
+    @variational_latent_dimension.setter
+    def variational_latent_dimension(self, value):
+        self._variational_latent_dimension = value
 
-    # Getter and setter for variational_autoencoder_training_algorithm
     @property
-    def variational_autoencoder_training_algorithm(self):
-        return self._variational_autoencoder_training_algorithm
+    def variational_training_algorithm(self):
+        return self._variational_training_algorithm
 
-    @variational_autoencoder_training_algorithm.setter
-    def variational_autoencoder_training_algorithm(self, value):
-        self._variational_autoencoder_training_algorithm = value
 
-    # Getter and setter for variational_autoencoder_activation_function
     @property
-    def variational_autoencoder_activation_function(self):
-        return self._variational_autoencoder_activation_function
+    def variational_activation_function(self):
+        return self._variational_activation_function
 
-    @variational_autoencoder_activation_function.setter
-    def variational_autoencoder_activation_function(self, value):
-        self._variational_autoencoder_activation_function = value
+    @variational_activation_function.setter
+    def variational_activation_function(self, value):
+        self._variational_activation_function = value
 
-    # Getter and setter for variational_autoencoder_dropout_decay_rate_encoder
     @property
-    def variational_autoencoder_dropout_decay_rate_encoder(self):
-        return self._variational_autoencoder_dropout_decay_rate_encoder
+    def variational_dropout_decay_rate_encoder(self):
+        return self._variational_dropout_decay_rate_encoder
 
-    @variational_autoencoder_dropout_decay_rate_encoder.setter
-    def variational_autoencoder_dropout_decay_rate_encoder(self, value):
-        self._variational_autoencoder_dropout_decay_rate_encoder = value
+    @variational_dropout_decay_rate_encoder.setter
+    def variational_dropout_decay_rate_encoder(self, value):
+        self._variational_dropout_decay_rate_encoder = value
 
-    # Getter and setter for variational_autoencoder_dropout_decay_rate_decoder
     @property
-    def variational_autoencoder_dropout_decay_rate_decoder(self):
-        return self._variational_autoencoder_dropout_decay_rate_decoder
+    def variational_dropout_decay_rate_decoder(self):
+        return self._variational_dropout_decay_rate_decoder
 
-    @variational_autoencoder_dropout_decay_rate_decoder.setter
-    def variational_autoencoder_dropout_decay_rate_decoder(self, value):
-        self._variational_autoencoder_dropout_decay_rate_decoder = value
+    @variational_dropout_decay_rate_decoder.setter
+    def variational_dropout_decay_rate_decoder(self, value):
+        self._variational_dropout_decay_rate_decoder = value
 
-    # Getter and setter for variational_autoencoder_dense_layer_sizes_encoder
     @property
-    def variational_autoencoder_dense_layer_sizes_encoder(self):
-        return self._variational_autoencoder_dense_layer_sizes_encoder
+    def variational_dense_layer_sizes_encoder(self):
+        return self._variational_dense_layer_sizes_encoder
 
-    @variational_autoencoder_dense_layer_sizes_encoder.setter
-    def variational_autoencoder_dense_layer_sizes_encoder(self, value):
-        self._variational_autoencoder_dense_layer_sizes_encoder = value
+    @variational_dense_layer_sizes_encoder.setter
+    def variational_dense_layer_sizes_encoder(self, value):
+        self._variational_dense_layer_sizes_encoder = value
 
-    # Getter and setter for variational_autoencoder_dense_layer_sizes_decoder
     @property
-    def variational_autoencoder_dense_layer_sizes_decoder(self):
-        return self._variational_autoencoder_dense_layer_sizes_decoder
+    def variational_dense_layer_sizes_decoder(self):
+        return self._variational_dense_layer_sizes_decoder
 
-    @variational_autoencoder_dense_layer_sizes_decoder.setter
-    def variational_autoencoder_dense_layer_sizes_decoder(self, value):
-        self._variational_autoencoder_dense_layer_sizes_decoder = value
+    @variational_dense_layer_sizes_decoder.setter
+    def variational_dense_layer_sizes_decoder(self, value):
+        self._variational_dense_layer_sizes_decoder = value
 
-    # Getter and setter for variational_autoencoder_batch_size
     @property
-    def variational_autoencoder_batch_size(self):
-        return self._variational_autoencoder_batch_size
+    def variational_batch_size(self):
+        return self._variational_batch_size
 
-    @variational_autoencoder_batch_size.setter
-    def variational_autoencoder_batch_size(self, value):
-        self._variational_autoencoder_batch_size = value
+    @variational_batch_size.setter
+    def variational_batch_size(self, value):
+        self._variational_batch_size = value
 
-    # Getter and setter for variational_autoencoder_number_classes
     @property
-    def variational_autoencoder_number_classes(self):
-        return self._variational_autoencoder_number_classes
+    def variational_number_epochs(self):
+        return self._variational_number_epochs
 
-    @variational_autoencoder_number_classes.setter
-    def variational_autoencoder_number_classes(self, value):
-        self._variational_autoencoder_number_classes = value
+    @variational_number_epochs.setter
+    def variational_number_epochs(self, value):
+        self._variational_number_epochs = value
 
-    # Getter and setter for variational_autoencoder_loss_function
     @property
-    def variational_autoencoder_loss_function(self):
-        return self._variational_autoencoder_loss_function
+    def variational_number_classes(self):
+        return self._variational_number_classes
 
-    @variational_autoencoder_loss_function.setter
-    def variational_autoencoder_loss_function(self, value):
-        self._variational_autoencoder_loss_function = value
+    @variational_number_classes.setter
+    def variational_number_classes(self, value):
+        self._variational_number_classes = value
 
-    # Getter and setter for variational_autoencoder_momentum
     @property
-    def variational_autoencoder_momentum(self):
-        return self._variational_autoencoder_momentum
+    def variational_loss_function(self):
+        return self._variational_loss_function
 
-    @variational_autoencoder_momentum.setter
-    def variational_autoencoder_momentum(self, value):
-        self._variational_autoencoder_momentum = value
+    @variational_loss_function.setter
+    def variational_loss_function(self, value):
+        self._variational_loss_function = value
 
-    # Getter and setter for variational_autoencoder_last_activation_layer
     @property
-    def variational_autoencoder_last_activation_layer(self):
-        return self._variational_autoencoder_last_activation_layer
+    def variational_momentum(self):
+        return self._variational_momentum
 
-    @variational_autoencoder_last_activation_layer.setter
-    def variational_autoencoder_last_activation_layer(self, value):
-        self._variational_autoencoder_last_activation_layer = value
+    @variational_momentum.setter
+    def variational_momentum(self, value):
+        self._variational_momentum = value
 
-    # Getter and setter for variational_autoencoder_initializer_mean
     @property
-    def variational_autoencoder_initializer_mean(self):
-        return self._variational_autoencoder_initializer_mean
+    def variational_last_activation_layer(self):
+        return self._variational_last_activation_layer
 
-    @variational_autoencoder_initializer_mean.setter
-    def variational_autoencoder_initializer_mean(self, value):
-        self._variational_autoencoder_initializer_mean = value
+    @variational_last_activation_layer.setter
+    def variational_last_activation_layer(self, value):
+        self._variational_last_activation_layer = value
 
-    # Getter and setter for variational_autoencoder_initializer_deviation
     @property
-    def variational_autoencoder_initializer_deviation(self):
-        return self._variational_autoencoder_initializer_deviation
+    def variational_initializer_mean(self):
+        return self._variational_initializer_mean
 
-    @variational_autoencoder_initializer_deviation.setter
-    def variational_autoencoder_initializer_deviation(self, value):
-        self._variational_autoencoder_initializer_deviation = value
+    @variational_initializer_mean.setter
+    def variational_initializer_mean(self, value):
+        self._variational_initializer_mean = value
 
-    # Getter and setter for variational_autoencoder_mean_distribution
     @property
-    def variational_autoencoder_mean_distribution(self):
-        return self._variational_autoencoder_mean_distribution
+    def variational_initializer_deviation(self):
+        return self._variational_initializer_deviation
 
-    @variational_autoencoder_mean_distribution.setter
-    def variational_autoencoder_mean_distribution(self, value):
-        self._variational_autoencoder_mean_distribution = value
+    @variational_initializer_deviation.setter
+    def variational_initializer_deviation(self, value):
+        self._variational_initializer_deviation = value
 
-    # Getter and setter for variational_autoencoder_stander_deviation
     @property
-    def variational_autoencoder_stander_deviation(self):
-        return self._variational_autoencoder_stander_deviation
+    def variational_latent_mean_distribution(self):
+        return self._variational_latent_mean_distribution
 
-    @variational_autoencoder_stander_deviation.setter
-    def variational_autoencoder_stander_deviation(self, value):
-        self._variational_autoencoder_stander_deviation = value
+    @variational_latent_mean_distribution.setter
+    def variational_latent_mean_distribution(self, value):
+        self._variational_latent_mean_distribution = value
 
-    # Getter and setter for variational_autoencoder_file_name_encoder
     @property
-    def variational_autoencoder_file_name_encoder(self):
-        return self._variational_autoencoder_file_name_encoder
+    def variational_latent_stander_deviation(self):
+        return self._variational_latent_stander_deviation
 
-    @variational_autoencoder_file_name_encoder.setter
-    def variational_autoencoder_file_name_encoder(self, value):
-        self._variational_autoencoder_file_name_encoder = value
+    @variational_latent_stander_deviation.setter
+    def variational_latent_stander_deviation(self, value):
+        self._variational_latent_stander_deviation = value
 
-    # Getter and setter for variational_autoencoder_file_name_decoder
     @property
-    def variational_autoencoder_file_name_decoder(self):
-        return self._variational_autoencoder_file_name_decoder
+    def variational_file_name_encoder(self):
+        return self._variational_file_name_encoder
 
-    @variational_autoencoder_file_name_decoder.setter
-    def variational_autoencoder_file_name_decoder(self, value):
-        self._variational_autoencoder_file_name_decoder = value
+    @variational_file_name_encoder.setter
+    def variational_file_name_encoder(self, value):
+        self._variational_file_name_encoder = value
 
-    # Getter and setter for variational_autoencoder_path_output_models
     @property
-    def variational_autoencoder_path_output_models(self):
-        return self._variational_autoencoder_path_output_models
+    def variational_file_name_decoder(self):
+        return self._variational_file_name_decoder
 
-    @variational_autoencoder_path_output_models.setter
-    def variational_autoencoder_path_output_models(self, value):
-        self._variational_autoencoder_path_output_models = value
+    @variational_file_name_decoder.setter
+    def variational_file_name_decoder(self, value):
+        self._variational_file_name_decoder = value
+
+    @property
+    def variational_path_output_models(self):
+        return self._variational_path_output_models
+
+    @variational_path_output_models.setter
+    def variational_path_output_models(self, value):
+        self._variational_path_output_models = value
+
+    @property
+    def variational_decoder_latent_dimension(self):
+        return self._variational_decoder_latent_dimension
+
+    @variational_decoder_latent_dimension.setter
+    def variational_decoder_latent_dimension(self, value):
+        self._variational_decoder_latent_dimension = value
+
+    @property
+    def variational_algorithm(self):
+        return self._variational_algorithm
+
+    @property
+    def variational_model(self):
+        return self._variational_model

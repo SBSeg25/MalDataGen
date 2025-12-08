@@ -8,6 +8,10 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
+from Engine.Models.VariationalAutoencoder.Tensorflow.VanillaDecoderTensorflow import VanillaDecoderTensorflow
+from Engine.Models.VariationalAutoencoder.Tensorflow.VanillaEncoderTensorflow import VanillaEncoderTensorflow
+
+
 # MIT License
 #
 # Copyright (c) 2025 Synthetic Ocean AI
@@ -34,9 +38,6 @@ try:
     import sys
     import numpy
 
-    from Engine.Models.VariationalAutoencoder.Tensorflow.VanillaDecoderTensorflow import VanillaDecoder
-    from Engine.Models.VariationalAutoencoder.Tensorflow.VanillaEncoderTensorflow import VanillaEncoder
-
 except ImportError as error:
     print(error)
     sys.exit(-1)
@@ -53,7 +54,7 @@ DEFAULT_VARIATIONAL_AUTOENCODER_INITIALIZER_MEAN = 0
 DEFAULT_VARIATIONAL_AUTOENCODER_INITIALIZER_DEVIATION = 0.125
 
 
-class VariationalModelTensorflow(VanillaDecoder, VanillaEncoder):
+class VariationalModelTensorflow(VanillaDecoderTensorflow, VanillaEncoderTensorflow):
     """
     A Variational Model that integrates both VanillaEncoder and VanillaDecoder
     functionalities. This class enables flexible configuration of encoder and
@@ -136,7 +137,7 @@ class VariationalModelTensorflow(VanillaDecoder, VanillaEncoder):
             number_neurons_encoder = DEFAULT_VARIATIONAL_AUTOENCODER_DENSE_LAYERS_SETTINGS_ENCODER
 
         # Initialize the encoder using the VanillaEncoder class
-        VanillaDecoder.__init__(self,
+        VanillaDecoderTensorflow.__init__(self,
                                 latent_dimension,
                                 output_shape,
                                 activation_function,
@@ -149,7 +150,7 @@ class VariationalModelTensorflow(VanillaDecoder, VanillaEncoder):
                                 number_samples_per_class)
 
         # Initialize the decoder using the VanillaDecoder class
-        VanillaEncoder.__init__(self,
+        VanillaEncoderTensorflow.__init__(self,
                                 latent_dimension,
                                 output_shape,
                                 activation_function,

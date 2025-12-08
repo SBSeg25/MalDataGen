@@ -496,7 +496,7 @@ class SynDataGen(Arguments, CSVDataProcessor, Metrics, GenerativeModels, Classif
                     self._autoencoder_algorithm.save_model(self.get_models_saved_path(), k_fold)
 
                 elif self.arguments.model_type == "variational":
-                    self._latent_variational_algorithm_diffusion.save_model(self.get_models_saved_path(), k_fold)
+                    self._latent_variational_algorithm.save_model(self.get_models_saved_path(), k_fold)
 
                 elif self.arguments.model_type == "wasserstein":
                     self._wasserstein_algorithm.save_model(self.get_models_saved_path(), k_fold)
