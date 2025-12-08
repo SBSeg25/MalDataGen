@@ -47,7 +47,7 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
         Initializes the VariationalAlgorithm model.
         """
         # Call parent __init__ first
-        super(VariationalAlgorithmTorch, self).__init__()
+        super(VariationalAutoencoderAlgorithmTorch, self).__init__()
 
         # Direct assignment to register as submodules
         self._encoder = encoder_model
