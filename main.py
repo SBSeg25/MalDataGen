@@ -60,9 +60,9 @@ try:
 
     from Engine.Classifiers.Classifiers import Classifiers
 
-    from Engine.Models.GenerativeModels import import_models
+    from Framework.GenerativeModels import import_models
 
-    from Engine.Models.GenerativeModels import GenerativeModels
+    from Framework.GenerativeModels import GenerativeModels
 
     from Engine.Evaluation.CrossValidation import StratifiedData
     from Engine.Classifiers.Classifiers import import_classifiers
