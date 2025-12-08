@@ -199,7 +199,7 @@ class VariationalAlgorithmTorch(nn.Module):
         """
         Generate synthetic samples for each specified class using the trained decoder.
         """
-        self.eval()
+
         device = next(self.parameters()).device
         generated_data = {}
 
