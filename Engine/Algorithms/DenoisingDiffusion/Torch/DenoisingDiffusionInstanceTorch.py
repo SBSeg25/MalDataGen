@@ -8,6 +8,9 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
+from Engine.Algorithms.DenoisingDiffusion.Torch.GaussianDenoisingDiffusionTorch import GaussianDiffusionTorch
+from Engine.Models.DenoisingDiffusion.DiffusionModelUnetTorch import UNetDenoisingModelTorch
+
 # MIT License
 #
 # Copyright (c) 2025 Synthetic Ocean AI
@@ -156,7 +159,7 @@ class DenoisingDiffusionInstanceTorch:
          """
 
         # Initialize the first instance of UNet for the diffusion model
-        self._denoising_first_instance_unet = UNetDenoisingModel(
+        self._denoising_first_instance_unet = UNetDenoisingModelTorch(
             output_shape=input_shape,
             embedding_channels=self._denoising_diffusion_unet_num_embedding_channels,
             list_neurons_per_level=self._denoising_diffusion_unet_channels_per_level,
@@ -170,7 +173,7 @@ class DenoisingDiffusionInstanceTorch:
         ).to(self._device)
 
         # Initialize the second instance of UNet with the same configuration
-        self._denoising_second_instance_unet = UNetDenoisingModel(
+        self._denoising_second_instance_unet = UNetDenoisingModelTorch(
             output_shape=input_shape,
             embedding_channels=self._denoising_diffusion_unet_num_embedding_channels,
             list_neurons_per_level=self._denoising_diffusion_unet_channels_per_level,
@@ -193,7 +196,7 @@ class DenoisingDiffusionInstanceTorch:
         )
 
         # Initialize the GaussianDiffusion utility
-        self._denoising_gaussian_diffusion_util = GaussianDiffusion(
+        self._denoising_gaussian_diffusion_util = GaussianDiffusionTorch(
             beta_start=self._denoising_diffusion_gaussian_beta_start,
             beta_end=self._denoising_diffusion_gaussian_beta_end,
             time_steps=self._denoising_diffusion_gaussian_time_steps,
