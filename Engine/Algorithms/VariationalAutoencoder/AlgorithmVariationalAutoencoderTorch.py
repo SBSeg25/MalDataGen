@@ -45,16 +45,11 @@ class VariationalAlgorithmTorch(nn.Module):
                  models_saved_path):
         """
         Initializes the VariationalAlgorithm model.
-
-        FIX: Properly register encoder and decoder as submodules by directly
-        assigning them to attributes WITHOUT using property setters.
         """
         # Call parent __init__ first
         super(VariationalAlgorithmTorch, self).__init__()
 
-        # FIX: Direct assignment to register as submodules
-        # This is the KEY fix - assign directly to _encoder and _decoder
-        # BEFORE the properties are defined, or use different names
+        # Direct assignment to register as submodules
         self._encoder = encoder_model
         self._decoder = decoder_model
 
@@ -81,59 +76,85 @@ class VariationalAlgorithmTorch(nn.Module):
     def train_step(self, batch):
         """
         Perform a training step for the Variational AutoEncoder (VAE).
-
-        Args:
-            batch: Input data batch.
-
-        Returns:
-            dict: Dictionary containing the loss values.
         """
-        batch_x, batch_y = batch
-
+        # Simplificar: assumir que batch é (x, y, labels) nessa ordem
+        if len(batch) == 3:
+            batch_x, batch_y, batch_y_labels = batch
+        else:
+            batch_x, batch_y = batch
+            batch_y_labels = None
         # Move to device
         device = next(self.parameters()).device
         batch_x = batch_x.to(device)
         batch_y = batch_y.to(device)
+        if batch_y_labels is not None:
+            batch_y_labels = batch_y_labels.to(device)
 
         # Zero gradients
         self.optimizer.zero_grad()
 
-        # Forward pass: Encode input data and sample from the latent space
-        latent_mean, latent_log_variation, latent, label = self._encoder(batch_x)
+        try:
+            # CORREÇÃO: Passar os argumentos corretamente para o encoder
+            # O encoder espera (x, label) como dois argumentos separados, não uma tupla
+            if batch_y_labels is not None:
+                # Chamar encoder com dois argumentos separados
+                encoder_output = self._encoder(batch_x, batch_y_labels)
+            else:
+                encoder_output = self._encoder(batch_x)
 
-        # Decode the sampled latent space and generate reconstructed data
-        reconstruction_data = self._decoder(latent, label)
+            # O encoder retorna uma tupla: (z_mean, z_log_var, z, label)
+            if isinstance(encoder_output, tuple) and len(encoder_output) >= 3:
+                z_mean, z_log_var, latent, label_output = encoder_output[:4]
+            else:
+                # Se for apenas um tensor, usar como latent
+                latent = encoder_output
+                label_output = batch_y_labels if batch_y_labels is not None else None
+                z_mean = z_log_var = None
 
-        # Calculate binary cross-entropy loss for reconstruction
-        binary_cross_entropy_loss = F.binary_cross_entropy(reconstruction_data, batch_y, reduction='none')
-        reconstruction_loss = torch.mean(binary_cross_entropy_loss)
+            # Se não temos label_output, criar um dummy
+            if label_output is None:
+                batch_size = latent.shape[0]
+                label_output = torch.zeros((batch_size, 2)).to(device)
 
-        # Calculate KL divergence loss
-        encoder_output = (1 + latent_log_variation - torch.square(latent_mean))
-        kl_divergence_loss = -0.5 * (encoder_output - torch.exp(latent_log_variation))
-        kl_divergence_loss = torch.mean(torch.sum(kl_divergence_loss, dim=1))
+            # Decoder - agora usando latent e label_output
+            reconstruction_data = self._decoder(latent, label_output)
 
-        # Total loss is the sum of reconstruction loss and KL divergence loss
-        loss_model_in_reconstruction = reconstruction_loss + kl_divergence_loss
+        except Exception as e:
+            print(f"ERROR in forward pass: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
+
+        # Calcular reconstruction loss
+        reconstruction_loss = F.binary_cross_entropy(reconstruction_data, batch_y, reduction='mean')
+
+        # Calcular KL divergence se temos z_mean e z_log_var
+        if z_mean is not None and z_log_var is not None:
+            kl_loss = -0.5 * torch.sum(1 + z_log_var - z_mean.pow(2) - z_log_var.exp())
+            kl_loss = kl_loss / batch_x.size(0)  # Normalizar pelo batch size
+        else:
+            # Para autoencoder simples, KL loss = 0
+            kl_loss = torch.tensor(0.0).to(device)
+
+        # Total loss
+        total_loss = reconstruction_loss + kl_loss
 
         # Backward pass
-        loss_model_in_reconstruction.backward()
+        total_loss.backward()
 
         # Update weights
         self.optimizer.step()
 
         # Update loss metrics
-        self._total_loss_tracker = loss_model_in_reconstruction.item()
+        self._total_loss_tracker = total_loss.item()
         self._reconstruction_loss_tracker = reconstruction_loss.item()
-        self._kl_loss_tracker = kl_divergence_loss.item()
+        self._kl_loss_tracker = kl_loss.item()
 
-        # Return a dictionary containing the current loss values
         return {
             "loss": self._total_loss_tracker,
             "reconstruction_loss": self._reconstruction_loss_tracker,
             "kl_loss": self._kl_loss_tracker
         }
-
     def configure_optimizer(self,
                             learning_rate=0.001,
                             beta_1=0.9,
@@ -280,7 +301,9 @@ class VariationalAlgorithmTorch(nn.Module):
         Train the VAE model.
         """
         device = next(self.parameters()).device
-        self.train()
+
+        # Definir modo de treino sem causar recursão
+        self.training = True
 
         # Unpack training data
         if isinstance(train_data, tuple):
@@ -297,7 +320,7 @@ class VariationalAlgorithmTorch(nn.Module):
         if y_labels is not None and isinstance(y_labels, numpy.ndarray):
             y_labels = torch.from_numpy(y_labels).float()
 
-        # Create dataset and dataloader
+        # Create dataset
         if y_labels is not None:
             dataset = TensorDataset(x_train, y_labels, y_data)
         else:
@@ -309,29 +332,41 @@ class VariationalAlgorithmTorch(nn.Module):
         for epoch in range(epochs):
             epoch_losses = []
 
-            for batch in dataloader:
+            for batch_idx, batch in enumerate(dataloader):
                 if y_labels is not None:
                     batch_x, batch_y_labels, batch_y = batch
-                    batch_x = torch.cat([batch_x, batch_y_labels], dim=1) if batch_y_labels.dim() > 1 else batch_x
                 else:
                     batch_x, batch_y = batch
+                    batch_y_labels = None
 
-                loss_dict = self.train_step((batch_x, batch_y))
+                # Mover para dispositivo
+                batch_x = batch_x.to(device)
+                batch_y = batch_y.to(device)
+                if batch_y_labels is not None:
+                    batch_y_labels = batch_y_labels.to(device)
+
+                # Passar para train_step
+                if batch_y_labels is not None:
+                    loss_dict = self.train_step((batch_x, batch_y, batch_y_labels))
+                else:
+                    loss_dict = self.train_step((batch_x, batch_y))
+
                 epoch_losses.append(loss_dict)
 
-            # Calculate average losses for epoch
-            avg_loss = sum(d['loss'] for d in epoch_losses) / len(epoch_losses)
-            avg_recon = sum(d['reconstruction_loss'] for d in epoch_losses) / len(epoch_losses)
-            avg_kl = sum(d['kl_loss'] for d in epoch_losses) / len(epoch_losses)
+            # Calcular perdas médias para a época
+            if epoch_losses:
+                avg_loss = sum(d['loss'] for d in epoch_losses) / len(epoch_losses)
+                avg_recon = sum(d['reconstruction_loss'] for d in epoch_losses) / len(epoch_losses)
+                avg_kl = sum(d['kl_loss'] for d in epoch_losses) / len(epoch_losses)
 
-            print(f"Epoch {epoch + 1}/{epochs} - loss: {avg_loss:.4f} - "
-                  f"reconstruction_loss: {avg_recon:.4f} - kl_loss: {avg_kl:.4f}")
+                print(f"\nEpoch {epoch + 1}/{epochs} - loss: {avg_loss:.4f} - "
+                      f"reconstruction_loss: {avg_recon:.4f} - kl_loss: {avg_kl:.4f}")
 
-            # Execute callbacks
-            if callbacks:
-                for callback in callbacks:
-                    if hasattr(callback, 'on_epoch_end'):
-                        callback.on_epoch_end(epoch, {'loss': avg_loss})
+                # Executar callbacks
+                if callbacks:
+                    for callback in callbacks:
+                        if hasattr(callback, 'on_epoch_end'):
+                            callback.on_epoch_end(epoch, {'loss': avg_loss})
 
     # REMOVED: The problematic property setters that interfere with module registration
     # Properties can still be used for read-only access if needed, but not for setting

@@ -113,20 +113,20 @@ class EncoderNetwork(nn.Module):
         Returns:
             Tuple of (z_mean, z_log_var, z_sample, label)
         """
-        # Handle combined input (x + label concatenated)
+        # CORREÇÃO: Não assumir que label pode estar concatenado em x
+        # O label é passado separadamente quando disponível
+
+        # Se label não foi fornecido, criar zeros
         if label is None:
-            # Assume label is concatenated at the end of x
             num_classes = self.parent._encoder_number_samples_per_class["number_classes"]
-            features = x[:, :-num_classes]
-            label = x[:, -num_classes:]
-        else:
-            features = x
+            batch_size = x.size(0)
+            label = torch.zeros((batch_size, num_classes), device=x.device)
 
         # Embed labels
         label_embedded = torch.relu(self.label_embedding(label))
 
         # Concatenate features and embedded labels
-        combined = torch.cat([features, label_embedded], dim=1)
+        combined = torch.cat([x, label_embedded], dim=1)
 
         # Pass through encoder layers
         encoded = self.encoder_layers(combined)

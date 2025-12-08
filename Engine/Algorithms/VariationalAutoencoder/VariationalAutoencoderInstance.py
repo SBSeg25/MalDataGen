@@ -34,6 +34,7 @@ class VariationalAutoencoderInstance:
 
     Configuration Parameters (with getters/setters):
         _variational_latent_dimension (int): Size of the latent space
+        _variational_training_algorithm (str): Training algorithm specification
         _variational_activation_function (str): Activation function for hidden layers
         _variational_dropout_decay_rate_encoder (float): Encoder dropout rate
         _variational_dropout_decay_rate_decoder (float): Decoder dropout rate
@@ -41,7 +42,9 @@ class VariationalAutoencoderInstance:
         _variational_dense_layer_sizes_decoder (list): Decoder layer sizes
         _variational_batch_size (int): Size of training batches
         _variational_number_epochs (int): Number of training epochs
+        _variational_number_classes (int): Number of output classes
         _variational_loss_function (str): Loss function for reconstruction
+        _variational_momentum (float): Momentum parameter for optimization
         _variational_last_activation_layer (str): Last layer activation function
         _variational_initializer_mean (float): Mean for weight initialization
         _variational_initializer_deviation (float): Std dev for weight initialization
@@ -63,27 +66,26 @@ class VariationalAutoencoderInstance:
         self._variational_model = None
 
         # ** Variational Autoencoder Model Configuration Parameters **
-        # Removidos argumentos não utilizados:
-        # - variational_training_algorithm (não usado em lugar algum)
-        # - variational_number_classes (não usado - obtido de number_samples_per_class)
-        # - variational_momentum (não usado no algoritmo PyTorch)
         self._variational_latent_dimension = arguments.variational_autoencoder_latent_dimension
-        self._variational_activation_function = 'relu'
-        self._variational_dropout_decay_rate_encoder = arguments.variational_dropout_decay_rate_encoder
-        self._variational_dropout_decay_rate_decoder = arguments.variational_dropout_decay_rate_decoder
-        self._variational_dense_layer_sizes_encoder = arguments.variational_dense_layer_sizes_encoder
-        self._variational_dense_layer_sizes_decoder = arguments.variational_dense_layer_sizes_decoder
-        self._variational_batch_size = arguments.variational_batch_size
-        self._variational_number_epochs = arguments.variational_number_epochs
-        self._variational_loss_function = arguments.variational_loss_function
-        self._variational_last_activation_layer = arguments.variational_last_activation_layer
-        self._variational_initializer_mean = arguments.variational_initializer_mean
-        self._variational_initializer_deviation = arguments.variational_initializer_deviation
-        self._variational_latent_mean_distribution = arguments.variational_latent_mean_distribution
-        self._variational_latent_stander_deviation = arguments.variational_latent_stander_deviation
-        self._variational_file_name_encoder = arguments.variational_file_name_encoder
-        self._variational_file_name_decoder = arguments.variational_file_name_decoder
-        self._variational_path_output_models = arguments.variational_path_output_models
+        self._variational_training_algorithm = arguments.variational_autoencoder_training_algorithm
+        self._variational_activation_function = arguments.variational_autoencoder_activation_function
+        self._variational_dropout_decay_rate_encoder = arguments.variational_autoencoder_dropout_decay_rate_encoder
+        self._variational_dropout_decay_rate_decoder = arguments.variational_autoencoder_dropout_decay_rate_decoder
+        self._variational_dense_layer_sizes_encoder = arguments.variational_autoencoder_dense_layer_sizes_encoder
+        self._variational_dense_layer_sizes_decoder = arguments.variational_autoencoder_dense_layer_sizes_decoder
+        self._variational_batch_size = arguments.variational_autoencoder_batch_size
+        self._variational_number_epochs = arguments.variational_autoencoder_number_epochs
+        self._variational_number_classes = arguments.variational_autoencoder_number_classes
+        self._variational_loss_function = arguments.variational_autoencoder_loss_function
+        self._variational_momentum = arguments.variational_autoencoder_momentum
+        self._variational_last_activation_layer = arguments.variational_autoencoder_last_activation_layer
+        self._variational_initializer_mean = arguments.variational_autoencoder_initializer_mean
+        self._variational_initializer_deviation = arguments.variational_autoencoder_initializer_deviation
+        self._variational_latent_mean_distribution = arguments.variational_autoencoder_mean_distribution
+        self._variational_latent_stander_deviation = arguments.variational_autoencoder_stander_deviation
+        self._variational_file_name_encoder = arguments.variational_autoencoder_file_name_encoder
+        self._variational_file_name_decoder = arguments.variational_autoencoder_file_name_decoder
+        self._variational_path_output_models = arguments.variational_autoencoder_path_output_models
 
         # Get number_samples_per_class from arguments if available
         self._number_samples_per_class = getattr(arguments, 'number_samples_per_class', None)
@@ -118,7 +120,7 @@ class VariationalAutoencoderInstance:
             decoder_model=self._variational_model.get_decoder(input_shape),
             loss_function=self._variational_loss_function,
             latent_dimension=self._variational_latent_dimension,
-            decoder_latent_dimension=self._variational_decoder_latent_dimension,
+            decoder_latent_dimension=self._variational_latent_dimension,
             latent_mean_distribution=self._variational_latent_mean_distribution,
             latent_stander_deviation=self._variational_latent_stander_deviation,
             file_name_encoder=self._variational_file_name_encoder,
@@ -129,22 +131,9 @@ class VariationalAutoencoderInstance:
     def _training_variational_autoencoder_model(self, input_shape, arguments, x_real_samples, y_real_samples):
         """
         Executes the complete variational autoencoder training process.
-
-        Args:
-            input_shape (tuple): Shape of input data samples
-            arguments (Namespace): Configuration parameters
-            x_real_samples (ndarray): Training data samples
-            y_real_samples (ndarray): Corresponding class labels
         """
         # Initialize the variational autoencoder model
         self._get_variational(input_shape)
-
-        # Print the model summaries for the encoder and decoder
-        encoder = self._variational_model.get_encoder(input_shape)
-        decoder = self._variational_model.get_decoder(input_shape)
-
-        print(f"Encoder model: {encoder}")
-        print(f"Decoder model: {decoder}")
 
         # Configure optimizer
         self._variational_algorithm.configure_optimizer(
@@ -157,34 +146,76 @@ class VariationalAutoencoderInstance:
         # Prepare callbacks list
         callbacks_list = []
 
-        # Note: You'll need to adapt or create Torch-compatible callbacks
-        # For now, we'll pass an empty list or basic print callbacks
+        # DEBUG: Verificar shapes
+        print(f"DEBUG Training: x_real_samples shape = {x_real_samples.shape}")
+        print(f"DEBUG Training: y_real_samples shape = {y_real_samples.shape}")
+
+        # One-hot encode dos labels
+        y_labels_one_hot = self._one_hot_encode(y_real_samples, self._number_samples_per_class["number_classes"])
+        print(f"DEBUG Training: y_labels_one_hot shape = {y_labels_one_hot.shape}")
+
+        # O target (y_data) deve ser x_real_samples para reconstrução
+        y_data = x_real_samples
+        print(f"DEBUG Training: y_data (target) shape = {y_data.shape}")
 
         # Fit the variational autoencoder model
         self._variational_algorithm.fit(
-            (x_real_samples, self._one_hot_encode(y_real_samples, self._number_samples_per_class["number_classes"])),
-            x_real_samples,
+            (x_real_samples, y_labels_one_hot),  # x e labels
+            y_data,  # y (target para reconstrução)
             epochs=self._variational_number_epochs,
             batch_size=self._variational_batch_size,
             callbacks=callbacks_list
         )
-
     def _one_hot_encode(self, labels, num_classes):
         """
         One-hot encode labels for PyTorch compatibility.
 
         Args:
-            labels (ndarray): Integer labels
+            labels (ndarray): Integer labels with shape [batch_size] or [batch_size, 1]
             num_classes (int): Number of classes
 
         Returns:
-            ndarray: One-hot encoded labels
+            torch.Tensor: One-hot encoded labels with shape [batch_size, num_classes]
         """
         import torch
-        if isinstance(labels, numpy.ndarray):
-            labels = torch.from_numpy(labels).long()
 
-        return torch.nn.functional.one_hot(labels, num_classes).float()
+        print(f"DEBUG _one_hot_encode: Input labels shape = {labels.shape}")
+        print(f"DEBUG _one_hot_encode: num_classes = {num_classes}")
+
+        if isinstance(labels, numpy.ndarray):
+            # Remover dimensão extra se for (n, 1) em vez de (n,)
+            if len(labels.shape) == 2 and labels.shape[1] == 1:
+                print(f"Flattening labels from shape {labels.shape}...")
+                labels = labels.flatten()  # Converter de (n, 1) para (n,)
+                print(f"Flattened labels shape = {labels.shape}")
+
+            # Verificar valores únicos
+            unique_vals = numpy.unique(labels)
+            print(f"Unique label values: {unique_vals}")
+
+            # Agora labels deve ser 1D
+            if len(labels.shape) == 1:
+                # Converter para tensor e fazer one-hot
+                labels_tensor = torch.from_numpy(labels).long()
+                one_hot = torch.nn.functional.one_hot(labels_tensor, num_classes).float()
+                print(f"One-hot output shape = {one_hot.shape}")
+                print(f"One-hot first 5 rows:\n{one_hot[:5]}")
+                return one_hot
+            else:
+                raise ValueError(f"Labels should be 1D after flattening, but got shape {labels.shape}")
+
+        elif isinstance(labels, torch.Tensor):
+            # Mesma lógica para tensores
+            if len(labels.shape) == 2 and labels.shape[1] == 1:
+                labels = labels.squeeze(1)
+
+            if len(labels.shape) == 1:
+                return torch.nn.functional.one_hot(labels.long(), num_classes).float()
+            else:
+                raise ValueError(f"Tensor labels should be 1D, but got shape {labels.shape}")
+
+        else:
+            raise ValueError(f"Unsupported labels type: {type(labels)}")
 
     # Property getters and setters
 
@@ -200,6 +231,9 @@ class VariationalAutoencoderInstance:
     def variational_training_algorithm(self):
         return self._variational_training_algorithm
 
+    @variational_training_algorithm.setter
+    def variational_training_algorithm(self, value):
+        self._variational_training_algorithm = value
 
     @property
     def variational_activation_function(self):
@@ -344,14 +378,6 @@ class VariationalAutoencoderInstance:
     @variational_path_output_models.setter
     def variational_path_output_models(self, value):
         self._variational_path_output_models = value
-
-    @property
-    def variational_decoder_latent_dimension(self):
-        return self._variational_decoder_latent_dimension
-
-    @variational_decoder_latent_dimension.setter
-    def variational_decoder_latent_dimension(self, value):
-        self._variational_decoder_latent_dimension = value
 
     @property
     def variational_algorithm(self):
