@@ -8,7 +8,7 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
-from Engine.Algorithms.QuantizedVAE.AlgorithmQuantizedVAETorch import QuantizedVAEAlgorithmTorch
+from Engine.Algorithms.QuantizedVAE.QuantizedVAEAlgorithm import QuantizedVAEAlgorithm
 from Engine.Models.QuantizedVAE.Torch.QuantizedVAEVanillaModelTorch import QuantizedVAEModelTorch
 
 # MIT License
@@ -151,7 +151,7 @@ class QuantizedVAEInstance:
         quantized_model = self._quantized_vae_model.get_quantized_model()
 
         # Quantized VAE Algorithm setup for training and model operations
-        self._quantized_vae_algorithm = QuantizedVAEAlgorithmTorch(
+        self._quantized_vae_algorithm = QuantizedVAEAlgorithm(
             encoder_model=self._quantized_vae_model.get_encoder(),
             decoder_model=self._quantized_vae_model.get_decoder(),
             quantized_vae_model=quantized_model,

@@ -54,7 +54,7 @@ except ImportError as error:
     sys.exit(-1)
 
 
-class QuantizedVAEAlgorithm(Model):
+class QuantizedVAEAlgorithmTensorflow(Model):
     """
     Implements a Vector Quantized Variational Autoencoder (VQ-VAE) for discrete latent
     representation learning and generation. This model combines an encoder, decoder,
@@ -95,7 +95,7 @@ class QuantizedVAEAlgorithm(Model):
         Available at: https://arxiv.org/abs/1711.00937
 
     Example:
-        >>> vae = QuantizedVAEAlgorithm(
+        >>> vae = QuantizedVAEAlgorithmTensorflow(
         ...     encoder_model=encoder,
         ...     decoder_model=decoder,
         ...     quantized_vae_model=vq_vae,
