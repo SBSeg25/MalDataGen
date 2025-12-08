@@ -33,6 +33,7 @@ __credits__ = ['Kayuã Oleques']
 try:
     import os
     import sys
+
     import json
     import numpy
 
@@ -41,12 +42,21 @@ try:
     import torch.nn.functional as F
 
     from abc import ABC
+
     from typing import Any
     from typing import Callable
 
 except ImportError as error:
     print(error)
     sys.exit(-1)
+
+
+def to_categorical(labels, num_classes):
+    """Convert class labels to one-hot encoded format."""
+    batch_size = len(labels)
+    categorical = numpy.zeros((batch_size, num_classes))
+    categorical[numpy.arange(batch_size), labels] = 1
+    return categorical
 
 
 class WassersteinGPAlgorithmTorch(nn.Module):
@@ -104,14 +114,14 @@ class WassersteinGPAlgorithmTorch(nn.Module):
     Example:
         >>> generator = build_generator_model()
         >>> discriminator = build_discriminator_model()
-        >>> wgan = WassersteinGPAlgorithm(
+        >>> wgan = WassersteinGPAlgorithmTorch(
         ...     generator_model=generator,
         ...     discriminator_model=discriminator,
         ...     latent_dimension=100,
         ...     generator_loss_fn=generator_loss_fn,
         ...     discriminator_loss_fn=discriminator_loss_fn,
-        ...     file_name_discriminator='discriminator_model.pth',
-        ...     file_name_generator='generator_model.pth',
+        ...     file_name_discriminator='discriminator_model.pt',
+        ...     file_name_generator='generator_model.pt',
         ...     models_saved_path='./models/',
         ...     latent_mean_distribution=0.0,
         ...     latent_stander_deviation=1.0,
@@ -119,7 +129,7 @@ class WassersteinGPAlgorithmTorch(nn.Module):
         ...     gradient_penalty_weight=10.0,
         ...     discriminator_steps=5
         ... )
-        >>> wgan.train_step(real_data, batch_size=64)
+        >>> wgan.fit(x_train, y_train, batch_size=64, epochs=10)
     """
 
     def __init__(self,
@@ -157,7 +167,7 @@ class WassersteinGPAlgorithmTorch(nn.Module):
         self._file_name_generator = file_name_generator
         self._models_saved_path = models_saved_path
         self._discriminator_steps = discriminator_steps
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self._device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     def compile(self, optimizer_generator, optimizer_discriminator,
                 loss_generator, loss_discriminator, *args, **kwargs):
@@ -165,13 +175,13 @@ class WassersteinGPAlgorithmTorch(nn.Module):
         Compile the WassersteinGP Generative Adversarial Network (WGAN) with custom optimizers and loss functions.
 
         Args:
-            optimizer_generator (torch.optim.Optimizer):
-                The optimizer for the generator.
-            optimizer_discriminator (torch.optim.Optimizer):
-                The optimizer for the discriminator.
-            loss_generator (callable):
+            optimizer_generator (torch.optim.Optimizer or keras.optimizers.Optimizer):
+                The optimizer for the generator. Can be Keras or PyTorch optimizer.
+            optimizer_discriminator (torch.optim.Optimizer or keras.optimizers.Optimizer):
+                The optimizer for the discriminator. Can be Keras or PyTorch optimizer.
+            loss_generator (Callable):
                 The loss function for the generator.
-            loss_discriminator (callable):
+            loss_discriminator (Callable):
                 The loss function for the discriminator.
             *args:
                 Additional positional arguments.
@@ -181,10 +191,79 @@ class WassersteinGPAlgorithmTorch(nn.Module):
         This method compiles the GAN with custom optimizers and loss functions specified as arguments.
         It sets the optimizer and loss for both the generator and discriminator.
         """
-        self._discriminator_optimizer = optimizer_discriminator
-        self._generator_optimizer = optimizer_generator
-        self._discriminator_loss_fn = loss_discriminator
-        self._generator_loss_fn = loss_generator
+        import torch.optim as optim
+
+        # Convert Keras optimizers to PyTorch optimizers if needed
+        if hasattr(optimizer_generator, 'learning_rate'):
+            # It's a Keras optimizer, convert to PyTorch
+            lr = float(optimizer_generator.learning_rate.numpy() if hasattr(optimizer_generator.learning_rate,
+                                                                            'numpy') else optimizer_generator.learning_rate)
+            beta_1 = getattr(optimizer_generator, 'beta_1', 0.9)
+            beta_2 = getattr(optimizer_generator, 'beta_2', 0.999)
+            self._generator_optimizer = optim.Adam(
+                self._generator.parameters(),
+                lr=lr,
+                betas=(beta_1, beta_2)
+            )
+        else:
+            self._generator_optimizer = optimizer_generator
+
+        if hasattr(optimizer_discriminator, 'learning_rate'):
+            # It's a Keras optimizer, convert to PyTorch
+            lr = float(optimizer_discriminator.learning_rate.numpy() if hasattr(optimizer_discriminator.learning_rate,
+                                                                                'numpy') else optimizer_discriminator.learning_rate)
+            beta_1 = getattr(optimizer_discriminator, 'beta_1', 0.9)
+            beta_2 = getattr(optimizer_discriminator, 'beta_2', 0.999)
+            self._discriminator_optimizer = optim.Adam(
+                self._discriminator.parameters(),
+                lr=lr,
+                betas=(beta_1, beta_2)
+            )
+        else:
+            self._discriminator_optimizer = optimizer_discriminator
+
+        # Wrap loss functions to handle TensorFlow-style calls
+        self._discriminator_loss_fn = self._wrap_loss_function(loss_discriminator, is_discriminator=True)
+        self._generator_loss_fn = self._wrap_loss_function(loss_generator, is_discriminator=False)
+
+    def _wrap_loss_function(self, loss_fn, is_discriminator=True):
+        """
+        Wraps a loss function to ensure compatibility between TensorFlow and PyTorch.
+
+        Args:
+            loss_fn: Original loss function (may use TensorFlow operations)
+            is_discriminator: Whether this is for discriminator (True) or generator (False)
+
+        Returns:
+            Wrapped loss function that works with PyTorch tensors
+        """
+
+        def wrapped_loss(*args, **kwargs):
+            if is_discriminator:
+                # Discriminator loss: expects real_img and fake_img
+                real_img = kwargs.get('real_img', args[0] if len(args) > 0 else None)
+                fake_img = kwargs.get('fake_img', args[1] if len(args) > 1 else None)
+
+                # Convert to PyTorch operations if they're tensors
+                if isinstance(real_img, torch.Tensor) and isinstance(fake_img, torch.Tensor):
+                    # Standard Wasserstein loss: E[D(fake)] - E[D(real)]
+                    return torch.mean(fake_img) - torch.mean(real_img)
+                else:
+                    # Call original function
+                    return loss_fn(*args, **kwargs)
+            else:
+                # Generator loss: expects fake_img
+                fake_img = args[0] if len(args) > 0 else kwargs.get('fake_img')
+
+                # Convert to PyTorch operations if it's a tensor
+                if isinstance(fake_img, torch.Tensor):
+                    # Standard Wasserstein generator loss: -E[D(fake)]
+                    return -torch.mean(fake_img)
+                else:
+                    # Call original function
+                    return loss_fn(*args, **kwargs)
+
+        return wrapped_loss
 
     def gradient_penalty(self, batch_size, real_feature, real_label, synthetic_feature):
         """
@@ -202,11 +281,9 @@ class WassersteinGPAlgorithmTorch(nn.Module):
             synthetic_feature (torch.Tensor):
                 Synthetic (generated) data features.
 
-        Returns:
-            torch.Tensor: The gradient penalty value.
         """
         # Generate random noise for smoothing.
-        random_smooth = torch.normal(0.0, 0.1, size=(batch_size, 1)).to(self.device)
+        random_smooth = torch.randn(batch_size, 1, device=self._device) * 0.1
 
         # Calculate the linear distance between real and synthetic features.
         linear_distance = synthetic_feature - real_feature
@@ -216,7 +293,7 @@ class WassersteinGPAlgorithmTorch(nn.Module):
         interpolated_feature.requires_grad_(True)
 
         # Get discriminator's output for the interpolated features.
-        labels_predicted = self._discriminator(interpolated_feature, real_label)
+        labels_predicted = self.discriminator([interpolated_feature, real_label])
 
         # Calculate the gradient of the discriminator's output with respect to the interpolated features.
         gradients = torch.autograd.grad(
@@ -224,7 +301,8 @@ class WassersteinGPAlgorithmTorch(nn.Module):
             inputs=interpolated_feature,
             grad_outputs=torch.ones_like(labels_predicted),
             create_graph=True,
-            retain_graph=True
+            retain_graph=True,
+            only_inputs=True
         )[0]
 
         # Compute the gradient magnitude and normalize it.
@@ -234,6 +312,86 @@ class WassersteinGPAlgorithmTorch(nn.Module):
         gradient_penalty_final = torch.mean((gradient_normalized - 1.0) ** 2)
 
         return gradient_penalty_final
+
+    def fit(self, x=None, y=None, batch_size=32, epochs=1, verbose=1, callbacks=None, **kwargs):
+        """
+        Train the model for a fixed number of epochs (iterations on a dataset).
+
+        This method mimics Keras's fit() API for compatibility.
+
+        Args:
+            x (array-like or torch.utils.data.Dataset): Training data features or dataset.
+            y (array-like, optional): Target data (labels). Not needed if x is a Dataset.
+            batch_size (int): Number of samples per gradient update.
+            epochs (int): Number of epochs to train the model.
+            verbose (int): Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch.
+            callbacks (list, optional): List of callbacks to apply during training.
+            **kwargs: Additional arguments for compatibility.
+
+        Returns:
+            History object containing training loss history.
+        """
+        from torch.utils.data import TensorDataset, DataLoader
+
+        # Create dataset and dataloader
+        if isinstance(x, torch.utils.data.Dataset):
+            dataloader = DataLoader(x, batch_size=batch_size, shuffle=True)
+        else:
+            # Convert numpy arrays to tensors
+            if not isinstance(x, torch.Tensor):
+                x_tensor = torch.tensor(x, dtype=torch.float32)
+            else:
+                x_tensor = x
+
+            if not isinstance(y, torch.Tensor):
+                y_tensor = torch.tensor(y, dtype=torch.long)
+            else:
+                y_tensor = y
+
+            dataset = TensorDataset(x_tensor, y_tensor)
+            dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+        # Training history
+        history = {'d_loss': [], 'g_loss': []}
+
+        # Move models to device
+        self._generator.to(self._device)
+        self._discriminator.to(self._device)
+
+        # Training loop
+        for epoch in range(epochs):
+            epoch_d_loss = []
+            epoch_g_loss = []
+
+            for batch_idx, batch in enumerate(dataloader):
+                # Train step
+                losses = self.train_step(batch)
+                epoch_d_loss.append(losses['d_loss'])
+                epoch_g_loss.append(losses['g_loss'])
+
+            # Calculate average losses for the epoch
+            avg_d_loss = sum(epoch_d_loss) / len(epoch_d_loss)
+            avg_g_loss = sum(epoch_g_loss) / len(epoch_g_loss)
+
+            history['d_loss'].append(avg_d_loss)
+            history['g_loss'].append(avg_g_loss)
+
+            # Verbose output
+            if verbose > 0:
+                if verbose == 1:
+                    print(f"\rEpoch {epoch + 1}/{epochs} - d_loss: {avg_d_loss:.4f} - g_loss: {avg_g_loss:.4f}", end='')
+                elif verbose == 2:
+                    print(f"Epoch {epoch + 1}/{epochs} - d_loss: {avg_d_loss:.4f} - g_loss: {avg_g_loss:.4f}")
+
+        if verbose == 1:
+            print()  # New line after progress
+
+        # Return history object (mimicking Keras)
+        class History:
+            def __init__(self, history_dict):
+                self.history = history_dict
+
+        return History(history)
 
     def train_step(self, batch):
         """
@@ -254,33 +412,52 @@ class WassersteinGPAlgorithmTorch(nn.Module):
 
         # Unpack batch into features and labels.
         real_feature, real_samples_label = batch
-        real_feature = real_feature.to(self.device)
-        real_samples_label = real_samples_label.to(self.device)
+
+        # Convert to torch tensors if needed
+        if not isinstance(real_feature, torch.Tensor):
+            real_feature = torch.tensor(real_feature, dtype=torch.float32, device=self._device)
+        else:
+            real_feature = real_feature.to(self._device)
+
+        if not isinstance(real_samples_label, torch.Tensor):
+            # Check if it's one-hot encoded (2D with num_classes columns)
+            if len(real_samples_label.shape) == 2 and real_samples_label.shape[1] > 1:
+                # Already one-hot encoded
+                real_samples_label = torch.tensor(real_samples_label, dtype=torch.float32, device=self._device)
+            else:
+                # Convert to long for indexing
+                real_samples_label = torch.tensor(real_samples_label, dtype=torch.long, device=self._device)
+        else:
+            real_samples_label = real_samples_label.to(self._device)
 
         batch_size = real_feature.shape[0]
 
-        # Expand label dimensions if needed
-        if len(real_samples_label.shape) == 1:
-            real_samples_label = real_samples_label.unsqueeze(-1)
+        # Handle label dimensions - check if already one-hot encoded
+        if len(real_samples_label.shape) == 2 and real_samples_label.shape[1] > 1:
+            # Already one-hot encoded, use as is
+            labels_for_model = real_samples_label
+        else:
+            # Expand label dimensions to match input expectations (e.g., (batch_size, 1)).
+            if len(real_samples_label.shape) == 1:
+                real_samples_label = real_samples_label.unsqueeze(-1)
+            labels_for_model = real_samples_label
 
         # === Discriminator Training Loop ===
         for _ in range(self._discriminator_steps):
-            self._discriminator_optimizer.zero_grad()
-
             # Generate random noise vectors for the latent space.
-            latent_space = torch.normal(
-                self._latent_mean_distribution,
-                self._latent_stander_deviation,
-                size=(batch_size, self._latent_dimension)
-            ).to(self.device)
+            latent_space = torch.randn(batch_size, self._latent_dimension, device=self._device) * \
+                           self._latent_stander_deviation + self._latent_mean_distribution
+
+            # Zero discriminator gradients
+            self._discriminator_optimizer.zero_grad()
 
             # Generate synthetic samples from the generator using noise and labels.
             with torch.no_grad():
-                synthetic_feature = self._generator(latent_space, real_samples_label)
+                synthetic_feature = self._generator([latent_space, labels_for_model])
 
             # Predict "real/fake" labels using the discriminator for real and synthetic samples.
-            label_predicted_real = self._discriminator(real_feature, real_samples_label)
-            label_predicted_synthetic = self._discriminator(synthetic_feature, real_samples_label)
+            label_predicted_real = self._discriminator([real_feature, labels_for_model])
+            label_predicted_synthetic = self._discriminator([synthetic_feature, labels_for_model])
 
             # Compute discriminator loss (real vs fake).
             discriminator_loss_result = self._discriminator_loss_fn(
@@ -289,36 +466,34 @@ class WassersteinGPAlgorithmTorch(nn.Module):
             # Compute gradient penalty for improved stability (WGAN-GP, etc.).
             gradient_penalty = self.gradient_penalty(batch_size,
                                                      real_feature,
-                                                     real_samples_label,
+                                                     labels_for_model,
                                                      synthetic_feature)
 
             # Combine loss with gradient penalty.
             all_discriminator_loss = discriminator_loss_result + gradient_penalty * self._gradient_penalty_weight
 
-            # Compute and apply gradients to update the discriminator's weights.
+            # Backpropagate and update discriminator
             all_discriminator_loss.backward()
             self._discriminator_optimizer.step()
 
         # === Generator Training Step ===
+        # Generate fresh random noise vectors for the latent space.
+        latent_space = torch.randn(batch_size, self._latent_dimension, device=self._device) * \
+                       self._latent_stander_deviation + self._latent_mean_distribution
+
+        # Zero generator gradients
         self._generator_optimizer.zero_grad()
 
-        # Generate fresh random noise vectors for the latent space.
-        latent_space = torch.normal(
-            self._latent_mean_distribution,
-            self._latent_stander_deviation,
-            size=(batch_size, self._latent_dimension)
-        ).to(self.device)
-
         # Generate synthetic samples from the generator.
-        synthetic_feature = self._generator(latent_space, real_samples_label)
+        synthetic_feature = self._generator([latent_space, labels_for_model])
 
         # Predict "real/fake" labels for synthetic samples using the discriminator.
-        predicted_labels = self._discriminator(synthetic_feature, real_samples_label)
+        predicted_labels = self._discriminator([synthetic_feature, labels_for_model])
 
         # Compute generator loss (how well generator fools the discriminator).
         all_generator_loss = self._generator_loss_fn(predicted_labels)
 
-        # Compute and apply gradients to update the generator's weights.
+        # Backpropagate and update generator
         all_generator_loss.backward()
         self._generator_optimizer.step()
 
@@ -344,40 +519,41 @@ class WassersteinGPAlgorithmTorch(nn.Module):
         # Dictionary to store generated samples for each class.
         generated_data = {}
 
+        # Set generator to evaluation mode
         self._generator.eval()
+
         with torch.no_grad():
             # Loop through each class and the desired number of samples for that class.
             for label_class, number_instances in number_samples_per_class["classes"].items():
                 # Create one-hot encoded labels for all samples of the current class.
-                label_samples_generated = F.one_hot(
-                    torch.tensor([label_class] * number_instances),
-                    num_classes=number_samples_per_class["number_classes"]
-                ).float().to(self.device)
+                label_samples_generated = to_categorical([label_class] * number_instances,
+                                                         num_classes=number_samples_per_class["number_classes"])
+                label_samples_generated = torch.tensor(label_samples_generated, dtype=torch.float32,
+                                                       device=self._device)
 
                 # Sample random noise vectors from a normal distribution.
-                latent_noise = torch.normal(
-                    self._latent_mean_distribution,
-                    self._latent_stander_deviation,
-                    size=(number_instances, self._latent_dimension)
-                ).to(self.device)
+                latent_noise = torch.randn(number_instances, self._latent_dimension, device=self._device) * \
+                               self._latent_stander_deviation + self._latent_mean_distribution
 
                 # Generate synthetic samples using the generator.
-                generated_samples = self._generator(latent_noise, label_samples_generated)
+                generated_samples = self._generator([latent_noise, label_samples_generated])
 
-                # Round the generated samples to integer values
-                # (if samples are intended to be binary, e.g., images with pixel values 0 or 1).
-                generated_samples = torch.round(generated_samples).cpu().numpy()
+                # Convert to numpy and round to integer values
+                generated_samples = generated_samples.cpu().numpy()
+                generated_samples = numpy.rint(generated_samples)
 
                 # Store generated samples for the current class.
                 generated_data[label_class] = generated_samples
 
+        # Set generator back to training mode
         self._generator.train()
+
         # Return the dictionary containing generated samples for all requested classes.
         return generated_data
 
     def save_model(self, directory, file_name):
         """
-        Save the generator and discriminator models.
+        Save the encoder and decoder models in both JSON and PyTorch formats.
 
         Args:
             directory (str): Directory where models will be saved.
@@ -386,21 +562,33 @@ class WassersteinGPAlgorithmTorch(nn.Module):
         if not os.path.exists(directory):
             os.makedirs(directory)
 
-        # Construct file names for generator and discriminator models
-        generator_file_name = os.path.join(directory, f"fold_{file_name}_generator.pth")
-        discriminator_file_name = os.path.join(directory, f"fold_{file_name}_discriminator.pth")
+        # Construct file names for encoder and decoder models
+        generator_file_name = os.path.join(directory, f"fold_{file_name}_generator")
+        discriminator_file_name = os.path.join(directory, f"fold_{file_name}_discriminator")
 
         # Save generator model
-        torch.save({
-            'model_state_dict': self._generator.state_dict(),
-            'model_config': str(self._generator)
-        }, generator_file_name)
+        torch.save(self._generator.state_dict(), f"{generator_file_name}.pt")
+        self._save_model_architecture(self._generator, f"{generator_file_name}.json")
 
         # Save discriminator model
-        torch.save({
-            'model_state_dict': self._discriminator.state_dict(),
-            'model_config': str(self._discriminator)
-        }, discriminator_file_name)
+        torch.save(self._discriminator.state_dict(), f"{discriminator_file_name}.pt")
+        self._save_model_architecture(self._discriminator, f"{discriminator_file_name}.json")
+
+    @staticmethod
+    def _save_model_architecture(model, file_path):
+        """
+        Save model architecture to a JSON file.
+
+        Args:
+            model (nn.Module): Model to save.
+            file_path (str): Path to the JSON file.
+        """
+        architecture = {
+            'class': model.__class__.__name__,
+            'state_dict_keys': list(model.state_dict().keys())
+        }
+        with open(file_path, "w") as json_file:
+            json.dump(architecture, json_file, indent=2)
 
     def load_models(self, directory, file_name):
         """
@@ -412,15 +600,12 @@ class WassersteinGPAlgorithmTorch(nn.Module):
         """
 
         # Construct file names for generator and discriminator models
-        generator_file_name = os.path.join(directory, f"{file_name}_generator.pth")
-        discriminator_file_name = os.path.join(directory, f"{file_name}_discriminator.pth")
+        generator_file_name = os.path.join(directory, f"{file_name}_generator.pt")
+        discriminator_file_name = os.path.join(directory, f"{file_name}_discriminator.pt")
 
-        # Load the generator and discriminator models
-        generator_checkpoint = torch.load(generator_file_name, map_location=self.device)
-        self._generator.load_state_dict(generator_checkpoint['model_state_dict'])
-
-        discriminator_checkpoint = torch.load(discriminator_file_name, map_location=self.device)
-        self._discriminator.load_state_dict(discriminator_checkpoint['model_state_dict'])
+        # Load the generator and discriminator state dicts
+        self._generator.load_state_dict(torch.load(generator_file_name, map_location=self._device))
+        self._discriminator.load_state_dict(torch.load(discriminator_file_name, map_location=self._device))
 
     @property
     def discriminator(self) -> Any:

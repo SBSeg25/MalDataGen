@@ -62,7 +62,7 @@ DEFAULT_WASSERSTEIN_GP_GAN_INITIALIZER_MEAN = 0.0
 DEFAULT_WASSERSTEIN_GP_GAN_INITIALIZER_DEVIATION = 0.125
 
 
-class WassersteinGPModel(VanillaDiscriminator, VanillaGenerator):
+class WassersteinGPModelTensorflow(VanillaDiscriminator, VanillaGenerator):
     """
     WassersteinGP Generative Adversarial Network (WGAN) with Gradient Penalty.
 

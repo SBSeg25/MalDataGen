@@ -53,7 +53,7 @@ except ImportError as error:
     sys.exit(-1)
 
 
-class VanillaGenerator(Activations):
+class VanillaGeneratorTensorflow(Activations):
     """
     VanillaGenerator
 

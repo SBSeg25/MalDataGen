@@ -8,8 +8,8 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
-from Engine.Algorithms.WassersteinGP.Tensorflow.AlgorithmWassersteinGPTensorflow import WassersteinGPAlgorithm
-from Engine.Models.WassersteinGP.Tensorflow.ModelWassersteinGPTensorflow import WassersteinGPModel
+from Engine.Algorithms.WassersteinGP.Torch.WassersteinGPAlgorithmTorch import WassersteinGPAlgorithmTorch
+from Engine.Models.WassersteinGP.Torch.ModelWassersteinGPTorch import WassersteinGPModelTorch
 
 # MIT License
 #
@@ -186,7 +186,7 @@ class WassersteinGPInstance:
         """
 
         # WassersteinGP Model setup for the Generator and Discriminator
-        self._wasserstein_gp_model = WassersteinGPModel(latent_dimension=self._wasserstein_gp_latent_dimension,
+        self._wasserstein_gp_model = WassersteinGPModelTorch(latent_dimension=self._wasserstein_gp_latent_dimension,
                                                       output_shape=input_shape,
                                                       activation_function=self._wasserstein_gp_activation_function,
                                                       initializer_mean=self._wasserstein_gp_initializer_mean,
@@ -200,7 +200,7 @@ class WassersteinGPInstance:
                                                       number_samples_per_class = self._number_samples_per_class)
 
         # WassersteinGP Algorithm setup for training and model operations
-        self._wasserstein_gp_algorithm = WassersteinGPAlgorithm(generator_model=self._wasserstein_gp_model.get_generator(),
+        self._wasserstein_gp_algorithm = WassersteinGPAlgorithmTorch(generator_model=self._wasserstein_gp_model.get_generator(),
                                                                 discriminator_model=self._wasserstein_gp_model.get_discriminator(),
                                                                 latent_dimension=self._wasserstein_gp_latent_dimension,
                                                                 generator_loss_fn=self._wasserstein_gp_loss_function,
@@ -237,8 +237,6 @@ class WassersteinGPInstance:
         self._get_wasserstein_gp(input_shape)
 
         # Print the model summaries for the generator and discriminator
-        self._wasserstein_gp_model.get_generator().summary()
-        self._wasserstein_gp_model.get_discriminator().summary()
 
         # Define the custom loss functions for the discriminator and generator
         def discriminator_loss(real_img, fake_img):

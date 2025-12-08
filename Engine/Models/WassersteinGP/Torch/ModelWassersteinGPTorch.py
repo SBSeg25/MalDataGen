@@ -8,6 +8,9 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
+from Engine.Models.WassersteinGP.Torch.VanillaDiscriminatorTorch import VanillaDiscriminatorTorch
+from Engine.Models.WassersteinGP.Torch.VanillaGeneratorTorch import VanillaGeneratorTorch
+
 # MIT License
 #
 # Copyright (c) 2025 Synthetic Ocean AI
@@ -42,9 +45,6 @@ try:
     from typing import Optional
     from typing import Callable
 
-    from Engine.Models.WassersteinGP.Pytorch.VanillaGeneratorPytorch import VanillaGenerator
-    from Engine.Models.WassersteinGP.Pytorch.VanillaDiscriminatorPytorch import VanillaDiscriminator
-
 except ImportError as error:
     print(error)
     print()
@@ -62,7 +62,7 @@ DEFAULT_WASSERSTEIN_GP_GAN_INITIALIZER_MEAN = 0.0
 DEFAULT_WASSERSTEIN_GP_GAN_INITIALIZER_DEVIATION = 0.125
 
 
-class WassersteinGPModel(VanillaDiscriminator, VanillaGenerator):
+class WassersteinGPModelTorch(VanillaDiscriminatorTorch, VanillaGeneratorTorch):
     """
     WassersteinGP Generative Adversarial Network (WGAN) with Gradient Penalty.
 
@@ -172,7 +172,7 @@ class WassersteinGPModel(VanillaDiscriminator, VanillaGenerator):
             raise ValueError("Discriminator dropout decay rate must be between 0 and 1.")
 
         # Initialize the discriminator
-        VanillaDiscriminator.__init__(self,
+        VanillaDiscriminatorTorch.__init__(self,
                                       latent_dimension,
                                       output_shape,
                                       activation_function,
@@ -185,7 +185,7 @@ class WassersteinGPModel(VanillaDiscriminator, VanillaGenerator):
                                       number_samples_per_class)
 
         # Initialize the generator
-        VanillaGenerator.__init__(self,
+        VanillaGeneratorTorch.__init__(self,
                                   latent_dimension,
                                   output_shape[0] if isinstance(output_shape, tuple) else output_shape,
                                   activation_function,
