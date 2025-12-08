@@ -9,7 +9,7 @@ __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
 from Engine.Algorithms.WassersteinGP.Tensorflow.AlgorithmWassersteinGPTensorflow import WassersteinGPAlgorithm
-from Engine.Models.WassersteinGP.ModelWassersteinGPGAN import WassersteinGPModel
+from Engine.Models.WassersteinGP.Tensorflow.ModelWassersteinGPTensorflow import WassersteinGPModel
 
 # MIT License
 #

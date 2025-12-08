@@ -42,8 +42,8 @@ try:
     from typing import Optional
     from typing import Callable
 
-    from Engine.Models.WassersteinGP.VanillaGenerator import VanillaGenerator
-    from Engine.Models.WassersteinGP.VanillaDiscriminator import VanillaDiscriminator
+    from Engine.Models.WassersteinGP.Tensorflow.VanillaGeneratorTensorflow import VanillaGenerator
+    from Engine.Models.WassersteinGP.Tensorflow.VanillaDiscriminatorTensorflow import VanillaDiscriminator
 
 except ImportError as error:
     print(error)

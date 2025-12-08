@@ -42,8 +42,8 @@ try:
     from typing import Optional
     from typing import Callable
 
-    from Engine.Models.WassersteinGP.VanillaGenerator import VanillaGenerator
-    from Engine.Models.WassersteinGP.VanillaDiscriminator import VanillaDiscriminator
+    from Engine.Models.WassersteinGP.Pytorch.VanillaGeneratorPytorch import VanillaGenerator
+    from Engine.Models.WassersteinGP.Pytorch.VanillaDiscriminatorPytorch import VanillaDiscriminator
 
 except ImportError as error:
     print(error)
@@ -51,18 +51,18 @@ except ImportError as error:
     sys.exit(-1)
 
 
-DEFAULT_WASSERSTEIN_GAN_LATENT_DIMENSION = 128
-DEFAULT_WASSERSTEIN_GAN_ACTIVATION = "LeakyReLU"
-DEFAULT_WASSERSTEIN_GAN_DROPOUT_DECAY_RATE_G = 0.2
-DEFAULT_WASSERSTEIN_GAN_DROPOUT_DECAY_RATE_D = 0.4
-DEFAULT_WASSERSTEIN_GAN_DENSE_LAYERS_SETTINGS_GENERATOR = [128]
-DEFAULT_WASSERSTEIN_GAN_DENSE_LAYERS_SETTINGS_DISCRIMINATOR = [128]
-DEFAULT_WASSERSTEIN_GAN_LAST_ACTIVATION_LAYER = "sigmoid"
-DEFAULT_WASSERSTEIN_GAN_INITIALIZER_MEAN = 0.0
-DEFAULT_WASSERSTEIN_GAN_INITIALIZER_DEVIATION = 0.125
+DEFAULT_WASSERSTEIN_GP_GAN_LATENT_DIMENSION = 128
+DEFAULT_WASSERSTEIN_GP_GAN_ACTIVATION = "LeakyReLU"
+DEFAULT_WASSERSTEIN_GP_GAN_DROPOUT_DECAY_RATE_G = 0.2
+DEFAULT_WASSERSTEIN_GP_GAN_DROPOUT_DECAY_RATE_D = 0.4
+DEFAULT_WASSERSTEIN_GP_GAN_DENSE_LAYERS_SETTINGS_GENERATOR = [128]
+DEFAULT_WASSERSTEIN_GP_GAN_DENSE_LAYERS_SETTINGS_DISCRIMINATOR = [128]
+DEFAULT_WASSERSTEIN_GP_GAN_LAST_ACTIVATION_LAYER = "sigmoid"
+DEFAULT_WASSERSTEIN_GP_GAN_INITIALIZER_MEAN = 0.0
+DEFAULT_WASSERSTEIN_GP_GAN_INITIALIZER_DEVIATION = 0.125
 
 
-class WassersteinModel(VanillaDiscriminator, VanillaGenerator):
+class WassersteinGPModel(VanillaDiscriminator, VanillaGenerator):
     """
     WassersteinGP Generative Adversarial Network (WGAN) with Gradient Penalty.
 
@@ -111,14 +111,14 @@ class WassersteinModel(VanillaDiscriminator, VanillaGenerator):
         @number_samples_per_class (Optional[int]): Number of samples per class, if applicable for class-conditional generation.
     """
 
-    def __init__(self, latent_dimension: int = DEFAULT_WASSERSTEIN_GAN_LATENT_DIMENSION,
+    def __init__(self, latent_dimension: int = DEFAULT_WASSERSTEIN_GP_GAN_LATENT_DIMENSION,
                  output_shape: Tuple[int, ...] = (128, ),
-                 activation_function: str = DEFAULT_WASSERSTEIN_GAN_ACTIVATION,
-                 initializer_mean: float = DEFAULT_WASSERSTEIN_GAN_INITIALIZER_MEAN,
-                 initializer_deviation: float = DEFAULT_WASSERSTEIN_GAN_INITIALIZER_DEVIATION,
-                 dropout_decay_rate_g: float = DEFAULT_WASSERSTEIN_GAN_DROPOUT_DECAY_RATE_G,
-                 dropout_decay_rate_d: float = DEFAULT_WASSERSTEIN_GAN_DROPOUT_DECAY_RATE_D,
-                 last_layer_activation: str = DEFAULT_WASSERSTEIN_GAN_LAST_ACTIVATION_LAYER,
+                 activation_function: str = DEFAULT_WASSERSTEIN_GP_GAN_ACTIVATION,
+                 initializer_mean: float = DEFAULT_WASSERSTEIN_GP_GAN_INITIALIZER_MEAN,
+                 initializer_deviation: float = DEFAULT_WASSERSTEIN_GP_GAN_INITIALIZER_DEVIATION,
+                 dropout_decay_rate_g: float = DEFAULT_WASSERSTEIN_GP_GAN_DROPOUT_DECAY_RATE_G,
+                 dropout_decay_rate_d: float = DEFAULT_WASSERSTEIN_GP_GAN_DROPOUT_DECAY_RATE_D,
+                 last_layer_activation: str = DEFAULT_WASSERSTEIN_GP_GAN_LAST_ACTIVATION_LAYER,
                  dense_layer_sizes_g=None,
                  dense_layer_sizes_d=None,
                  dataset_type: type = numpy.float32,
@@ -151,10 +151,10 @@ class WassersteinModel(VanillaDiscriminator, VanillaGenerator):
                 empty layer lists, etc.).
         """
         if dense_layer_sizes_d is None:
-            dense_layer_sizes_d = DEFAULT_WASSERSTEIN_GAN_DENSE_LAYERS_SETTINGS_DISCRIMINATOR
+            dense_layer_sizes_d = DEFAULT_WASSERSTEIN_GP_GAN_DENSE_LAYERS_SETTINGS_DISCRIMINATOR
 
         if dense_layer_sizes_g is None:
-            dense_layer_sizes_g = DEFAULT_WASSERSTEIN_GAN_DENSE_LAYERS_SETTINGS_GENERATOR
+            dense_layer_sizes_g = DEFAULT_WASSERSTEIN_GP_GAN_DENSE_LAYERS_SETTINGS_GENERATOR
 
         if latent_dimension <= 0:
             raise ValueError("Latent dimension must be a positive integer.")
@@ -187,7 +187,7 @@ class WassersteinModel(VanillaDiscriminator, VanillaGenerator):
         # Initialize the generator
         VanillaGenerator.__init__(self,
                                   latent_dimension,
-                                  output_shape,
+                                  output_shape[0] if isinstance(output_shape, tuple) else output_shape,
                                   activation_function,
                                   initializer_mean,
                                   initializer_deviation,
