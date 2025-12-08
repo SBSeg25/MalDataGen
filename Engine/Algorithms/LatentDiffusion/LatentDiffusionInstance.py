@@ -9,8 +9,6 @@ __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
 from Engine.Algorithms.LatentDiffusion.AlgorithmLatentDiffusion import LatentDiffusionAlgorithm
-from Engine.Algorithms.VariationalAutoencoder.AlgorithmVariationalAutoencoder import VariationalAlgorithm
-from Engine.Algorithms.VariationalAutoencoder.AlgorithmVariationalAutoencoderTorch import VariationalAlgorithmTorch
 from Engine.Models.VariationalAutoencoder.Torch.VariationalAutoencoderModelTorch import VariationalModelTorch
 
 # MIT License

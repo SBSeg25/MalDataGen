@@ -34,25 +34,26 @@ __credits__ = ['Synthetic Ocean AI']
 try:
     import os
     import sys
-
     import logging
 
-    from Engine.Algorithms.Wasserstein.Tensorflow.AlgorithmWassersteinTensorflow import WassersteinAlgorithmTensorflow
-    from Engine.Algorithms.Wasserstein.Torch.AlgorithmWassersteinTorch import WassersteinAlgorithmTorch
+    from Engine.Algorithms.VariationalAutoencoder.Tensorflow.AlgorithmVariationalAutoencoderTensorflow import \
+        VariationalAutoencoderAlgorithmTensorflow
+    from Engine.Algorithms.VariationalAutoencoder.Torch.AlgorithmVariationalAutoencoderTorch import \
+        VariationalAutoencoderAlgorithmTorch
 
     framework = os.getenv("ML_FRAMEWORK", "tensorflow").lower()
 
     if framework == "pytorch":
-        WassersteinAlgorithmBase = WassersteinAlgorithmTorch
+        VariationalAutoencoderAlgorithmBase = VariationalAutoencoderAlgorithmTorch
 
     else:
-        WassersteinAlgorithmBase = WassersteinAlgorithmTensorflow
+        VariationalAutoencoderAlgorithmBase = VariationalAutoencoderAlgorithmTensorflow
 
 except ImportError as error:
     logging.error(error)
     sys.exit(-1)
 
-class WassersteinAlgorithm(WassersteinAlgorithmBase):
+class WassersteinAlgorithm(VariationalAutoencoderAlgorithmBase):
     def __init__(self, *args, **kwargs):
 
         super().__init__(*args, **kwargs)

@@ -27,7 +27,7 @@ except ImportError as error:
     sys.exit(-1)
 
 
-class VariationalAlgorithmTorch(nn.Module):
+class VariationalAutoencoderAlgorithmTorch(nn.Module):
     """
     Implements a Variational AutoEncoder (VAE) model for generating synthetic data.
     """

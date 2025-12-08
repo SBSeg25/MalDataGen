@@ -54,7 +54,7 @@ except ImportError as error:
     sys.exit(-1)
 
 
-class VariationalAlgorithm(Model):
+class VariationalAutoencoderAlgorithmTensorflow(Model):
     """
     Implements a Variational AutoEncoder (VAE) model for generating synthetic data.
 
