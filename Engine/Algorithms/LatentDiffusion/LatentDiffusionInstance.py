@@ -53,7 +53,7 @@ try:
     from Engine.Algorithms.LatentDiffusion.GaussianLatentDiffusion import GaussianDiffusion
     from Engine.Models.LatentDiffusion.DiffusionModelUnet import UNetModel
     from Engine.Models.LatentDiffusion.VariationalAutoencoderModel import VariationalModelDiffusion
-    from Engine.Models.VariationalAutoencoder.Tensorflow.VariationalAutoencoderModel import VariationalModel
+    from Engine.Models.VariationalAutoencoder.Tensorflow.VariationalAutoencoderModelTensorflow import VariationalModel
 
 except ImportError as error:
     logging.error(error)

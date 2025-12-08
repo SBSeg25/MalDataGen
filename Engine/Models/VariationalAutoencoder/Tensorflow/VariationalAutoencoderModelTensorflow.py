@@ -34,8 +34,8 @@ try:
     import sys
     import numpy
 
-    from Engine.Models.VariationalAutoencoder.Tensorflow.VanillaDecoder import VanillaDecoder
-    from Engine.Models.VariationalAutoencoder.Tensorflow.VanillaEncoder import VanillaEncoder
+    from Engine.Models.VariationalAutoencoder.Tensorflow.VanillaDecoderTensorflow import VanillaDecoder
+    from Engine.Models.VariationalAutoencoder.Tensorflow.VanillaEncoderTensorflow import VanillaEncoder
 
 except ImportError as error:
     print(error)
