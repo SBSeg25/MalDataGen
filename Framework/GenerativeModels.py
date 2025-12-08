@@ -9,17 +9,17 @@ __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
 from Framework.Instances.AdversarialInstance import AdversarialInstance
-from Framework.Instances.AutoencoderInstance import AutoencoderInstance
+from Framework.Instances.AutoencoderInstanceTorch import AutoencoderInstance
 from Engine.Algorithms.DenoisingDiffusion.DenoisingDiffusionInstance import DenoisingDiffusionInstance
 from Engine.Algorithms.LatentDiffusion.LatentDiffusionInstance import LatentDiffusionInstance
-from Framework.Instances.QuantizedVAEInstance import QuantizedVAEInstance
+from Framework.Instances.QuantizedVAEInstanceTorch import QuantizedVAEInstance
 from Engine.Algorithms.RandomNoise.AlgorithmRandomNoise import RandomNoiseAlgorithm
 from Engine.Callbacks.CallbackModel import ModelMonitorCallback
 from Engine.Callbacks.CallbackResources import ResourceMonitorCallback
 from Framework.Instances.SmoteInstance import SmoteInstance
-from Framework.Instances.VariationalAutoencoderInstance import VariationalAutoencoderInstance
-from Framework.Instances.WassersteinInstance import WassersteinInstance
-from Framework.Instances.WassersteinGPInstance import WassersteinGPInstance
+from Framework.Instances.VariationalAutoencoderInstanceTorch import VariationalAutoencoderInstance
+from Framework.Instances.WassersteinInstanceTorch import WassersteinInstance
+from Framework.Instances.WassersteinGPInstanceTensorflow import WassersteinGPInstance
 
 # MIT License
 #

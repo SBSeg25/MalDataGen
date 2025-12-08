@@ -32,7 +32,9 @@ import os
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-os.environ['ML_FRAMEWORK'] = 'pytorch'
+import os
+os.environ["ML_FRAMEWORK"] = "pytorch"
+
 try:
     import sys
     import time

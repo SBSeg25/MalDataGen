@@ -9,7 +9,6 @@ __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
 from Engine.Algorithms.Adversarial.AdversarialAlgorithm import AdversarialAlgorithm
-from Engine.Algorithms.Adversarial.AdversarialAlgorithmTorch import AdversarialAlgorithmTorch
 from Engine.Models.Adversarial.Tensorflow.AdversarialModelTensorflow import AdversarialModel
 from Engine.Models.Adversarial.Torch.AdversarialModelTorch import AdversarialModelTorch
 
@@ -170,7 +169,7 @@ class AdversarialInstance:
                                                    number_samples_per_class = self._number_samples_per_class)
 
         # Adversarial Algorithm setup for training and model operations
-        self._adversarial_algorithm = AdversarialAlgorithmTorch(generator_model=self._adversarial_model.get_generator(),
+        self._adversarial_algorithm = AdversarialAlgorithm(generator_model=self._adversarial_model.get_generator(),
                                                            discriminator_model=self._adversarial_model.get_discriminator(),
                                                            latent_dimension=self._adversarial_latent_dimension,
                                                            loss_generator=self._adversarial_loss_generator,
