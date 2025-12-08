@@ -52,7 +52,7 @@ except ImportError as error:
     sys.exit(-1)
 
 
-class VanillaDecoder(Activations):
+class VanillaDecoderTorch(Activations):
     """
       VanillaDecoder
 

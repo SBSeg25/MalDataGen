@@ -34,8 +34,8 @@ try:
     import sys
     import numpy
 
-    from Engine.Models.VariationalAutoencoder.VanillaDecoder import VanillaDecoder
-    from Engine.Models.VariationalAutoencoder.VanillaEncoder import VanillaEncoder
+    from Engine.Models.VariationalAutoencoder.Tensorflow.VanillaDecoder import VanillaDecoder
+    from Engine.Models.VariationalAutoencoder.Tensorflow.VanillaEncoder import VanillaEncoder
 
 except ImportError as error:
     print(error)
@@ -53,7 +53,7 @@ DEFAULT_VARIATIONAL_AUTOENCODER_INITIALIZER_MEAN = 0
 DEFAULT_VARIATIONAL_AUTOENCODER_INITIALIZER_DEVIATION = 0.125
 
 
-class VariationalModel(VanillaDecoder, VanillaEncoder):
+class VariationalModelTorch(VanillaDecoder, VanillaEncoder):
     """
     A Variational Model that integrates both VanillaEncoder and VanillaDecoder
     functionalities. This class enables flexible configuration of encoder and

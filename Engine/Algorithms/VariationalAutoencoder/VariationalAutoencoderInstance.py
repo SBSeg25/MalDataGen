@@ -9,7 +9,7 @@ __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
 from Engine.Algorithms.VariationalAutoencoder.AlgorithmVariationalAutoencoder import VariationalAlgorithm
-from Engine.Models.VariationalAutoencoder.VariationalAutoencoderModel import VariationalModel
+from Engine.Models.VariationalAutoencoder.Tensorflow.VariationalAutoencoderModel import VariationalModel
 
 # MIT License
 #
