@@ -36,25 +36,14 @@ import warnings
 
 try:
     import sys
-    import tensorflow
-
-    from tensorflow.keras.layers import Add
-    from tensorflow.keras.layers import Dense
-    from tensorflow.keras.layers import Input
-    from tensorflow.keras.models import Model
-
-    from tensorflow.keras.layers import Flatten
-    from tensorflow.keras.layers import Reshape
-
-    from tensorflow.keras.layers import Concatenate
+    import torch
+    import torch.nn as nn
+    import torch.nn.functional as F
 
     from Engine.Activations.Activations import Activations
-    from tensorflow.keras.layers import LayerNormalization
-
-    from Engine.Layers.Tensorflow.TimeEmbeddingLayer import TimeEmbedding
-    from Engine.Layers.Tensorflow.AttentionBlockLayer import AttentionBlock
-
-    from Engine.Layers.Tensorflow.CrossAttentionLayer import CrossAttentionBlock
+    from Engine.Layers.Pytorch.TimeEmbeddingLayer import TimeEmbedding
+    from Engine.Layers.Pytorch.AttentionBlockLayer import AttentionBlock
+    from Engine.Layers.Pytorch.CrossAttentionLayer import CrossAttentionBlock
 
 except ImportError as error:
     print(error)
@@ -71,7 +60,7 @@ DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION = 'swish'
 DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION_ALPHA = 0.05
 
 
-class UNetDenoisingModelTensorflow(Activations):
+class UNetDenoisingModelTorch(nn.Module, Activations):
     """
     UNetModel
 
@@ -113,7 +102,7 @@ class UNetDenoisingModelTensorflow(Activations):
             - Missing or incorrect `number_classes` in `number_samples_per_class`
 
     Example:
-        >>> unet_model = UNetDenoisingModelTensorflow(
+        >>> unet_model = UNetDenoisingModel(
         ...    output_shape=256,
         ...    embedding_channels=3,
         ...    list_neurons_per_level=[64, 128, 256],
@@ -137,7 +126,7 @@ class UNetDenoisingModelTensorflow(Activations):
                  intermediary_activation_function: int = DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION,
                  intermediary_activation_alpha: str = DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION_ALPHA,
                  last_layer_activation: str = DEFAULT_DIFFUSION_UNET_LAST_LAYER_ACTIVATION,
-                 number_samples_per_class = None):
+                 number_samples_per_class=None):
         """
         Initializes the UNetModel class with the provided parameters.
 
@@ -174,6 +163,7 @@ class UNetDenoisingModelTensorflow(Activations):
                 If the `intermediary_activation_function` or `last_layer_activation` is invalid.
                 If `number_samples_per_class` is missing the key "number_classes".
         """
+        super(UNetDenoisingModelTorch, self).__init__()
 
         if list_neurons_per_level is None:
             list_neurons_per_level = DEFAULT_DIFFUSION_UNET_CHANNELS_PER_LEVEL
@@ -187,7 +177,8 @@ class UNetDenoisingModelTensorflow(Activations):
         if not isinstance(embedding_channels, int) or embedding_channels <= 0:
             raise ValueError("embedding_channels must be a positive integer.")
 
-        if not isinstance(list_neurons_per_level, list) or not all(isinstance(n, int) and n > 0 for n in list_neurons_per_level):
+        if not isinstance(list_neurons_per_level, list) or not all(
+                isinstance(n, int) and n > 0 for n in list_neurons_per_level):
             raise ValueError("list_neurons_per_level must be a list of positive integers.")
 
         if not isinstance(list_attentions, list) or not all(isinstance(a, bool) for a in list_attentions):
@@ -211,7 +202,6 @@ class UNetDenoisingModelTensorflow(Activations):
         if not isinstance(number_samples_per_class, dict) or "number_classes" not in number_samples_per_class:
             raise ValueError("number_samples_per_class must be a dictionary containing the key 'number_classes'.")
 
-
         self._embedding_channels = embedding_channels
         self._list_neurons_per_level = list_neurons_per_level
         self._list_attention = list_attentions
@@ -222,6 +212,9 @@ class UNetDenoisingModelTensorflow(Activations):
         self._intermediary_activation_alpha = intermediary_activation_alpha
         self._number_samples_per_class = number_samples_per_class
         self._output_shape = self._adjust_output_shape_for_downsampling(output_shape, len(self._list_neurons_per_level))
+
+        # Build the model architecture
+        self._build_model()
 
     @staticmethod
     def _adjust_output_shape_for_downsampling(shape: int, number_downsamples: int) -> int:
@@ -270,269 +263,194 @@ class UNetDenoisingModelTensorflow(Activations):
 
         return padded_shape
 
-
-    def _down_sample(self, width):
+    def _build_model(self):
         """
-        Downsamples the input by reducing its dimensionality.
-
-        Args:
-            width (int): The target width for the downsampling.
-
-        Returns:
-            Function: A function that applies the downsampling operation to a given input tensor.
+        Constructs the U-Net model architecture as PyTorch modules.
         """
-        def apply(down_sample_flow):
-            original_shape = down_sample_flow.shape
-            down_sample_flow = Flatten()(down_sample_flow)
-            down_sample_flow = Dense(original_shape[1] // 2 * width)(down_sample_flow)
-            self._add_activation_layer(down_sample_flow, self._intermediary_activation_function)
-
-            down_sample_flow = Reshape((original_shape[1] // 2, width))(down_sample_flow)
-
-            return down_sample_flow
-
-        return apply
-
-    def _up_sample(self, width):
-        """
-        Upsamples the input by increasing its dimensionality.
-
-        Args:
-            width (int): The target width for the upsampling.
-
-        Returns:
-            Function: A function that applies the upsampling operation to a given input tensor.
-        """
-        def apply(up_sample_flow):
-            original_shape = up_sample_flow.shape
-            up_sample_flow = Flatten()(up_sample_flow)
-            up_sample_flow = Dense(original_shape[1] * 2 * width)(up_sample_flow)
-            up_sample_flow = self._add_activation_layer(up_sample_flow, self._intermediary_activation_function)
-            up_sample_flow = Reshape((original_shape[1] * 2, width))(up_sample_flow)
-
-            return up_sample_flow
-
-        return apply
-
-    def _time_MLP(self, units):
-        """
-        Creates a Multi-Layer Perceptron (MLP) to process time embeddings.
-
-        Args:
-            units (int): The number of units for the dense layers in the MLP.
-
-        Returns:
-            Function: A function that applies the MLP transformation to a given input.
-        """
-        def apply(inputs):
-            time_embedding = Dense(units)(Dense(units, activation='swish')(inputs))
-
-            time_embedding = self._add_activation_layer(time_embedding,
-                                                                    self._intermediary_activation_function)
-            # time_embedding = LayerNormalization()(time_embedding)
-            return time_embedding
-
-
-        return apply
-
-
-    def _label_embedding_MLP(self, units):
-        """
-        Creates a Multi-Layer Perceptron (MLP) to process label embeddings.
-
-        Args:
-            units (int): The number of units for the dense layers in the MLP.
-
-        Returns:
-            Function: A function that applies the MLP transformation to a given input.
-        """
-        def apply(inputs):
-            label_embedding = Dense(self._output_shape)(Dense(units, activation='swish')(inputs))
-
-            label_embedding = self._add_activation_layer(label_embedding,
-                                                                    self._intermediary_activation_function)
-            # label_embedding = LayerNormalization()(label_embedding)
-
-            return label_embedding
-
-
-        return apply
-
-    def _residual_block(self, number_filters, groups=1):
-        """
-        Builds a residual block for the network, which includes convolution, normalization,
-        and embedding layers for time and description inputs. The block follows the
-        residual learning framework by applying a skip connection that adds the
-        original input to the transformed output, facilitating gradient flow and
-        improving training stability.
-
-        The residual block performs the following operations:
-        - If the input width matches the number of filters, the residual block directly passes the input.
-        - Otherwise, it reshapes the input, applies a dense transformation, and adds activation.
-        - Time and description embeddings are applied to match the number of filters and added to the output.
-        - A final skip connection is added to the transformed output, which improves learning by retaining
-        original input features.
-
-        Args:
-            number_filters (int): The number of filters used in the convolutional layers of the residual block.
-            groups (int, optional): The number of normalization groups (default is 1). This could be used for group
-            normalization in more advanced versions.
-
-        Returns:
-            Function: A function that applies the residual block transformation to a given input.
-                    The function accepts a list of inputs and returns the transformed tensor with the residual connection applied.
-        """
-
-        def apply(inputs):
-            # Extract the inputs
-            residual_block_flow, time_embedding = inputs
-            input_width = residual_block_flow.shape[-1]
-
-            # If input width matches the number of filters, use the original input as the residual
-            if input_width == number_filters:
-                residual = residual_block_flow
-            else:
-                # Reshape the input if the widths don't match and apply a dense transformation
-                reshaped_input = Reshape((-1,))(residual_block_flow)
-                transformed = Dense(number_filters * residual_block_flow.shape[1])(reshaped_input)
-                transformed = self._add_activation_layer(transformed, self._intermediary_activation_function)
-                residual = Reshape((residual_block_flow.shape[1], number_filters))(transformed)
-
-            # Apply the time embedding transformation
-            time_embedding = Dense(number_filters)(time_embedding)[:, None, :]
-            time_embedding = self._add_activation_layer(time_embedding, self._intermediary_activation_function)
-
-
-            # Flatten and apply a dense transformation to the residual block flow
-            number_neurons = residual_block_flow.shape[1]
-            residual_block_flow = Flatten()(residual_block_flow)
-            residual_block_flow = Dense(number_neurons * number_filters)(residual_block_flow)
-            residual_block_flow = self._add_activation_layer(residual_block_flow,
-                                                             self._intermediary_activation_function)
-
-            # Reshape the transformed flow and add the embeddings
-            residual_block_flow = Reshape((number_neurons, number_filters))(residual_block_flow)
-            residual_block_flow = Add()([residual_block_flow, time_embedding])
-
-            # Flatten the residual block flow and apply a final dense layer
-            original_shape = residual_block_flow.shape
-            residual_block_flow = Flatten()(residual_block_flow)
-            residual_block_flow = Dense(original_shape[1] * original_shape[2])(residual_block_flow)
-            residual_block_flow = self._add_activation_layer(residual_block_flow,
-                                                             self._intermediary_activation_function)
-
-            # Reshape back to the original residual block shape
-            residual_block_flow = Reshape((original_shape[1], original_shape[2]))(residual_block_flow)
-
-            # Add the original residual input to the transformed output
-            residual_block_flow = Add()([residual_block_flow, residual])
-
-            return residual_block_flow
-
-        return apply
-
-    def build_model(self):
-        """
-        Constructs the U-Net model, integrating all components like downsampling,
-        upsampling, residual blocks, and attention mechanisms. The model is designed
-        to process inputs such as images, time embeddings, and description embeddings
-        to produce an output that is reshaped back into an image-like structure.
-
-        The model architecture consists of:
-        - Initial convolution and dense layers to process the image input.
-        - Time embedding and description embedding layers to process time and description inputs.
-        - Residual blocks with optional attention mechanisms at each level.
-        - Skip connections to preserve information at each level of the network.
-        - Downsampling and upsampling blocks for maintaining spatial resolution.
-        - Final reshaping and dense layers to output a processed image with specified dimensions.
-
-        The final output is a model ready for training with image, time, and description inputs.
-
-        Returns:
-            Model: A compiled U-Net model configured with the provided architecture.
-        """
-        # Define the input layers
-        image_input = Input(shape=(self._output_shape, self._embedding_channels), name="image_input")
-        time_input = Input(shape=(), dtype=tensorflow.int32, name="time_input")
-        description_input = Input(shape=(self._number_samples_per_class["number_classes"],), dtype=tensorflow.float32,
-                                  name="description_input")
-
-        # Initial convolutional processing
         first_conv_channels = self._list_neurons_per_level[0]
-        network_flow = Flatten()(image_input)
-        network_flow = Dense(self._output_shape)(network_flow)
 
-        # Apply intermediary activation function
-        network_flow = self._add_activation_layer(network_flow, self._intermediary_activation_function)
+        # Initial convolution
+        self.first_dense = nn.Linear(self._output_shape, self._output_shape)
 
-        # Reshape the network flow to match the embedding dimensions
-        network_flow = Reshape((self._output_shape, self._embedding_channels))(network_flow)
+        # Time embedding layers
+        self.time_embedding = TimeEmbedding(first_conv_channels * 4)
+        self.time_mlp = self._time_MLP(first_conv_channels * 4)
 
-        # Time and description embeddings
-        time_embedding = TimeEmbedding(first_conv_channels * 4)(time_input)
-        time_embedding = self._time_MLP(first_conv_channels * 4)(time_embedding)
-        description_embedding = self._label_embedding_MLP(self._number_samples_per_class["number_classes"]
-                                                          )(description_input)
+        # Label embedding
+        self.label_mlp = self._label_embedding_MLP(self._number_samples_per_class["number_classes"])
 
-        # Initialize skip connections
-        skip_connection_flow = [network_flow]
+        # Encoder (downsampling path)
+        self.down_blocks = nn.ModuleList()
+        self.down_samples = nn.ModuleList()
 
-        # U-Net architecture loop: downsampling and residual blocks with attention
-        for number_neurons in range(len(self._list_neurons_per_level)):
+        for level_idx, num_neurons in enumerate(self._list_neurons_per_level):
+            level_blocks = nn.ModuleList()
 
-            # Add residual blocks
             for _ in range(self._number_residual_blocks):
-                network_flow = self._residual_block(self._list_neurons_per_level[number_neurons])([network_flow,
-                                                                                                   time_embedding])
+                level_blocks.append(self._create_residual_block(num_neurons))
 
-                # Optionally apply attention mechanism
-                if self._list_attention[number_neurons]:
-                    network_flow = CrossAttentionBlock(self._list_neurons_per_level[number_neurons]
-                                                       )([network_flow, description_embedding])
-                # Append to skip connections
-                skip_connection_flow.append(network_flow)
+                if self._list_attention[level_idx]:
+                    level_blocks.append(CrossAttentionBlock(num_neurons))
 
-            # Downsample if not at the last level
-            if self._list_neurons_per_level[number_neurons] != self._list_neurons_per_level[-1]:
-                network_flow = self._down_sample(self._list_neurons_per_level[number_neurons])(network_flow)
-                skip_connection_flow.append(network_flow)
+            self.down_blocks.append(level_blocks)
 
-        # Final residual block and attention mechanism at the last level
-        network_flow = self._residual_block(self._list_neurons_per_level[-1])(
-            [network_flow, time_embedding])
-        network_flow = CrossAttentionBlock(self._list_neurons_per_level[number_neurons]
-                                           )([network_flow, description_embedding])
-        network_flow = self._residual_block(self._list_neurons_per_level[-1])([network_flow, time_embedding])
+            if level_idx != len(self._list_neurons_per_level) - 1:
+                self.down_samples.append(self._create_down_sample(num_neurons))
 
-        # U-Net architecture loop: upsampling and residual blocks with attention
-        for number_neurons in reversed(range(len(self._list_neurons_per_level))):
+        # Middle blocks
+        self.mid_block1 = self._create_residual_block(self._list_neurons_per_level[-1])
+        self.mid_attn = CrossAttentionBlock(self._list_neurons_per_level[-1])
+        self.mid_block2 = self._create_residual_block(self._list_neurons_per_level[-1])
+
+        # Decoder (upsampling path)
+        self.up_blocks = nn.ModuleList()
+        self.up_samples = nn.ModuleList()
+
+        for level_idx in reversed(range(len(self._list_neurons_per_level))):
+            num_neurons = self._list_neurons_per_level[level_idx]
+            level_blocks = nn.ModuleList()
 
             for _ in range(self._number_residual_blocks + 1):
-                # Concatenate with skip connections
-                network_flow = Concatenate(axis=-1)([network_flow, skip_connection_flow.pop()])
-                network_flow = self._residual_block(self._list_neurons_per_level[number_neurons],
-                                                    self._normalization_groups)([network_flow, time_embedding])
+                level_blocks.append(self._create_residual_block(num_neurons))
 
-                # Apply attention mechanism if specified
-                if self._list_attention[number_neurons]:
+                if self._list_attention[level_idx]:
+                    level_blocks.append(CrossAttentionBlock(num_neurons))
 
-                    network_flow = CrossAttentionBlock(self._list_neurons_per_level[number_neurons]
-                                                       )([network_flow, description_embedding])
+            self.up_blocks.append(level_blocks)
 
-            # Upsample if not at the first level
-            if number_neurons != 0:
-                network_flow = self._up_sample(self._list_neurons_per_level[number_neurons])(network_flow)
+            if level_idx != 0:
+                self.up_samples.append(self._create_up_sample(num_neurons))
 
-        # Final output processing: flatten, dense, and reshape
-        network_flow = Flatten()(network_flow)
-        network_flow = Dense(self._output_shape)(network_flow)
+        # Final output layer
+        self.final_dense = nn.Linear(self._output_shape, self._output_shape)
 
-        network_flow = Reshape((self._output_shape, self._embedding_channels))(network_flow)
+    def _create_down_sample(self, width):
+        """Creates a downsampling module."""
+        return nn.ModuleDict({
+            'dense': nn.Linear(self._output_shape // 2 * width, self._output_shape // 2 * width)
+        })
 
-        # Create the model instance
-        unet_model_instance = Model([image_input, time_input, description_input], network_flow, name="UnetModel")
+    def _create_up_sample(self, width):
+        """Creates an upsampling module."""
+        return nn.ModuleDict({
+            'dense': nn.Linear(self._output_shape * 2 * width, self._output_shape * 2 * width)
+        })
 
-        return unet_model_instance
+    def _time_MLP(self, units):
+        """Creates a Multi-Layer Perceptron for time embeddings."""
+        return nn.Sequential(
+            nn.Linear(units, units),
+            nn.SiLU(),
+            nn.Linear(units, units)
+        )
+
+    def _label_embedding_MLP(self, units):
+        """Creates a Multi-Layer Perceptron for label embeddings."""
+        return nn.Sequential(
+            nn.Linear(units, units),
+            nn.SiLU(),
+            nn.Linear(units, self._output_shape)
+        )
+
+    def _create_residual_block(self, number_filters):
+        """Creates a residual block module."""
+        return ResidualBlock(number_filters, self._intermediary_activation_function)
+
+    def forward(self, image_input, time_input, description_input):
+        """
+        Forward pass through the U-Net model.
+
+        Args:
+            image_input: Input images (batch_size, seq_len, channels)
+            time_input: Time step indices (batch_size,)
+            description_input: Class labels (batch_size, num_classes)
+
+        Returns:
+            Output tensor (batch_size, seq_len, channels)
+        """
+        # Initial processing
+        batch_size = image_input.shape[0]
+        x = image_input.view(batch_size, -1)
+        x = self.first_dense(x)
+        x = self._get_activation(self._intermediary_activation_function)(x)
+        x = x.view(batch_size, self._output_shape, self._embedding_channels)
+
+        # Time and label embeddings
+        t_emb = self.time_embedding(time_input)
+        t_emb = self.time_mlp(t_emb)
+        l_emb = self.label_mlp(description_input)
+
+        # Skip connections
+        skip_connections = [x]
+
+        # Encoder
+        for level_idx, level_blocks in enumerate(self.down_blocks):
+            for block in level_blocks:
+                if isinstance(block, ResidualBlock):
+                    x = block(x, t_emb)
+                else:  # CrossAttentionBlock
+                    x = block(x, l_emb)
+                skip_connections.append(x)
+
+            if level_idx < len(self.down_samples):
+                x = self._down_sample_forward(x, self.down_samples[level_idx])
+                skip_connections.append(x)
+
+        # Middle
+        x = self.mid_block1(x, t_emb)
+        x = self.mid_attn(x, l_emb)
+        x = self.mid_block2(x, t_emb)
+
+        # Decoder
+        for level_idx, level_blocks in enumerate(self.up_blocks):
+            for block_idx, block in enumerate(level_blocks):
+                if block_idx == 0:
+                    skip = skip_connections.pop()
+                    x = torch.cat([x, skip], dim=-1)
+
+                if isinstance(block, ResidualBlock):
+                    x = block(x, t_emb)
+                else:  # CrossAttentionBlock
+                    x = block(x, l_emb)
+
+            if level_idx < len(self.up_samples):
+                x = self._up_sample_forward(x, self.up_samples[level_idx])
+
+        # Final output
+        batch_size = x.shape[0]
+        x = x.view(batch_size, -1)
+        x = self.final_dense(x)
+        x = x.view(batch_size, self._output_shape, self._embedding_channels)
+
+        return x
+
+    def _down_sample_forward(self, x, module):
+        """Applies downsampling."""
+        batch_size, seq_len, width = x.shape
+        x = x.view(batch_size, -1)
+        x = module['dense'](x)
+        x = self._get_activation(self._intermediary_activation_function)(x)
+        x = x.view(batch_size, seq_len // 2, width)
+        return x
+
+    def _up_sample_forward(self, x, module):
+        """Applies upsampling."""
+        batch_size, seq_len, width = x.shape
+        x = x.view(batch_size, -1)
+        x = module['dense'](x)
+        x = self._get_activation(self._intermediary_activation_function)(x)
+        x = x.view(batch_size, seq_len * 2, width)
+        return x
+
+    def _get_activation(self, name):
+        """Returns the activation function."""
+        activations = {
+            'swish': nn.SiLU(),
+            'relu': nn.ReLU(),
+            'leaky_relu': nn.LeakyReLU(self._intermediary_activation_alpha),
+            'linear': nn.Identity()
+        }
+        return activations.get(name.lower(), nn.SiLU())
 
     @property
     def embedding_dimension(self):
@@ -633,3 +551,45 @@ class UNetDenoisingModelTensorflow(Activations):
         if not isinstance(value, dict) or "number_classes" not in value:
             raise ValueError("number_samples_per_class must be a dictionary containing the key 'number_classes'.")
         self._number_samples_per_class = value
+
+
+class ResidualBlock(nn.Module):
+    """Residual block for the UNet model."""
+
+    def __init__(self, num_filters, activation='swish'):
+        super(ResidualBlock, self).__init__()
+        self.num_filters = num_filters
+        self.activation = activation
+
+    def forward(self, x, t_emb):
+        input_width = x.shape[-1]
+        batch_size, seq_len, _ = x.shape
+
+        # Residual connection
+        if input_width == self.num_filters:
+            residual = x
+        else:
+            residual = nn.Linear(seq_len * input_width, seq_len * self.num_filters).to(x.device)(
+                x.view(batch_size, -1)
+            ).view(batch_size, seq_len, self.num_filters)
+
+        # Time embedding
+        t_emb_proj = nn.Linear(t_emb.shape[-1], self.num_filters).to(x.device)(t_emb).unsqueeze(1)
+
+        # Main path
+        x_flat = x.view(batch_size, -1)
+        x = nn.Linear(x_flat.shape[-1], seq_len * self.num_filters).to(x.device)(x_flat)
+        x = F.silu(x) if self.activation == 'swish' else x
+        x = x.view(batch_size, seq_len, self.num_filters)
+
+        # Add embeddings
+        x = x + t_emb_proj
+
+        # Second transformation
+        x_flat = x.view(batch_size, -1)
+        x = nn.Linear(x_flat.shape[-1], seq_len * self.num_filters).to(x.device)(x_flat)
+        x = F.silu(x) if self.activation == 'swish' else x
+        x = x.view(batch_size, seq_len, self.num_filters)
+
+        # Residual connection
+        return x + residual
