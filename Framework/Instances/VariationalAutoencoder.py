@@ -9,7 +9,7 @@ __last_update__ = '2025/03/29'
 __credits__ = ['Kayuã Oleques']
 
 from Engine.Algorithms.VariationalAutoencoder.VariationalAutoencoderAlgorithm import VariationalAutoencoderAlgorithm
-from Engine.Models.VariationalAutoencoder.Torch.VariationalAutoencoderModelTorch import VariationalModelTorch
+from Engine.Models.VariationalAutoencoder.VariationalAutoencoderModel import VariationalAutoencoderModel
 
 try:
     import sys
@@ -29,7 +29,7 @@ class VariationalAutoencoderInstance:
     for variational autoencoder-based learning tasks.
 
     Attributes:
-        _variational_model (VariationalModelTorch): Contains encoder and decoder components
+        _variational_model (VariationalAutoencoderModelTorch): Contains encoder and decoder components
         _variational_algorithm (VariationalAlgorithmTorch): Manages the VAE training process
 
     Configuration Parameters (with getters/setters):
@@ -99,7 +99,7 @@ class VariationalAutoencoderInstance:
                 The shape of the input data, which determines the output shape for the models.
         """
         # Variational Model setup for Encoder and Decoder
-        self._variational_model = VariationalModelTorch(
+        self._variational_model = VariationalAutoencoderModel(
             latent_dimension=self._variational_latent_dimension,
             output_shape=input_shape[0] if isinstance(input_shape, tuple) else input_shape,
             activation_function=self._variational_activation_function,

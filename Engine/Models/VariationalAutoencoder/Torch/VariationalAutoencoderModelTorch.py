@@ -33,7 +33,7 @@ DEFAULT_VARIATIONAL_AUTOENCODER_INITIALIZER_MEAN = 0
 DEFAULT_VARIATIONAL_AUTOENCODER_INITIALIZER_DEVIATION = 0.125
 
 
-class VariationalModelTorch(nn.Module):
+class VariationalAutoencoderModelTorch(nn.Module):
     """
     A Variational Model that integrates both VanillaEncoder and VanillaDecoder
     functionalities using composition instead of multiple inheritance.
@@ -58,7 +58,7 @@ class VariationalModelTorch(nn.Module):
         """
         Initializes the VariationalModel with user-defined encoder and decoder configurations.
         """
-        super(VariationalModelTorch, self).__init__()
+        super(VariationalAutoencoderModelTorch, self).__init__()
 
         if number_neurons_decoder is None:
             number_neurons_decoder = DEFAULT_VARIATIONAL_AUTOENCODER_DENSE_LAYERS_SETTINGS_DECODER

@@ -33,7 +33,7 @@ import os
 # SOFTWARE.
 
 import os
-os.environ["ML_FRAMEWORK"] = "tensorflow"
+os.environ["ML_FRAMEWORK"] = "pytorch"
 
 try:
     import sys

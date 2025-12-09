@@ -8,9 +8,6 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
-from Engine.Models.VariationalAutoencoder.Tensorflow.VanillaDecoderTensorflow import VanillaDecoderTensorflow
-from Engine.Models.VariationalAutoencoder.Tensorflow.VanillaEncoderTensorflow import VanillaEncoderTensorflow
-
 
 # MIT License
 #
@@ -37,6 +34,9 @@ from Engine.Models.VariationalAutoencoder.Tensorflow.VanillaEncoderTensorflow im
 try:
     import sys
     import numpy
+    from Engine.Models.VariationalAutoencoder.Tensorflow.VanillaDecoderTensorflow import VanillaDecoderTensorflow
+    from Engine.Models.VariationalAutoencoder.Tensorflow.VanillaEncoderTensorflow import VanillaEncoderTensorflow
+
 
 except ImportError as error:
     print(error)
@@ -54,7 +54,7 @@ DEFAULT_VARIATIONAL_AUTOENCODER_INITIALIZER_MEAN = 0
 DEFAULT_VARIATIONAL_AUTOENCODER_INITIALIZER_DEVIATION = 0.125
 
 
-class VariationalModelTensorflow(VanillaDecoderTensorflow, VanillaEncoderTensorflow):
+class VariationalAutoencoderModelTensorflow(VanillaDecoderTensorflow, VanillaEncoderTensorflow):
     """
     A Variational Model that integrates both VanillaEncoder and VanillaDecoder
     functionalities. This class enables flexible configuration of encoder and

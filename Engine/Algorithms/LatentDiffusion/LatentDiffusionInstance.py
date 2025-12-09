@@ -9,7 +9,6 @@ __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
 from Engine.Algorithms.LatentDiffusion.AlgorithmLatentDiffusion import LatentDiffusionAlgorithm
-from Engine.Models.VariationalAutoencoder.Torch.VariationalAutoencoderModelTorch import VariationalModelTorch
 
 # MIT License
 #
@@ -55,7 +54,6 @@ try:
     from Engine.Algorithms.LatentDiffusion.GaussianLatentDiffusion import GaussianDiffusion
     from Engine.Models.LatentDiffusion.DiffusionModelUnet import UNetModel
     from Engine.Models.LatentDiffusion.VariationalAutoencoderModel import VariationalModelDiffusion
-    from Engine.Models.VariationalAutoencoder.Tensorflow.VariationalAutoencoderModelTensorflow import VariationalModelTensorflow
 
 except ImportError as error:
     logging.error(error)
@@ -322,19 +320,19 @@ class LatentDiffusionInstance:
 
         """
 
-        # Variational Model setup for the VAE's encoder and decoder
-        self._variation_model = VariationalModelTorch(latent_dimension=self._latent_diffusion_VAE_latent_dimension,
-                                                 output_shape=input_shape,
-                                                 activation_function=self._latent_diffusion_VAE_intermediary_activation_function,
-                                                 initializer_mean=self._latent_diffusion_VAE_initializer_mean,
-                                                 initializer_deviation=self._latent_diffusion_VAE_initializer_deviation,
-                                                 dropout_decay_encoder=self._latent_diffusion_VAE_dropout_decay_rate_encoder,
-                                                 dropout_decay_decoder=self._latent_diffusion_VAE_dropout_decay_rate_decoder,
-                                                 last_layer_activation=self._latent_diffusion_VAE_last_layer_activation,
-                                                 number_neurons_encoder=self._latent_diffusion_VAE_encoder_filters,
-                                                 number_neurons_decoder=self._latent_diffusion_VAE_decoder_filters,
-                                                 dataset_type=numpy.float32,
-                                                 number_samples_per_class = self._number_samples_per_class)
+        # # Variational Model setup for the VAE's encoder and decoder
+        # self._variation_model = VariationalAutoencoderModelTorch(latent_dimension=self._latent_diffusion_VAE_latent_dimension,
+        #                                                          output_shape=input_shape,
+        #                                                          activation_function=self._latent_diffusion_VAE_intermediary_activation_function,
+        #                                                          initializer_mean=self._latent_diffusion_VAE_initializer_mean,
+        #                                                          initializer_deviation=self._latent_diffusion_VAE_initializer_deviation,
+        #                                                          dropout_decay_encoder=self._latent_diffusion_VAE_dropout_decay_rate_encoder,
+        #                                                          dropout_decay_decoder=self._latent_diffusion_VAE_dropout_decay_rate_decoder,
+        #                                                          last_layer_activation=self._latent_diffusion_VAE_last_layer_activation,
+        #                                                          number_neurons_encoder=self._latent_diffusion_VAE_encoder_filters,
+        #                                                          number_neurons_decoder=self._latent_diffusion_VAE_decoder_filters,
+        #                                                          dataset_type=numpy.float32,
+        #                                                          number_samples_per_class = self._number_samples_per_class)
         print("---------------------------------------------------------")
         # Variational Algorithm setup for training and model operations
         # self._variational_algorithm = VariationalAlgorithmTorch(encoder_model=self._variation_model.get_encoder(),

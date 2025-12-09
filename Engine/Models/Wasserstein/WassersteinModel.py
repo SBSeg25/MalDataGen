@@ -8,9 +8,6 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/12/07'
 __credits__ = ['Synthetic Ocean AI']
 
-from Engine.Models.VariationalAutoencoder.Tensorflow.VariationalAutoencoderModelTensorflow import \
-    VariationalAutoencoderModelTensorflow
-from Engine.Models.VariationalAutoencoder.Torch.VariationalAutoencoderModelTorch import VariationalAutoencoderModelTorch
 
 # MIT License
 #
@@ -40,20 +37,22 @@ try:
 
     import logging
 
+    from Engine.Models.Wasserstein.Torch.ModelWassersteinGANTorch import WassersteinModelTorch
+    from Engine.Models.Wasserstein.Tensorflow.ModelWassersteinGANTensorflow import WassersteinModelTensorflow
 
     framework = os.getenv("ML_FRAMEWORK", "tensorflow").lower()
 
     if framework == "pytorch":
-        VariationalAutoencoderModelBase = VariationalAutoencoderModelTorch
+        WassersteinModelBase = WassersteinModelTorch
 
     else:
-        VariationalAutoencoderModelBase = VariationalAutoencoderModelTensorflow
+        WassersteinModelBase = WassersteinModelTensorflow
 
 except ImportError as error:
     logging.error(error)
     sys.exit(-1)
 
-class VariationalAutoencoderModel(VariationalAutoencoderModelBase):
+class WassersteinModel(WassersteinModelBase):
     def __init__(self, *args, **kwargs):
 
         super().__init__(*args, **kwargs)
