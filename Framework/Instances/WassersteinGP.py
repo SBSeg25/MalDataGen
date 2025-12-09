@@ -8,6 +8,7 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
+from Engine.Models.WassersteinGP.WassersteinGPModel import WassersteinGPModel
 
 # MIT License
 #
@@ -186,7 +187,7 @@ class WassersteinGPInstance:
         """
 
         # WassersteinGP Model setup for the Generator and Discriminator
-        self._wasserstein_gp_model = WassersteinGPModelTorch(latent_dimension=self._wasserstein_gp_latent_dimension,
+        self._wasserstein_gp_model = WassersteinGPModel(latent_dimension=self._wasserstein_gp_latent_dimension,
                                                       output_shape=input_shape,
                                                       activation_function=self._wasserstein_gp_activation_function,
                                                       initializer_mean=self._wasserstein_gp_initializer_mean,
