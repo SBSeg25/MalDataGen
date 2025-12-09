@@ -8,9 +8,9 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
+from Engine.Algorithms.DenoisingDiffusion.Torch.DenoisingDiffusionInstanceTorch import DenoisingDiffusionInstanceTorch
 from Framework.Instances.Adversarial import AdversarialInstance
 from Framework.Instances.Autoencoder import AutoencoderInstance
-from Engine.Algorithms.DenoisingDiffusion.Tensorflow.DenoisingDiffusionInstanceTensorflow import DenoisingDiffusionInstance
 from Engine.Algorithms.LatentDiffusion.LatentDiffusionInstance import LatentDiffusionInstance
 from Framework.Instances.QuantizedVAE import QuantizedVAEInstance
 from Engine.Algorithms.RandomNoise.AlgorithmRandomNoise import RandomNoiseAlgorithm
@@ -77,7 +77,7 @@ class GenerativeModels(AdversarialInstance,
                        WassersteinGPInstance,
                        VariationalAutoencoderInstance,
                        SmoteInstance,
-                       DenoisingDiffusionInstance):
+                       DenoisingDiffusionInstanceTorch):
 
     """
     A class to manage and facilitate the training and generation of various types of generative models,
