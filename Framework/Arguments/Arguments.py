@@ -43,7 +43,7 @@ try:
     from Framework.Arguments.LoggerSetup import LoggerSetup
 
     from Engine.DataIO.DirectoryManager import DirectoryManager
-    from Framework.Arguments.ArgumentsSMOTE import add_argument_smote
+    from Framework.Arguments.Models.ArgumentsSMOTE import add_argument_smote
 
     from Framework.Arguments.ArgumentsFramework import add_argument_framework
     from Framework.Arguments.Classifiers.ArgumentsKNN import add_argument_knn
@@ -51,28 +51,28 @@ try:
     from Framework.Arguments.ArgumentsEarlyStop import add_argument_early_stop
     from Framework.Arguments.ArgumentsOptimizer import add_argument_optimizers
 
-    from Framework.Arguments.ArgumentsAdversarial import add_argument_adversarial
-    from Framework.Arguments.ArgumentsAutoencoder import add_argument_autoencoder
+    from Framework.Arguments.Models.ArgumentsAdversarial import add_argument_adversarial
+    from Framework.Arguments.Models.ArgumentsAutoencoder import add_argument_autoencoder
 
-    from Framework.Arguments.ArgumentsRandomNoise import add_argument_random_noise
+    from Framework.Arguments.Models.ArgumentsRandomNoise import add_argument_random_noise
 
     from Framework.Arguments.Classifiers.ArgumentsKMeans import add_argument_k_means
-    from Framework.Arguments.ArgumentsQuantizedVAE import add_argument_quantized_vae
+    from Framework.Arguments.Models.ArgumentsQuantizedVAE import add_argument_quantized_vae
 
-    from Framework.Arguments.ArgumentsWassersteinGAN import add_argument_wasserstein_gan
+    from Framework.Arguments.Models.ArgumentsWassersteinGAN import add_argument_wasserstein_gan
 
-    from Framework.Arguments.ArgumentsLatentDiffusion import add_argument_latent_diffusion
+    from Framework.Arguments.Models.ArgumentsLatentDiffusion import add_argument_latent_diffusion
 
-    from Framework.Arguments.ArgumentsWassersteinGANGP import add_argument_wasserstein_gan_gp
+    from Framework.Arguments.Models.ArgumentsWassersteinGANGP import add_argument_wasserstein_gan_gp
 
     from Framework.Arguments.Classifiers.ArgumentsPerceptron import add_argument_perceptron
     from Framework.Arguments.Classifiers.ArgumentsNaiveBayes import add_argument_naive_bayes
 
-    from Framework.Arguments.ArgumentsDenoisingDiffusion import add_argument_denoising_diffusion
+    from Framework.Arguments.Models.ArgumentsDenoisingDiffusion import add_argument_denoising_diffusion
     from Framework.Arguments.Classifiers.ArgumentsDecisionTree import add_argument_decision_tree
     from Framework.Arguments.Classifiers.ArgumentsRandomForest import add_argument_random_forest
 
-    from Framework.Arguments.ArgumentsVariationalAutoencoder import add_argument_variation_autoencoder
+    from Framework.Arguments.Models.ArgumentsVariationalAutoencoder import add_argument_variation_autoencoder
     from Framework.Arguments.Classifiers.ArgumentsGaussianProcess import add_argument_gaussian_process
 
     from Framework.Arguments.Classifiers.ArgumentsGradientBoosting import add_argument_gradient_boosting

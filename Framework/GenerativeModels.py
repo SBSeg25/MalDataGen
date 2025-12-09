@@ -310,12 +310,49 @@ class GenerativeModels(Adversarial,
                                                  arguments.denoising_diffusion_ema,
                                                  arguments.denoising_diffusion_time_steps)
 
-        QuantizedVAE.__init__(self, arguments)
+        QuantizedVAE.__init__(self,
+                              arguments.quantized_vae_number_epochs,
+                              arguments.quantized_vae_batch_size,
+                              arguments.quantized_vae_latent_dimension,
+                              arguments.quantized_vae_number_embedding,
+                              arguments.quantized_vae_activation_function,
+                              arguments.quantized_vae_initializer_mean,
+                              arguments.quantized_vae_mean_distribution,
+                              arguments.quantized_vae_dropout_decay_rate_encoder,
+                              arguments.quantized_vae_dropout_decay_rate_decoder,
+                              arguments.quantized_vae_last_activation_layer,
+                              arguments.quantized_vae_dense_layer_sizes_encoder,
+                              arguments.quantized_vae_dense_layer_sizes_decoder,
+                              arguments.quantized_vae_train_variance,
+                              arguments.quantized_vae_file_name_encoder,
+                              arguments.quantized_vae_file_name_decoder,
+                              arguments.quantized_vae_path_output_models)
+
         LatentDiffusionInstance.__init__(self, arguments)
-        Wasserstein.__init__(self, arguments)
+
+        Wasserstein.__init__(self,
+                             arguments.quantized_vae_number_epochs,
+                             arguments.quantized_vae_batch_size,
+                             arguments.quantized_vae_latent_dimension,
+                             arguments.quantized_vae_number_embedding,
+                             arguments.quantized_vae_activation_function,
+                             arguments.quantized_vae_initializer_mean,
+                             arguments.quantized_vae_mean_distribution,
+                             arguments.quantized_vae_dropout_decay_rate_encoder,
+                             arguments.quantized_vae_dropout_decay_rate_decoder,
+                             arguments.quantized_vae_last_activation_layer,
+                             arguments.quantized_vae_dense_layer_sizes_encoder,
+                             arguments.quantized_vae_dense_layer_sizes_decoder,
+                             arguments.quantized_vae_train_variance,
+                             arguments.quantized_vae_file_name_encoder,
+                             arguments.quantized_vae_file_name_decoder,
+                             arguments.quantized_vae_path_output_models)
+
         WassersteinGP.__init__(self, arguments)
         VariationalAutoencoder.__init__(self, arguments)
+
         Smote.__init__(self, arguments)
+
 
         self._callback_model_monitor = None
         self._callback_resources_monitor = None

@@ -9,6 +9,7 @@ __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
 from Engine.Architectures.QuantizedVAE.QuantizedVAEModel import QuantizedVAEModel
+from Engine.Algorithms.QuantizedVAE.QuantizedVAEAlgorithm import QuantizedVAEAlgorithm
 
 # MIT License
 #
@@ -34,16 +35,39 @@ from Engine.Architectures.QuantizedVAE.QuantizedVAEModel import QuantizedVAEMode
 
 try:
     import sys
-    import numpy
+    import numpy as np
     import logging
     import torch
     import torch.nn.functional as F
-    from Engine.Algorithms.QuantizedVAE.QuantizedVAEAlgorithm import QuantizedVAEAlgorithm
-    from Engine.Architectures.QuantizedVAE.Torch.QuantizedVAEVanillaModelTorch import QuantizedVAEModelTorch
 
 except ImportError as error:
     logging.error(error)
     sys.exit(-1)
+
+# Default values from your constants file
+DEFAULT_QUANTIZED_VAE_LATENT_DIMENSION = 16
+DEFAULT_QUANTIZED_VAE_NUMBER_EMBEDDING = 16
+DEFAULT_QUANTIZED_VAE_TRAINING_ALGORITHM = "Adam"
+DEFAULT_QUANTIZED_VAE_ACTIVATION_INTERMEDIARY = "swish"
+DEFAULT_QUANTIZED_VAE_DROPOUT_DECAY_RATE_ENCODER = 0.25
+DEFAULT_QUANTIZED_VAE_DROPOUT_DECAY_RATE_DECODER = 0.25
+DEFAULT_QUANTIZED_VAE_BATCH_SIZE = 64
+DEFAULT_QUANTIZED_VAE_NUMBER_EPOCHS = 30
+DEFAULT_QUANTIZED_VAE_NUMBER_CLASSES = 2
+DEFAULT_QUANTIZED_VAE_DENSE_LAYERS_SETTINGS_ENCODER = [320, 160]
+DEFAULT_QUANTIZED_VAE_DENSE_LAYERS_SETTINGS_DECODER = [160, 320]
+DEFAULT_QUANTIZED_VAE_LOSS = "binary_crossentropy"
+DEFAULT_QUANTIZED_VAE_MOMENTUM = 0.8
+DEFAULT_QUANTIZED_VAE_LAST_ACTIVATION_LAYER = "sigmoid"
+DEFAULT_QUANTIZED_VAE_INITIALIZER_MEAN = 0
+DEFAULT_QUANTIZED_VAE_INITIALIZER_DEVIATION = 0.125
+DEFAULT_QUANTIZED_VAE_LOSS_FUNCTION = 'binary_crossentropy'
+DEFAULT_QUANTIZED_VAE_FILE_NAME_ENCODER = "encoder_model"
+DEFAULT_QUANTIZED_VAE_FILE_NAME_DECODER = "decoder_model"
+DEFAULT_QUANTIZED_VAE_PATH_OUTPUT_MODELS = "models_saved/"
+DEFAULT_QUANTIZED_VAE_MEAN_DISTRIBUTION = 0.5
+DEFAULT_QUANTIZED_VAE_TRAIN_VARIANCE = 0.5
+DEFAULT_QUANTIZED_VAE_STANDER_DEVIATION = 0.125
 
 
 class QuantizedVAE:
@@ -67,48 +91,96 @@ class QuantizedVAE:
         _quantized_vae_dropout_decay_encoder (float): Encoder dropout rate
         _quantized_vae_dropout_decay_decoder (float): Decoder dropout rate
         _quantized_vae_last_layer_activation (str): Last layer activation function
-        _quantized_vae_number_neurons_encoder (list): Encoder layer sizes
-        _quantized_vae_number_neurons_decoder (list): Decoder layer sizes
+        _quantized_vae_number_neurons_encoder (list[int]): Encoder layer sizes
+        _quantized_vae_number_neurons_decoder (list[int]): Decoder layer sizes
         _quantized_vae_train_variance (float): Training variance parameter
         _quantized_vae_file_name_encoder (str): Encoder model filename
         _quantized_vae_file_name_decoder (str): Decoder model filename
         _quantized_vae_path_output_models (str): Path for saving models
     """
 
-    def __init__(self, arguments):
+    def __init__(
+            self,
+            quantized_vae_number_epochs: int = DEFAULT_QUANTIZED_VAE_NUMBER_EPOCHS,
+            quantized_vae_batch_size: int = DEFAULT_QUANTIZED_VAE_BATCH_SIZE,
+            quantized_vae_latent_dimension: int = DEFAULT_QUANTIZED_VAE_LATENT_DIMENSION,
+            quantized_vae_number_embeddings: int = DEFAULT_QUANTIZED_VAE_NUMBER_EMBEDDING,
+            quantized_vae_activation_function: str = DEFAULT_QUANTIZED_VAE_ACTIVATION_INTERMEDIARY,
+            quantized_vae_initializer_mean: float = DEFAULT_QUANTIZED_VAE_INITIALIZER_MEAN,
+            quantized_vae_initializer_deviation: float = DEFAULT_QUANTIZED_VAE_MEAN_DISTRIBUTION,
+            quantized_vae_dropout_decay_encoder: float = DEFAULT_QUANTIZED_VAE_DROPOUT_DECAY_RATE_ENCODER,
+            quantized_vae_dropout_decay_decoder: float = DEFAULT_QUANTIZED_VAE_DROPOUT_DECAY_RATE_DECODER,
+            quantized_vae_last_layer_activation: str = DEFAULT_QUANTIZED_VAE_LAST_ACTIVATION_LAYER,
+            quantized_vae_number_neurons_encoder: list[int] = None,
+            quantized_vae_number_neurons_decoder: list[int] = None,
+            quantized_vae_train_variance: float = DEFAULT_QUANTIZED_VAE_TRAIN_VARIANCE,
+            quantized_vae_file_name_encoder: str = DEFAULT_QUANTIZED_VAE_FILE_NAME_ENCODER,
+            quantized_vae_file_name_decoder: str = DEFAULT_QUANTIZED_VAE_FILE_NAME_DECODER,
+            quantized_vae_path_output_models: str = DEFAULT_QUANTIZED_VAE_PATH_OUTPUT_MODELS,
+            quantized_vae_algorithm: QuantizedVAEAlgorithm | None = None,
+            quantized_vae_model: QuantizedVAEModel | None = None
+    ) -> None:
         """
         Initializes the quantized VAE instance with configuration parameters.
 
         Args:
-            arguments (Namespace): Configuration object containing all required parameters:
-                - quantized_vae_number_epochs: Training epochs
-                - quantized_vae_batch_size: Batch size
-                - quantized_vae_latent_dimension: Latent space size
-                - quantized_vae_number_embedding: Codebook size
-                - [All other parameters matching attribute names]
+            quantized_vae_number_epochs: Training epochs (default: 30)
+            quantized_vae_batch_size: Batch size (default: 64)
+            quantized_vae_latent_dimension: Latent space size (default: 16)
+            quantized_vae_number_embeddings: Codebook size (default: 16)
+            quantized_vae_activation_function: Activation function (default: "swish")
+            quantized_vae_initializer_mean: Weight init mean (default: 0)
+            quantized_vae_initializer_deviation: Weight init std dev (default: 0.125)
+            quantized_vae_dropout_decay_encoder: Encoder dropout rate (default: 0.25)
+            quantized_vae_dropout_decay_decoder: Decoder dropout rate (default: 0.25)
+            quantized_vae_last_layer_activation: Last layer activation (default: "sigmoid")
+            quantized_vae_number_neurons_encoder: Encoder layer sizes (default: [320, 160])
+            quantized_vae_number_neurons_decoder: Decoder layer sizes (default: [160, 320])
+            quantized_vae_train_variance: Training variance parameter (default: 0.5)
+            quantized_vae_file_name_encoder: Encoder model filename (default: "encoder_model")
+            quantized_vae_file_name_decoder: Decoder model filename (default: "decoder_model")
+            quantized_vae_path_output_models: Path for saving models (default: "models_saved/")
+            quantized_vae_algorithm: Optional pre-initialized QuantizedVAEAlgorithm (default: None)
+            quantized_vae_model: Optional pre-initialized QuantizedVAEModel (default: None)
         """
-        self._quantizedVAE_algorithm = None
-        self._quantizedVAE_model = None
+        # Store pre-initialized instances if provided
+        self._quantized_vae_algorithm: QuantizedVAEAlgorithm | None = quantized_vae_algorithm
+        self._quantized_vae_model: QuantizedVAEModel | None = quantized_vae_model
 
         # ** Vector Quantized Variational Autoencoder (VQ-VAE) Configuration Parameters **
-        self._quantized_vae_number_epochs = arguments.quantized_vae_number_epochs
-        self._quantized_vae_batch_size = arguments.quantized_vae_batch_size
-        self._quantized_vae_latent_dimension = arguments.quantized_vae_latent_dimension
-        self._quantized_vae_number_embeddings = arguments.quantized_vae_number_embedding
-        self._quantized_vae_activation_function = arguments.quantized_vae_activation_function
-        self._quantized_vae_initializer_mean = arguments.quantized_vae_initializer_mean
-        self._quantized_vae_initializer_deviation = arguments.quantized_vae_mean_distribution
-        self._quantized_vae_dropout_decay_encoder = arguments.quantized_vae_dropout_decay_rate_encoder
-        self._quantized_vae_dropout_decay_decoder = arguments.quantized_vae_dropout_decay_rate_decoder
-        self._quantized_vae_last_layer_activation = arguments.quantized_vae_last_activation_layer
-        self._quantized_vae_number_neurons_encoder = arguments.quantized_vae_dense_layer_sizes_encoder
-        self._quantized_vae_number_neurons_decoder = arguments.quantized_vae_dense_layer_sizes_decoder
-        self._quantized_vae_train_variance = arguments.quantized_vae_train_variance
-        self._quantized_vae_file_name_encoder = arguments.quantized_vae_file_name_encoder
-        self._quantized_vae_file_name_decoder = arguments.quantized_vae_file_name_decoder
-        self._quantized_vae_path_output_models = arguments.quantized_vae_path_output_models
+        self._quantized_vae_number_epochs: int = quantized_vae_number_epochs
+        self._quantized_vae_batch_size: int = quantized_vae_batch_size
+        self._quantized_vae_latent_dimension: int = quantized_vae_latent_dimension
+        self._quantized_vae_number_embeddings: int = quantized_vae_number_embeddings
+        self._quantized_vae_activation_function: str = quantized_vae_activation_function
+        self._quantized_vae_initializer_mean: float = quantized_vae_initializer_mean
+        self._quantized_vae_initializer_deviation: float = quantized_vae_initializer_deviation
+        self._quantized_vae_dropout_decay_encoder: float = quantized_vae_dropout_decay_encoder
+        self._quantized_vae_dropout_decay_decoder: float = quantized_vae_dropout_decay_decoder
+        self._quantized_vae_last_layer_activation: str = quantized_vae_last_layer_activation
 
-    def _get_quantized_vae(self, input_shape):
+        # Handle mutable default values safely
+        self._quantized_vae_number_neurons_encoder: list[int] = (
+            quantized_vae_number_neurons_encoder
+            if quantized_vae_number_neurons_encoder is not None
+            else DEFAULT_QUANTIZED_VAE_DENSE_LAYERS_SETTINGS_ENCODER.copy()
+        )
+        self._quantized_vae_number_neurons_decoder: list[int] = (
+            quantized_vae_number_neurons_decoder
+            if quantized_vae_number_neurons_decoder is not None
+            else DEFAULT_QUANTIZED_VAE_DENSE_LAYERS_SETTINGS_DECODER.copy()
+        )
+
+        self._quantized_vae_train_variance: float = quantized_vae_train_variance
+        self._quantized_vae_file_name_encoder: str = quantized_vae_file_name_encoder
+        self._quantized_vae_file_name_decoder: str = quantized_vae_file_name_decoder
+        self._quantized_vae_path_output_models: str = quantized_vae_path_output_models
+
+        # Flags to indicate if instances were provided
+        self._has_external_algorithm: bool = quantized_vae_algorithm is not None
+        self._has_external_model: bool = quantized_vae_model is not None
+
+    def _get_quantized_vae(self, input_shape: tuple[int, ...]) -> None:
         """
         Initialize and configure the Quantized Variational Autoencoder (VQ-VAE) model, including encoder, decoder,
         and quantization components.
@@ -118,9 +190,10 @@ class QuantizedVAE:
         specified configurations such as latent dimension, number of embeddings, activation functions, dropout rates,
         and layer sizes for both the encoder and decoder.
 
+        If pre-initialized instances were provided in the constructor, they are used instead of creating new ones.
+
         Args:
-            input_shape (tuple):
-                The shape of the input data, which determines the output shape for the models.
+            input_shape: The shape of the input data, which determines the output shape for the models.
 
         Initializes:
             self._quantized_vae_model:
@@ -131,66 +204,103 @@ class QuantizedVAE:
                 the encoder, decoder, and quantized models, training variance, latent dimension, number of embeddings,
                 and model file paths.
         """
+        # Only create new model if none was provided
+        if not self._has_external_model:
+            # Quantized VAE Model setup for Encoder, Decoder, and Quantization
+            self._quantized_vae_model = QuantizedVAEModel(
+                latent_dimension=self._quantized_vae_latent_dimension,
+                number_embeddings=self._quantized_vae_number_embeddings,
+                output_shape=input_shape,
+                activation_function=self._quantized_vae_activation_function,
+                initializer_mean=self._quantized_vae_initializer_mean,
+                initializer_deviation=self._quantized_vae_initializer_deviation,
+                dropout_decay_encoder=self._quantized_vae_dropout_decay_encoder,
+                dropout_decay_decoder=self._quantized_vae_dropout_decay_decoder,
+                last_layer_activation=self._quantized_vae_last_layer_activation,
+                number_neurons_encoder=self._quantized_vae_number_neurons_encoder,
+                number_neurons_decoder=self._quantized_vae_number_neurons_decoder,
+                dataset_type=np.float32,
+                number_samples_per_class=self._number_samples_per_class
+            )
 
-        # Quantized VAE Model setup for Encoder, Decoder, and Quantization
-        self._quantized_vae_model = QuantizedVAEModel(
-            latent_dimension=self._quantized_vae_latent_dimension,
-            number_embeddings=self._quantized_vae_number_embeddings,
-            output_shape=input_shape,
-            activation_function=self._quantized_vae_activation_function,
-            initializer_mean=self._quantized_vae_initializer_mean,
-            initializer_deviation=self._quantized_vae_initializer_deviation,
-            dropout_decay_encoder=self._quantized_vae_dropout_decay_encoder,
-            dropout_decay_decoder=self._quantized_vae_dropout_decay_decoder,
-            last_layer_activation=self._quantized_vae_last_layer_activation,
-            number_neurons_encoder=self._quantized_vae_number_neurons_encoder,
-            number_neurons_decoder=self._quantized_vae_number_neurons_decoder,
-            dataset_type=numpy.float32,
-            number_samples_per_class=self._number_samples_per_class
-        )
+        # Only create new algorithm if none was provided
+        if not self._has_external_algorithm:
+            # Ensure we have a model to get components from
+            if self._quantized_vae_model is None:
+                raise ValueError("QuantizedVAEModel instance is required but was not provided.")
 
-        quantized_model = self._quantized_vae_model.get_quantized_model()
+            quantized_model = self._quantized_vae_model.get_quantized_model()
 
-        # Quantized VAE Algorithm setup for training and model operations
-        self._quantized_vae_algorithm = QuantizedVAEAlgorithm(
-            encoder_model=self._quantized_vae_model.get_encoder(),
-            decoder_model=self._quantized_vae_model.get_decoder(),
-            quantized_vae_model=quantized_model,
-            train_variance=self._quantized_vae_train_variance,
-            latent_dimension=self._quantized_vae_latent_dimension,
-            number_embeddings=self._quantized_vae_number_embeddings,
-            file_name_encoder=self._quantized_vae_file_name_encoder,
-            file_name_decoder=self._quantized_vae_file_name_decoder,
-            models_saved_path=self._quantized_vae_path_output_models
-        )
+            # Quantized VAE Algorithm setup for training and model operations
+            self._quantized_vae_algorithm = QuantizedVAEAlgorithm(
+                encoder_model=self._quantized_vae_model.get_encoder(),
+                decoder_model=self._quantized_vae_model.get_decoder(),
+                quantized_vae_model=quantized_model,
+                train_variance=self._quantized_vae_train_variance,
+                latent_dimension=self._quantized_vae_latent_dimension,
+                number_embeddings=self._quantized_vae_number_embeddings,
+                file_name_encoder=self._quantized_vae_file_name_encoder,
+                file_name_decoder=self._quantized_vae_file_name_decoder,
+                models_saved_path=self._quantized_vae_path_output_models
+            )
+        else:
+            # If algorithm was provided externally, update its configuration if needed
+            if hasattr(self._quantized_vae_algorithm, 'train_variance'):
+                self._quantized_vae_algorithm.train_variance = self._quantized_vae_train_variance
 
-    def _training_quantized_VAE_model(self, input_shape, arguments, x_real_samples, y_real_samples):
+            if hasattr(self._quantized_vae_algorithm, 'latent_dimension'):
+                self._quantized_vae_algorithm.latent_dimension = self._quantized_vae_latent_dimension
+
+            if hasattr(self._quantized_vae_algorithm, 'number_embeddings'):
+                self._quantized_vae_algorithm.number_embeddings = self._quantized_vae_number_embeddings
+
+            if hasattr(self._quantized_vae_algorithm, 'file_name_encoder'):
+                self._quantized_vae_algorithm.file_name_encoder = self._quantized_vae_file_name_encoder
+
+            if hasattr(self._quantized_vae_algorithm, 'file_name_decoder'):
+                self._quantized_vae_algorithm.file_name_decoder = self._quantized_vae_file_name_decoder
+
+            if hasattr(self._quantized_vae_algorithm, 'models_saved_path'):
+                self._quantized_vae_algorithm.models_saved_path = self._quantized_vae_path_output_models
+
+    def _training_quantized_VAE_model(
+            self,
+            input_shape: tuple[int, ...],
+            arguments: 'argparse.Namespace',
+            x_real_samples: np.ndarray,
+            y_real_samples: np.ndarray
+    ) -> None:
         """
         Executes the complete quantized VAE training process.
 
         Args:
-            input_shape (tuple): Shape of input data samples
-            arguments (Namespace): Configuration parameters
-            x_real_samples (ndarray): Training data samples
-            y_real_samples (ndarray): Corresponding class labels
+            input_shape: Shape of input data samples
+            arguments: Configuration parameters namespace
+            x_real_samples: Training data samples
+            y_real_samples: Corresponding class labels
 
         Process:
-            1. Initializes model architecture
+            1. Initializes model architecture (or uses provided)
             2. Configures optimizer and loss functions
             3. Sets up training callbacks
             4. Executes quantized VAE training
             5. Manages model saving and monitoring
         """
-        # Initialize the variational autoencoder model
+        # Initialize the quantized VAE model (or use provided)
         self._get_quantized_vae(input_shape)
 
-        # Print the model summaries for the encoder and decoder
-        print("\nEncoder Model:")
-        print(self._quantized_vae_model.get_encoder())
-        print("\nDecoder Model:")
-        print(self._quantized_vae_model.get_decoder())
+        # Print the model summaries for the encoder and decoder if available
+        if self._quantized_vae_model is not None:
+            print("\nEncoder Model:")
+            print(self._quantized_vae_model.get_encoder())
+            print("\nDecoder Model:")
+            print(self._quantized_vae_model.get_decoder())
 
-        # Compile the variational autoencoder algorithm with the specified optimizer
+        # Ensure we have an algorithm
+        if self._quantized_vae_algorithm is None:
+            raise ValueError("QuantizedVAEAlgorithm instance is required but was not provided or created.")
+
+        # Compile the quantized VAE algorithm with the specified optimizer
         optimizer = torch.optim.Adam(
             self._quantized_vae_algorithm._quantized_vae_model.parameters(),
             lr=0.0001
@@ -204,10 +314,10 @@ class QuantizedVAE:
 
         # Convert labels to one-hot encoding
         num_classes = self._number_samples_per_class["number_classes"]
-        y_one_hot = numpy.zeros((len(y_real_samples), num_classes))
-        y_one_hot[numpy.arange(len(y_real_samples)), y_real_samples.astype(int)] = 1
+        y_one_hot = np.zeros((len(y_real_samples), num_classes))
+        y_one_hot[np.arange(len(y_real_samples)), y_real_samples.astype(int)] = 1
 
-        # Fit the variational autoencoder model
+        # Fit the quantized VAE model
         self._quantized_vae_algorithm.fit(
             (x_real_samples, y_one_hot),
             x_real_samples,
@@ -216,130 +326,174 @@ class QuantizedVAE:
             callbacks=callbacks_list
         )
 
+    # Additional getters for the algorithm and model
     @property
-    def quantized_vae_number_epochs(self):
+    def quantized_vae_algorithm(self) -> QuantizedVAEAlgorithm | None:
+        """Get the quantized VAE algorithm instance."""
+        return self._quantized_vae_algorithm
+
+    @property
+    def quantized_vae_model(self) -> QuantizedVAEModel | None:
+        """Get the quantized VAE model instance."""
+        return self._quantized_vae_model
+
+    # Property getters and setters
+    @property
+    def quantized_vae_number_epochs(self) -> int:
+        """Get the number of training epochs."""
         return self._quantized_vae_number_epochs
 
     @quantized_vae_number_epochs.setter
-    def quantized_vae_number_epochs(self, value):
+    def quantized_vae_number_epochs(self, value: int) -> None:
+        """Set the number of training epochs."""
         self._quantized_vae_number_epochs = value
 
     @property
-    def quantized_vae_batch_size(self):
+    def quantized_vae_batch_size(self) -> int:
+        """Get the batch size."""
         return self._quantized_vae_batch_size
 
     @quantized_vae_batch_size.setter
-    def quantized_vae_batch_size(self, value):
+    def quantized_vae_batch_size(self, value: int) -> None:
+        """Set the batch size."""
         self._quantized_vae_batch_size = value
 
     @property
-    def quantized_vae_latent_dimension(self):
+    def quantized_vae_latent_dimension(self) -> int:
+        """Get the latent dimension."""
         return self._quantized_vae_latent_dimension
 
     @quantized_vae_latent_dimension.setter
-    def quantized_vae_latent_dimension(self, value):
+    def quantized_vae_latent_dimension(self, value: int) -> None:
+        """Set the latent dimension."""
         self._quantized_vae_latent_dimension = value
 
     @property
-    def quantized_vae_number_embeddings(self):
+    def quantized_vae_number_embeddings(self) -> int:
+        """Get the number of embeddings."""
         return self._quantized_vae_number_embeddings
 
     @quantized_vae_number_embeddings.setter
-    def quantized_vae_number_embeddings(self, value):
+    def quantized_vae_number_embeddings(self, value: int) -> None:
+        """Set the number of embeddings."""
         self._quantized_vae_number_embeddings = value
 
     @property
-    def quantized_vae_activation_function(self):
+    def quantized_vae_activation_function(self) -> str:
+        """Get the activation function."""
         return self._quantized_vae_activation_function
 
     @quantized_vae_activation_function.setter
-    def quantized_vae_activation_function(self, value):
+    def quantized_vae_activation_function(self, value: str) -> None:
+        """Set the activation function."""
         self._quantized_vae_activation_function = value
 
     @property
-    def quantized_vae_initializer_mean(self):
+    def quantized_vae_initializer_mean(self) -> float:
+        """Get the initializer mean."""
         return self._quantized_vae_initializer_mean
 
     @quantized_vae_initializer_mean.setter
-    def quantized_vae_initializer_mean(self, value):
+    def quantized_vae_initializer_mean(self, value: float) -> None:
+        """Set the initializer mean."""
         self._quantized_vae_initializer_mean = value
 
     @property
-    def quantized_vae_initializer_deviation(self):
+    def quantized_vae_initializer_deviation(self) -> float:
+        """Get the initializer deviation."""
         return self._quantized_vae_initializer_deviation
 
     @quantized_vae_initializer_deviation.setter
-    def quantized_vae_initializer_deviation(self, value):
+    def quantized_vae_initializer_deviation(self, value: float) -> None:
+        """Set the initializer deviation."""
         self._quantized_vae_initializer_deviation = value
 
     @property
-    def quantized_vae_dropout_decay_encoder(self):
+    def quantized_vae_dropout_decay_encoder(self) -> float:
+        """Get the encoder dropout decay rate."""
         return self._quantized_vae_dropout_decay_encoder
 
     @quantized_vae_dropout_decay_encoder.setter
-    def quantized_vae_dropout_decay_encoder(self, value):
+    def quantized_vae_dropout_decay_encoder(self, value: float) -> None:
+        """Set the encoder dropout decay rate."""
         self._quantized_vae_dropout_decay_encoder = value
 
     @property
-    def quantized_vae_dropout_decay_decoder(self):
+    def quantized_vae_dropout_decay_decoder(self) -> float:
+        """Get the decoder dropout decay rate."""
         return self._quantized_vae_dropout_decay_decoder
 
     @quantized_vae_dropout_decay_decoder.setter
-    def quantized_vae_dropout_decay_decoder(self, value):
+    def quantized_vae_dropout_decay_decoder(self, value: float) -> None:
+        """Set the decoder dropout decay rate."""
         self._quantized_vae_dropout_decay_decoder = value
 
     @property
-    def quantized_vae_last_layer_activation(self):
+    def quantized_vae_last_layer_activation(self) -> str:
+        """Get the last layer activation."""
         return self._quantized_vae_last_layer_activation
 
     @quantized_vae_last_layer_activation.setter
-    def quantized_vae_last_layer_activation(self, value):
+    def quantized_vae_last_layer_activation(self, value: str) -> None:
+        """Set the last layer activation."""
         self._quantized_vae_last_layer_activation = value
 
     @property
-    def quantized_vae_number_neurons_encoder(self):
+    def quantized_vae_number_neurons_encoder(self) -> list[int]:
+        """Get the encoder neuron sizes."""
         return self._quantized_vae_number_neurons_encoder
 
     @quantized_vae_number_neurons_encoder.setter
-    def quantized_vae_number_neurons_encoder(self, value):
+    def quantized_vae_number_neurons_encoder(self, value: list[int]) -> None:
+        """Set the encoder neuron sizes."""
         self._quantized_vae_number_neurons_encoder = value
 
     @property
-    def quantized_vae_number_neurons_decoder(self):
+    def quantized_vae_number_neurons_decoder(self) -> list[int]:
+        """Get the decoder neuron sizes."""
         return self._quantized_vae_number_neurons_decoder
 
     @quantized_vae_number_neurons_decoder.setter
-    def quantized_vae_number_neurons_decoder(self, value):
+    def quantized_vae_number_neurons_decoder(self, value: list[int]) -> None:
+        """Set the decoder neuron sizes."""
         self._quantized_vae_number_neurons_decoder = value
 
     @property
-    def quantized_vae_train_variance(self):
+    def quantized_vae_train_variance(self) -> float:
+        """Get the training variance."""
         return self._quantized_vae_train_variance
 
     @quantized_vae_train_variance.setter
-    def quantized_vae_train_variance(self, value):
+    def quantized_vae_train_variance(self, value: float) -> None:
+        """Set the training variance."""
         self._quantized_vae_train_variance = value
 
     @property
-    def quantized_vae_file_name_encoder(self):
+    def quantized_vae_file_name_encoder(self) -> str:
+        """Get the encoder filename."""
         return self._quantized_vae_file_name_encoder
 
     @quantized_vae_file_name_encoder.setter
-    def quantized_vae_file_name_encoder(self, value):
+    def quantized_vae_file_name_encoder(self, value: str) -> None:
+        """Set the encoder filename."""
         self._quantized_vae_file_name_encoder = value
 
     @property
-    def quantized_vae_file_name_decoder(self):
+    def quantized_vae_file_name_decoder(self) -> str:
+        """Get the decoder filename."""
         return self._quantized_vae_file_name_decoder
 
     @quantized_vae_file_name_decoder.setter
-    def quantized_vae_file_name_decoder(self, value):
+    def quantized_vae_file_name_decoder(self, value: str) -> None:
+        """Set the decoder filename."""
         self._quantized_vae_file_name_decoder = value
 
     @property
-    def quantized_vae_path_output_models(self):
+    def quantized_vae_path_output_models(self) -> str:
+        """Get the output models path."""
         return self._quantized_vae_path_output_models
 
     @quantized_vae_path_output_models.setter
-    def quantized_vae_path_output_models(self, value):
+    def quantized_vae_path_output_models(self, value: str) -> None:
+        """Set the output models path."""
         self._quantized_vae_path_output_models = value
