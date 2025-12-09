@@ -8,6 +8,7 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
+from Engine.Models.Autoencoder.AutoencoderModel import AutoencoderModel
 
 # MIT License
 #
@@ -50,7 +51,6 @@ try:
 
     from tensorflow.python.keras.losses import BinaryCrossentropy
 
-    from Engine.Models.Autoencoder.Torch.ModelAutoencoderTorch import AutoencoderModelTorch
     from Engine.Algorithms.Autoencoder.AutoencoderAlgorithm import AutoencoderAlgorithm
 except ImportError as error:
     logging.error(error)
@@ -147,7 +147,7 @@ class AutoencoderInstance:
         """
 
         # Autoencoder Model setup for Encoder and Decoder
-        self._autoencoder_model = AutoencoderModelTorch(latent_dimension=self._autoencoder_latent_dimension,
+        self._autoencoder_model = AutoencoderModel(latent_dimension=self._autoencoder_latent_dimension,
                                                    output_shape=input_shape,
                                                    activation_function=self._autoencoder_activation_function,
                                                    initializer_mean=self._autoencoder_initializer_mean,

@@ -61,7 +61,7 @@ DEFAULT_AUTOENCODER_INITIALIZER_MEAN = 0.0
 DEFAULT_AUTOENCODER_INITIALIZER_DEVIATION = 0.125
 
 
-class AutoencoderModel(VanillaEncoder, VanillaDecoder):
+class AutoencoderModelTensorflow(VanillaEncoder, VanillaDecoder):
     """
     AutoencoderModel
 
