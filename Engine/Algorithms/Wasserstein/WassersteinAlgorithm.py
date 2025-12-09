@@ -36,7 +36,6 @@ try:
     import sys
 
     import logging
-
     from Engine.Algorithms.Wasserstein.Tensorflow.AlgorithmWassersteinTensorflow import WassersteinAlgorithmTensorflow
     from Engine.Algorithms.Wasserstein.Torch.AlgorithmWassersteinTorch import WassersteinAlgorithmTorch
 

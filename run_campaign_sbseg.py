@@ -72,7 +72,7 @@ NUM_EPOCHS = 40  # Default number of training epochs (overridden per campaign)
 TIME_FORMAT = '%Y-%m-%d_%H:%M:%S'  # Format for timestamps in logs
 SAMPLES = '0:2000,1:2000'  # Default number of samples per class in string format (class:count)
 #DEFAULT_CAMPAIGN = "wasserstein wasserstein_gp variational autoencoder adversarial latent_diffusion denoising_diffusion ctgan tvae copula".split()  # Active campaign types
-DEFAULT_CAMPAIGN = "wasserstein".split()  # Active campaign types
+DEFAULT_CAMPAIGN = "wasserstein_gp".split()  # Active campaign types
 
 
 # Default classifiers to evaluate models with (space-separated string in list)

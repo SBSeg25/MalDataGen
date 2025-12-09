@@ -58,7 +58,7 @@ except ImportError as error:
 
 
 
-class VanillaDiscriminator(Activations):
+class VanillaDiscriminatorTensorflow(Activations):
     """
     VanillaDiscriminator
 

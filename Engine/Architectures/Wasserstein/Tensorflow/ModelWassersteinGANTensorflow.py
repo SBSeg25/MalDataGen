@@ -8,6 +8,7 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
+
 # MIT License
 #
 # Copyright (c) 2025 Synthetic Ocean AI
@@ -41,10 +42,9 @@ try:
 
     from typing import Optional
     from typing import Callable
-
-    from Engine.Architectures.WassersteinGP.Tensorflow.VanillaGeneratorTensorflow import VanillaGenerator
-    from Engine.Architectures.WassersteinGP.Tensorflow.VanillaDiscriminatorTensorflow import VanillaDiscriminator
-
+    from Engine.Architectures.Wasserstein.Tensorflow.VanillaDiscriminatorTensorflow import \
+        VanillaDiscriminatorTensorflow
+    from Engine.Architectures.Wasserstein.Tensorflow.VanillaGeneratorTensorflow import VanillaGeneratorTensorflow
 except ImportError as error:
     print(error)
     print()
@@ -62,7 +62,7 @@ DEFAULT_WASSERSTEIN_GAN_INITIALIZER_MEAN = 0.0
 DEFAULT_WASSERSTEIN_GAN_INITIALIZER_DEVIATION = 0.125
 
 
-class WassersteinModelTensorflow(VanillaDiscriminator, VanillaGenerator):
+class WassersteinModelTensorflow(VanillaDiscriminatorTensorflow, VanillaGeneratorTensorflow):
     """
     WassersteinGP Generative Adversarial Network (WGAN) with Gradient Penalty.
 
@@ -172,7 +172,7 @@ class WassersteinModelTensorflow(VanillaDiscriminator, VanillaGenerator):
             raise ValueError("Discriminator dropout decay rate must be between 0 and 1.")
 
         # Initialize the discriminator
-        VanillaDiscriminator.__init__(self,
+        VanillaDiscriminatorTensorflow.__init__(self,
                                       latent_dimension,
                                       output_shape,
                                       activation_function,
@@ -185,7 +185,7 @@ class WassersteinModelTensorflow(VanillaDiscriminator, VanillaGenerator):
                                       number_samples_per_class)
 
         # Initialize the generator
-        VanillaGenerator.__init__(self,
+        VanillaGeneratorTensorflow.__init__(self,
                                   latent_dimension,
                                   output_shape,
                                   activation_function,

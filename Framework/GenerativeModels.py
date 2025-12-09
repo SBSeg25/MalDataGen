@@ -331,24 +331,62 @@ class GenerativeModels(Adversarial,
         LatentDiffusionInstance.__init__(self, arguments)
 
         Wasserstein.__init__(self,
-                             arguments.quantized_vae_number_epochs,
-                             arguments.quantized_vae_batch_size,
-                             arguments.quantized_vae_latent_dimension,
-                             arguments.quantized_vae_number_embedding,
-                             arguments.quantized_vae_activation_function,
-                             arguments.quantized_vae_initializer_mean,
-                             arguments.quantized_vae_mean_distribution,
-                             arguments.quantized_vae_dropout_decay_rate_encoder,
-                             arguments.quantized_vae_dropout_decay_rate_decoder,
-                             arguments.quantized_vae_last_activation_layer,
-                             arguments.quantized_vae_dense_layer_sizes_encoder,
-                             arguments.quantized_vae_dense_layer_sizes_decoder,
-                             arguments.quantized_vae_train_variance,
-                             arguments.quantized_vae_file_name_encoder,
-                             arguments.quantized_vae_file_name_decoder,
-                             arguments.quantized_vae_path_output_models)
+                             arguments.wasserstein_latent_dimension,
+                             arguments.wasserstein_training_algorithm,
+                             arguments.wasserstein_activation_function,
+                             arguments.wasserstein_dropout_decay_rate_g,
+                             arguments.wasserstein_dropout_decay_rate_d,
+                             arguments.wasserstein_dense_layer_sizes_generator,
+                             arguments.wasserstein_dense_layer_sizes_discriminator,
+                             arguments.wasserstein_batch_size,
+                             arguments.wasserstein_number_epochs,
+                             arguments.wasserstein_number_classes,
+                             arguments.wasserstein_loss_function,
+                             arguments.wasserstein_momentum,
+                             arguments.wasserstein_last_activation_layer,
+                             arguments.wasserstein_initializer_mean,
+                             arguments.wasserstein_initializer_deviation,
+                             arguments.wasserstein_optimizer_generator_learning_rate,
+                             arguments.wasserstein_optimizer_discriminator_learning_rate,
+                             arguments.wasserstein_optimizer_generator_beta,
+                             arguments.wasserstein_optimizer_discriminator_beta,
+                             arguments.wasserstein_discriminator_steps,
+                             arguments.wasserstein_smoothing_rate,
+                             arguments.wasserstein_latent_mean_distribution,
+                             arguments.wasserstein_latent_stander_deviation,
+                             arguments.wasserstein_file_name_discriminator,
+                             arguments.wasserstein_file_name_generator,
+                             arguments.wasserstein_path_output_models)
 
-        WassersteinGP.__init__(self, arguments)
+
+
+
+        WassersteinGP.__init__(self, arguments.wasserstein_gp_latent_dimension,
+                               arguments.wasserstein_gp_training_algorithm,
+                               arguments.wasserstein_gp_activation_function,
+                               arguments.wasserstein_gp_dropout_decay_rate_g,
+                               arguments.wasserstein_gp_dropout_decay_rate_d,
+                               arguments.wasserstein_gp_dense_layer_sizes_generator,
+                               arguments.wasserstein_gp_dense_layer_sizes_discriminator,
+                               arguments.wasserstein_gp_batch_size,
+                               arguments.wasserstein_gp_number_epochs,
+                               arguments.wasserstein_gp_number_classes,
+                               arguments.wasserstein_gp_loss_function,
+                               arguments.wasserstein_gp_momentum,
+                               arguments.wasserstein_gp_last_activation_layer,
+                               arguments.wasserstein_gp_initializer_mean,
+                               arguments.wasserstein_gp_initializer_deviation,
+                               arguments.wasserstein_gp_optimizer_generator_learning_rate,
+                               arguments.wasserstein_gp_optimizer_discriminator_learning_rate,
+                               arguments.wasserstein_gp_optimizer_generator_beta,
+                               arguments.wasserstein_gp_optimizer_discriminator_beta,
+                               arguments.wasserstein_gp_discriminator_steps)
+
+
+
+
+
+
         VariationalAutoencoder.__init__(self, arguments)
 
         Smote.__init__(self, arguments)

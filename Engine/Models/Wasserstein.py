@@ -8,8 +8,6 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/12/07'
 __credits__ = ['Synthetic Ocean AI']
 
-from Engine.Algorithms.Wasserstein.WassersteinAlgorithm import WassersteinAlgorithm
-from Engine.Architectures.Wasserstein.Torch.ModelWassersteinGANTorch import WassersteinModelTorch
 
 # MIT License
 #
@@ -39,7 +37,8 @@ try:
     import torch.optim as optim
     import numpy as np
     import logging
-
+    from Engine.Algorithms.Wasserstein.WassersteinAlgorithm import WassersteinAlgorithm
+    from Engine.Architectures.Wasserstein.WassersteinModel import WassersteinModel
 except ImportError as error:
     logging.error(error)
     sys.exit(-1)
@@ -149,7 +148,7 @@ class Wasserstein:
             wasserstein_file_name_generator: str = DEFAULT_WASSERSTEIN_FILE_NAME_GENERATOR,
             wasserstein_path_output_models: str = DEFAULT_WASSERSTEIN_PATH_OUTPUT_MODELS,
             wasserstein_algorithm: WassersteinAlgorithm | None = None,
-            wasserstein_model: WassersteinModelTorch | None = None
+            wasserstein_model: WassersteinModel | None = None
     ) -> None:
         """
         Initializes the Wasserstein GAN instance with configuration parameters.
@@ -186,7 +185,7 @@ class Wasserstein:
         """
         # Store pre-initialized instances if provided
         self._wasserstein_algorithm: WassersteinAlgorithm | None = wasserstein_algorithm
-        self._wasserstein_model: WassersteinModelTorch | None = wasserstein_model
+        self._wasserstein_model: WassersteinModel | None = wasserstein_model
 
         # ** Wasserstein GAN Configuration Parameters **
         self._wasserstein_latent_dimension: int = wasserstein_latent_dimension
@@ -254,7 +253,7 @@ class Wasserstein:
         # Only create new model if none was provided
         if not self._has_external_model:
             # Wasserstein Model setup for the Generator and Discriminator
-            self._wasserstein_model = WassersteinModelTorch(
+            self._wasserstein_model = WassersteinModel(
                 latent_dimension=self._wasserstein_latent_dimension,
                 output_shape=input_shape,
                 activation_function=self._wasserstein_activation_function,
@@ -274,7 +273,6 @@ class Wasserstein:
             # Ensure we have a model to get generator and discriminator from
             if self._wasserstein_model is None:
                 raise ValueError("WassersteinModelTorch instance is required but was not provided.")
-
             # Build the generator and discriminator models
             generator_model = self._wasserstein_model.get_generator()
             discriminator_model = self._wasserstein_model.get_discriminator()
@@ -344,11 +342,11 @@ class Wasserstein:
             print("\n" + "=" * 60)
             print("GENERATOR ARCHITECTURE")
             print("=" * 60)
-            print(self._wasserstein_model.generator)
+            print(self._wasserstein_model.get_generator())
             print("\n" + "=" * 60)
             print("DISCRIMINATOR/CRITIC ARCHITECTURE")
             print("=" * 60)
-            print(self._wasserstein_model.critic)
+            print(self._wasserstein_model.get_discriminator())
             print("=" * 60 + "\n")
 
         # Ensure we have an algorithm
@@ -441,7 +439,7 @@ class Wasserstein:
         return self._wasserstein_algorithm
 
     @property
-    def wasserstein_model(self) -> WassersteinModelTorch | None:
+    def wasserstein_model(self) -> WassersteinModel | None:
         """Get the Wasserstein model instance."""
         return self._wasserstein_model
 
