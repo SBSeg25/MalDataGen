@@ -106,98 +106,97 @@ class Autoencoder:
         _autoencoder_path_output_models (str): Path for saving models
     """
 
-    def __init__(
-            self,
-            autoencoder_latent_dimension: int = DEFAULT_AUTOENCODER_LATENT_DIMENSION,
-            autoencoder_training_algorithm: str = DEFAULT_AUTOENCODER_TRAINING_ALGORITHM,
-            autoencoder_activation_function: str = DEFAULT_AUTOENCODER_MODEL_ACTIVATION,
-            autoencoder_dropout_decay_rate_encoder: float = DEFAULT_AUTOENCODER_DROPOUT_DECAY_RATE_ENCODER,
-            autoencoder_dropout_decay_rate_decoder: float = DEFAULT_AUTOENCODER_DROPOUT_DECAY_RATE_DECODER,
-            autoencoder_dense_layer_sizes_encoder: list[int] = None,
-            autoencoder_dense_layer_sizes_decoder: list[int] = None,
-            autoencoder_batch_size: int = DEFAULT_AUTOENCODER_BATCH_SIZE,
-            autoencoder_number_epochs: int = DEFAULT_AUTOENCODER_NUMBER_EPOCHS,
-            autoencoder_number_classes: int = DEFAULT_AUTOENCODER_NUMBER_CLASSES,
-            autoencoder_loss_function: str = DEFAULT_AUTOENCODER_LOSS_FUNCTION,
-            autoencoder_momentum: float = DEFAULT_AUTOENCODER_MOMENTUM,
-            autoencoder_last_activation_layer: str = DEFAULT_AUTOENCODER_LAST_ACTIVATION_LAYER,
-            autoencoder_initializer_mean: float = DEFAULT_AUTOENCODER_INITIALIZER_MEAN,
-            autoencoder_initializer_deviation: float = DEFAULT_AUTOENCODER_INITIALIZER_DEVIATION,
-            autoencoder_latent_mean_distribution: float = DEFAULT_AUTOENCODER_LATENT_MEAN_DISTRIBUTION,
-            autoencoder_latent_stander_deviation: float = DEFAULT_AUTOENCODER_STANDER_DEVIATION,
-            autoencoder_file_name_encoder: str = DEFAULT_AUTOENCODER_FILE_NAME_ENCODER,
-            autoencoder_file_name_decoder: str = DEFAULT_AUTOENCODER_FILE_NAME_DECODER,
-            autoencoder_path_output_models: str = DEFAULT_AUTOENCODER_PATH_OUTPUT_MODELS,
-            autoencoder_algorithm: AutoencoderAlgorithm | None = None,
-            autoencoder_model: AutoencoderModel | None = None
-    ) -> None:
+    def __init__(self,
+                 latent_dimension: int = DEFAULT_AUTOENCODER_LATENT_DIMENSION,
+                 training_algorithm: str = DEFAULT_AUTOENCODER_TRAINING_ALGORITHM,
+                 activation_function: str = DEFAULT_AUTOENCODER_MODEL_ACTIVATION,
+                 dropout_decay_rate_encoder: float = DEFAULT_AUTOENCODER_DROPOUT_DECAY_RATE_ENCODER,
+                 dropout_decay_rate_decoder: float = DEFAULT_AUTOENCODER_DROPOUT_DECAY_RATE_DECODER,
+                 dense_layer_sizes_encoder: list[int] = None,
+                 dense_layer_sizes_decoder: list[int] = None,
+                 batch_size: int = DEFAULT_AUTOENCODER_BATCH_SIZE,
+                 number_epochs: int = DEFAULT_AUTOENCODER_NUMBER_EPOCHS,
+                 number_classes: int = DEFAULT_AUTOENCODER_NUMBER_CLASSES,
+                 loss_function: str = DEFAULT_AUTOENCODER_LOSS_FUNCTION,
+                 momentum: float = DEFAULT_AUTOENCODER_MOMENTUM,
+                 last_activation_layer: str = DEFAULT_AUTOENCODER_LAST_ACTIVATION_LAYER,
+                 initializer_mean: float = DEFAULT_AUTOENCODER_INITIALIZER_MEAN,
+                 initializer_deviation: float = DEFAULT_AUTOENCODER_INITIALIZER_DEVIATION,
+                 latent_mean_distribution: float = DEFAULT_AUTOENCODER_LATENT_MEAN_DISTRIBUTION,
+                 latent_stander_deviation: float = DEFAULT_AUTOENCODER_STANDER_DEVIATION,
+                 file_name_encoder: str = DEFAULT_AUTOENCODER_FILE_NAME_ENCODER,
+                 file_name_decoder: str = DEFAULT_AUTOENCODER_FILE_NAME_DECODER,
+                 path_output_models: str = DEFAULT_AUTOENCODER_PATH_OUTPUT_MODELS,
+                 algorithm: AutoencoderAlgorithm | None = None,
+                 model: AutoencoderModel | None = None
+                 ) -> None:
         """
         Initializes the autoencoder instance with configuration parameters.
 
         Args:
-            autoencoder_latent_dimension: Latent space size (default: 64)
-            autoencoder_training_algorithm: Training algorithm (default: "Adam")
-            autoencoder_activation_function: Activation function (default: "swish")
-            autoencoder_dropout_decay_rate_encoder: Encoder dropout rate (default: 0.25)
-            autoencoder_dropout_decay_rate_decoder: Decoder dropout rate (default: 0.25)
-            autoencoder_dense_layer_sizes_encoder: Encoder layer sizes (default: [320, 160])
-            autoencoder_dense_layer_sizes_decoder: Decoder layer sizes (default: [160, 320])
-            autoencoder_batch_size: Size of training batches (default: 128)
-            autoencoder_number_epochs: Number of training epochs (default: 350)
-            autoencoder_number_classes: Number of output classes (default: 2)
-            autoencoder_loss_function: Loss function for reconstruction (default: "mse")
-            autoencoder_momentum: Momentum parameter for optimization (default: 0.8)
-            autoencoder_last_activation_layer: Last layer activation function (default: "sigmoid")
-            autoencoder_initializer_mean: Mean for weight initialization (default: 0.0)
-            autoencoder_initializer_deviation: Std dev for weight initialization (default: 0.125)
-            autoencoder_latent_mean_distribution: Latent space mean (default: 0.5)
-            autoencoder_latent_stander_deviation: Latent space std dev (default: 0.125)
-            autoencoder_file_name_encoder: Encoder model filename (default: "encoder_model")
-            autoencoder_file_name_decoder: Decoder model filename (default: "decoder_model")
-            autoencoder_path_output_models: Path for saving models (default: "models_saved/")
-            autoencoder_algorithm: Optional pre-initialized AutoencoderAlgorithm instance (default: None)
-            autoencoder_model: Optional pre-initialized AutoencoderModel instance (default: None)
+            latent_dimension: Latent space size (default: 64)
+            training_algorithm: Training algorithm (default: "Adam")
+            activation_function: Activation function (default: "swish")
+            dropout_decay_rate_encoder: Encoder dropout rate (default: 0.25)
+            dropout_decay_rate_decoder: Decoder dropout rate (default: 0.25)
+            dense_layer_sizes_encoder: Encoder layer sizes (default: [320, 160])
+            dense_layer_sizes_decoder: Decoder layer sizes (default: [160, 320])
+            batch_size: Size of training batches (default: 128)
+            number_epochs: Number of training epochs (default: 350)
+            number_classes: Number of output classes (default: 2)
+            loss_function: Loss function for reconstruction (default: "mse")
+            momentum: Momentum parameter for optimization (default: 0.8)
+            last_activation_layer: Last layer activation function (default: "sigmoid")
+            initializer_mean: Mean for weight initialization (default: 0.0)
+            initializer_deviation: Std dev for weight initialization (default: 0.125)
+            latent_mean_distribution: Latent space mean (default: 0.5)
+            latent_stander_deviation: Latent space std dev (default: 0.125)
+            file_name_encoder: Encoder model filename (default: "encoder_model")
+            file_name_decoder: Decoder model filename (default: "decoder_model")
+            path_output_models: Path for saving models (default: "models_saved/")
+            algorithm: Optional pre-initialized AutoencoderAlgorithm instance (default: None)
+            model: Optional pre-initialized AutoencoderModel instance (default: None)
         """
         # Store pre-initialized instances if provided
-        self._autoencoder_algorithm: AutoencoderAlgorithm | None = autoencoder_algorithm
-        self._autoencoder_model: AutoencoderModel | None = autoencoder_model
+        self._autoencoder_algorithm: AutoencoderAlgorithm | None = algorithm
+        self._autoencoder_model: AutoencoderModel | None = model
 
         # ** Autoencoder Model Configuration Parameters **
-        self._autoencoder_latent_dimension: int = autoencoder_latent_dimension
-        self._autoencoder_training_algorithm: str = autoencoder_training_algorithm
-        self._autoencoder_activation_function: str = autoencoder_activation_function
-        self._autoencoder_dropout_decay_rate_encoder: float = autoencoder_dropout_decay_rate_encoder
-        self._autoencoder_dropout_decay_rate_decoder: float = autoencoder_dropout_decay_rate_decoder
+        self._autoencoder_latent_dimension: int = latent_dimension
+        self._autoencoder_training_algorithm: str = training_algorithm
+        self._autoencoder_activation_function: str = activation_function
+        self._autoencoder_dropout_decay_rate_encoder: float = dropout_decay_rate_encoder
+        self._autoencoder_dropout_decay_rate_decoder: float = dropout_decay_rate_decoder
 
         # Handle mutable default values safely
         self._autoencoder_dense_layer_sizes_encoder: list[int] = (
-            autoencoder_dense_layer_sizes_encoder
-            if autoencoder_dense_layer_sizes_encoder is not None
+            dense_layer_sizes_encoder
+            if dense_layer_sizes_encoder is not None
             else DEFAULT_AUTOENCODER_DENSE_LAYERS_SETTINGS_ENCODER.copy()
         )
         self._autoencoder_dense_layer_sizes_decoder: list[int] = (
-            autoencoder_dense_layer_sizes_decoder
-            if autoencoder_dense_layer_sizes_decoder is not None
+            dense_layer_sizes_decoder
+            if dense_layer_sizes_decoder is not None
             else DEFAULT_AUTOENCODER_DENSE_LAYERS_SETTINGS_DECODER.copy()
         )
 
-        self._autoencoder_batch_size: int = autoencoder_batch_size
-        self._autoencoder_number_epochs: int = autoencoder_number_epochs
-        self._autoencoder_number_classes: int = autoencoder_number_classes
-        self._autoencoder_loss_function: str = autoencoder_loss_function
-        self._autoencoder_momentum: float = autoencoder_momentum
-        self._autoencoder_last_activation_layer: str = autoencoder_last_activation_layer
-        self._autoencoder_initializer_mean: float = autoencoder_initializer_mean
-        self._autoencoder_initializer_deviation: float = autoencoder_initializer_deviation
-        self._autoencoder_latent_mean_distribution: float = autoencoder_latent_mean_distribution
-        self._autoencoder_latent_stander_deviation: float = autoencoder_latent_stander_deviation
-        self._autoencoder_file_name_encoder: str = autoencoder_file_name_encoder
-        self._autoencoder_file_name_decoder: str = autoencoder_file_name_decoder
-        self._autoencoder_path_output_models: str = autoencoder_path_output_models
+        self._autoencoder_batch_size: int = batch_size
+        self._autoencoder_number_epochs: int = number_epochs
+        self._autoencoder_number_classes: int = number_classes
+        self._autoencoder_loss_function: str = loss_function
+        self._autoencoder_momentum: float = momentum
+        self._autoencoder_last_activation_layer: str = last_activation_layer
+        self._autoencoder_initializer_mean: float = initializer_mean
+        self._autoencoder_initializer_deviation: float = initializer_deviation
+        self._autoencoder_latent_mean_distribution: float = latent_mean_distribution
+        self._autoencoder_latent_stander_deviation: float = latent_stander_deviation
+        self._autoencoder_file_name_encoder: str = file_name_encoder
+        self._autoencoder_file_name_decoder: str = file_name_decoder
+        self._autoencoder_path_output_models: str = path_output_models
 
         # Flag to indicate if instances were provided
-        self._has_external_algorithm: bool = autoencoder_algorithm is not None
-        self._has_external_model: bool = autoencoder_model is not None
+        self._has_external_algorithm: bool = algorithm is not None
+        self._has_external_model: bool = model is not None
 
     def _get_autoencoder(self, input_shape: tuple[int, ...]) -> None:
         """
