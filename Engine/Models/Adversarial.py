@@ -113,99 +113,99 @@ class Adversarial:
 
     def __init__(
             self,
-            adversarial_number_epochs: int = DEFAULT_ADVERSARIAL_NUMBER_EPOCHS,
-            adversarial_batch_size: int = DEFAULT_ADVERSARIAL_BATCH_SIZE,
-            adversarial_initializer_mean: float = DEFAULT_ADVERSARIAL_INITIALIZER_MEAN,
-            adversarial_initializer_deviation: float = DEFAULT_ADVERSARIAL_INITIALIZER_DEVIATION,
-            adversarial_latent_dimension: int = DEFAULT_ADVERSARIAL_LATENT_DIMENSION,
-            adversarial_training_algorithm: str = DEFAULT_ADVERSARIAL_TRAINING_ALGORITHM,
-            adversarial_activation_function: str = DEFAULT_ADVERSARIAL_INTERMEDIARY_ACTIVATION,
-            adversarial_dropout_decay_rate_g: float = DEFAULT_ADVERSARIAL_DROPOUT_DECAY_RATE_G,
-            adversarial_dropout_decay_rate_d: float = DEFAULT_ADVERSARIAL_DROPOUT_DECAY_RATE_D,
-            adversarial_dense_layer_sizes_g: list[int] = None,
-            adversarial_dense_layer_sizes_d: list[int] = None,
-            adversarial_loss_generator: str = DEFAULT_ADVERSARIAL_LOSS_GENERATOR,
-            adversarial_loss_discriminator: str = DEFAULT_ADVERSARIAL_LOSS_DISCRIMINATOR,
-            adversarial_smoothing_rate: float = DEFAULT_ADVERSARIAL_SMOOTHING_RATE,
-            adversarial_latent_mean_distribution: float = DEFAULT_ADVERSARIAL_LATENT_MEAN_DISTRIBUTION,
-            adversarial_latent_stander_deviation: float = DEFAULT_ADVERSARIAL_LATENT_STANDER_DEVIATION,
-            adversarial_file_name_discriminator: str = DEFAULT_ADVERSARIAL_FILE_NAME_DISCRIMINATOR,
-            adversarial_file_name_generator: str = DEFAULT_ADVERSARIAL_FILE_NAME_GENERATOR,
-            adversarial_path_output_models: str = DEFAULT_ADVERSARIAL_PATH_OUTPUT_MODELS,
-            adversarial_last_layer_activation: str = DEFAULT_ADVERSARIAL_LAST_ACTIVATION_LAYER,
-            variational_autoencoder_number_epochs: int = DEFAULT_VARIATIONAL_AUTOENCODER_NUMBER_EPOCHS,
-            adversarial_algorithm: AdversarialAlgorithm | None = None,
-            adversarial_model: AdversarialModel | None = None
+            number_epochs: int = DEFAULT_ADVERSARIAL_NUMBER_EPOCHS,
+            batch_size: int = DEFAULT_ADVERSARIAL_BATCH_SIZE,
+            initializer_mean: float = DEFAULT_ADVERSARIAL_INITIALIZER_MEAN,
+            initializer_deviation: float = DEFAULT_ADVERSARIAL_INITIALIZER_DEVIATION,
+            latent_dimension: int = DEFAULT_ADVERSARIAL_LATENT_DIMENSION,
+            training_algorithm: str = DEFAULT_ADVERSARIAL_TRAINING_ALGORITHM,
+            activation_function: str = DEFAULT_ADVERSARIAL_INTERMEDIARY_ACTIVATION,
+            dropout_decay_rate_g: float = DEFAULT_ADVERSARIAL_DROPOUT_DECAY_RATE_G,
+            dropout_decay_rate_d: float = DEFAULT_ADVERSARIAL_DROPOUT_DECAY_RATE_D,
+            dense_layer_sizes_g: list[int] = None,
+            dense_layer_sizes_d: list[int] = None,
+            loss_generator: str = DEFAULT_ADVERSARIAL_LOSS_GENERATOR,
+            loss_discriminator: str = DEFAULT_ADVERSARIAL_LOSS_DISCRIMINATOR,
+            smoothing_rate: float = DEFAULT_ADVERSARIAL_SMOOTHING_RATE,
+            latent_mean_distribution: float = DEFAULT_ADVERSARIAL_LATENT_MEAN_DISTRIBUTION,
+            latent_stander_deviation: float = DEFAULT_ADVERSARIAL_LATENT_STANDER_DEVIATION,
+            file_name_discriminator: str = DEFAULT_ADVERSARIAL_FILE_NAME_DISCRIMINATOR,
+            file_name_generator: str = DEFAULT_ADVERSARIAL_FILE_NAME_GENERATOR,
+            path_output_models: str = DEFAULT_ADVERSARIAL_PATH_OUTPUT_MODELS,
+            last_layer_activation: str = DEFAULT_ADVERSARIAL_LAST_ACTIVATION_LAYER,
+            autoencoder_number_epochs: int = DEFAULT_VARIATIONAL_AUTOENCODER_NUMBER_EPOCHS,
+            algorithm: AdversarialAlgorithm | None = None,
+            model: AdversarialModel | None = None
     ) -> None:
         """
         Initializes the adversarial instance with configuration parameters.
 
         Args:
-            adversarial_number_epochs: Training epochs (default: 20)
-            adversarial_batch_size: Batch size (default: 32)
-            adversarial_initializer_mean: Weight init mean (default: 0.0)
-            adversarial_initializer_deviation: Weight init std dev (default: 0.5)
-            adversarial_latent_dimension: Size of the latent space (default: 128)
-            adversarial_training_algorithm: Training algorithm specification (default: "Adam")
-            adversarial_activation_function: Activation function for hidden layers (default: "LeakyReLU")
-            adversarial_dropout_decay_rate_g: Generator dropout rate (default: 0.2)
-            adversarial_dropout_decay_rate_d: Discriminator dropout rate (default: 0.4)
-            adversarial_dense_layer_sizes_g: Generator layer sizes (default: [128])
-            adversarial_dense_layer_sizes_d: Discriminator layer sizes (default: [128])
-            adversarial_loss_generator: Generator loss function (default: 'binary_crossentropy')
-            adversarial_loss_discriminator: Discriminator loss function (default: 'binary_crossentropy')
-            adversarial_smoothing_rate: Label smoothing rate (default: 0.15)
-            adversarial_latent_mean_distribution: Latent space mean (default: 0.0)
-            adversarial_latent_stander_deviation: Latent space std dev (default: 1.0)
-            adversarial_file_name_discriminator: Discriminator model filename (default: "discriminator_model")
-            adversarial_file_name_generator: Generator model filename (default: "generator_model")
-            adversarial_path_output_models: Path for saving models (default: "models_saved/")
-            adversarial_last_layer_activation: Last layer activation function (default: "Sigmoid")
-            variational_autoencoder_number_epochs: Epochs for VAE pre-training (default: 10)
-            adversarial_algorithm: Optional pre-initialized AdversarialAlgorithm instance (default: None)
-            adversarial_model: Optional pre-initialized AdversarialModel instance (default: None)
+            number_epochs: Training epochs (default: 20)
+            batch_size: Batch size (default: 32)
+            initializer_mean: Weight init mean (default: 0.0)
+            initializer_deviation: Weight init std dev (default: 0.5)
+            latent_dimension: Size of the latent space (default: 128)
+            training_algorithm: Training algorithm specification (default: "Adam")
+            activation_function: Activation function for hidden layers (default: "LeakyReLU")
+            dropout_decay_rate_g: Generator dropout rate (default: 0.2)
+            dropout_decay_rate_d: Discriminator dropout rate (default: 0.4)
+            dense_layer_sizes_g: Generator layer sizes (default: [128])
+            dense_layer_sizes_d: Discriminator layer sizes (default: [128])
+            loss_generator: Generator loss function (default: 'binary_crossentropy')
+            loss_discriminator: Discriminator loss function (default: 'binary_crossentropy')
+            smoothing_rate: Label smoothing rate (default: 0.15)
+            latent_mean_distribution: Latent space mean (default: 0.0)
+            latent_stander_deviation: Latent space std dev (default: 1.0)
+            file_name_discriminator: Discriminator model filename (default: "discriminator_model")
+            file_name_generator: Generator model filename (default: "generator_model")
+            path_output_models: Path for saving models (default: "models_saved/")
+            last_layer_activation: Last layer activation function (default: "Sigmoid")
+            autoencoder_number_epochs: Epochs for VAE pre-training (default: 10)
+            algorithm: Optional pre-initialized AdversarialAlgorithm instance (default: None)
+            model: Optional pre-initialized AdversarialModel instance (default: None)
         """
         # Store pre-initialized instances if provided
-        self._adversarial_algorithm: AdversarialAlgorithm | None = adversarial_algorithm
-        self._adversarial_model: AdversarialModel | None = adversarial_model
+        self._adversarial_algorithm: AdversarialAlgorithm | None = algorithm
+        self._adversarial_model: AdversarialModel | None = model
 
         # ** Adversarial Model (GAN) Configuration Parameters **
-        self._adversarial_number_epochs: int = adversarial_number_epochs
-        self._adversarial_batch_size: int = adversarial_batch_size
-        self._adversarial_initializer_mean: float = adversarial_initializer_mean
-        self._adversarial_initializer_deviation: float = adversarial_initializer_deviation
-        self._adversarial_latent_dimension: int = adversarial_latent_dimension
-        self._adversarial_training_algorithm: str = adversarial_training_algorithm
-        self._adversarial_activation_function: str = adversarial_activation_function
-        self._adversarial_dropout_decay_rate_g: float = adversarial_dropout_decay_rate_g
-        self._adversarial_dropout_decay_rate_d: float = adversarial_dropout_decay_rate_d
+        self._adversarial_number_epochs: int = number_epochs
+        self._adversarial_batch_size: int = batch_size
+        self._adversarial_initializer_mean: float = initializer_mean
+        self._adversarial_initializer_deviation: float = initializer_deviation
+        self._adversarial_latent_dimension: int = latent_dimension
+        self._adversarial_training_algorithm: str = training_algorithm
+        self._adversarial_activation_function: str = activation_function
+        self._adversarial_dropout_decay_rate_g: float = dropout_decay_rate_g
+        self._adversarial_dropout_decay_rate_d: float = dropout_decay_rate_d
 
         # Handle mutable default values safely
         self._adversarial_dense_layer_sizes_g: list[int] = (
-            adversarial_dense_layer_sizes_g
-            if adversarial_dense_layer_sizes_g is not None
+            dense_layer_sizes_g
+            if dense_layer_sizes_g is not None
             else DEFAULT_ADVERSARIAL_DENSE_LAYERS_SETTINGS_G.copy()
         )
         self._adversarial_dense_layer_sizes_d: list[int] = (
-            adversarial_dense_layer_sizes_d
-            if adversarial_dense_layer_sizes_d is not None
+            dense_layer_sizes_d
+            if dense_layer_sizes_d is not None
             else DEFAULT_ADVERSARIAL_DENSE_LAYERS_SETTINGS_D.copy()
         )
 
-        self._adversarial_loss_generator: str = adversarial_loss_generator
-        self._adversarial_loss_discriminator: str = adversarial_loss_discriminator
-        self._adversarial_smoothing_rate: float = adversarial_smoothing_rate
-        self._adversarial_latent_mean_distribution: float = adversarial_latent_mean_distribution
-        self._adversarial_latent_stander_deviation: float = adversarial_latent_stander_deviation
-        self._adversarial_file_name_discriminator: str = adversarial_file_name_discriminator
-        self._adversarial_file_name_generator: str = adversarial_file_name_generator
-        self._adversarial_path_output_models: str = adversarial_path_output_models
-        self._adversarial_last_layer_activation: str = adversarial_last_layer_activation
-        self._variational_autoencoder_number_epochs: int = variational_autoencoder_number_epochs
+        self._adversarial_loss_generator: str = loss_generator
+        self._adversarial_loss_discriminator: str = loss_discriminator
+        self._adversarial_smoothing_rate: float = smoothing_rate
+        self._adversarial_latent_mean_distribution: float = latent_mean_distribution
+        self._adversarial_latent_stander_deviation: float = latent_stander_deviation
+        self._adversarial_file_name_discriminator: str = file_name_discriminator
+        self._adversarial_file_name_generator: str = file_name_generator
+        self._adversarial_path_output_models: str = path_output_models
+        self._adversarial_last_layer_activation: str = last_layer_activation
+        self._variational_autoencoder_number_epochs: int = autoencoder_number_epochs
 
         # Flag to indicate if instances were provided
-        self._has_external_algorithm: bool = adversarial_algorithm is not None
-        self._has_external_model: bool = adversarial_model is not None
+        self._has_external_algorithm: bool = algorithm is not None
+        self._has_external_model: bool = model is not None
 
     def _get_adversarial_model(self, input_shape: tuple[int, ...]) -> None:
         """
