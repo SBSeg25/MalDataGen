@@ -8,29 +8,6 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Kayuã Oleques']
 
-# MIT License
-#
-# Copyright (c) 2025 Synthetic Ocean AI
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
-
 try:
     import os
     import sys
@@ -54,63 +31,6 @@ class AlgorithmDenoisingDiffusionTorch(nn.Module):
 
     This class supports exponential moving average (EMA) updates for stable training,
     multiple training stages, and customizable hyperparameters to adapt to different tasks.
-
-    Attributes:
-        @ema (float):
-            Exponential moving average (EMA) decay rate for stabilizing training updates.
-        @margin (float):
-            Margin parameter used for loss computation or regularization purposes.
-        @gdf_util:
-            Utility object for Gaussian diffusion functions, handling noise scheduling and diffusion-related operations.
-        @time_steps (int):
-            Number of time steps used in the diffusion process.
-        @train_stage (str):
-            Defines the current training stage ('all', 'diffusion', etc.), determining whether only specific components are updated.
-        @network (Model):
-            Primary UNet model responsible for the diffusion process.
-        @second_unet_model (Model):
-            Secondary UNet model used for EMA-based weight updates to enhance training stability.
-        @embedding_dimension (int):
-            Dimensionality of the latent space used for encoding data.
-        @encoder_model_data (Model):
-            Encoder model responsible for feature extraction from input data.
-        @decoder_model_data (Model):
-            Decoder model used to reconstruct data from encoded representations.
-        @optimizer_diffusion (Optimizer):
-            Optimizer used for training the diffusion model.
-        @optimizer_autoencoder (Optimizer):
-            Optimizer responsible for training the autoencoder components.
-        @ensemble_encoder_decoder (Model):
-            Combined encoder-decoder model for data reconstruction.
-
-    Raises:
-        ValueError:
-            Raised in cases where:
-            - The number of time steps is non-positive.
-            - The EMA decay rate is outside the range (0,1).
-            - The embedding dimension is invalid (<=0).
-
-    References:
-        - Ho, J., Jain, A., & Abbeel, P. (2020). "Denoising LatentDiffusion Probabilistic Models."
-        Advances in Neural Information Processing Systems (NeurIPS).
-        Available at: https://arxiv.org/abs/2006.11239
-
-    Example:
-        >>> diffusion_model = AlgorithmDenoisingDiffusionTorch(
-        ...     first_unet_model=primary_unet,
-        ...     second_unet_model=ema_unet,
-        ...     encoder_model_image=encoder,
-        ...     decoder_model_image=decoder,
-        ...     gdf_util=gaussian_diffusion,
-        ...     optimizer_autoencoder=torch.optim.Adam(lr=1e-4),
-        ...     optimizer_diffusion=torch.optim.Adam(lr=2e-4),
-        ...     time_steps=1000,
-        ...     ema=0.999,
-        ...     margin=0.1,
-        ...     train_stage='all'
-        ... )
-        >>> diffusion_model.set_stage_training('diffusion')
-        >>> diffusion_model.train_step(data)
     """
 
     def __init__(self,
@@ -126,44 +46,6 @@ class AlgorithmDenoisingDiffusionTorch(nn.Module):
                  train_stage='all'):
 
         super().__init__()
-        """
-        Initializes the DiffusionModel with provided sub-models, optimizers, and hyperparameters.
-
-        This constructor sets up the network structure, including the autoencoder, diffusion
-        models, and EMA components, ensuring flexibility for different training strategies.
-
-        Args:
-            @first_unet_model (Model):
-                Primary UNet model for diffusion-based generation.
-            @second_unet_model (Model):
-                Secondary UNet model for maintaining EMA-based weight updates.
-            @encoder_model_image (Model):
-                Encoder model used to extract meaningful feature representations.
-            @decoder_model_image (Model):
-                Decoder model reconstructing data from encoded embeddings.
-            @gdf_util:
-                Utility object responsible for Gaussian diffusion operations.
-            @optimizer_autoencoder (Optimizer):
-                Optimizer handling the training of the encoder-decoder network.
-            @optimizer_diffusion (Optimizer):
-                Optimizer applied to the diffusion process.
-            @time_steps (int):
-                Number of discrete time steps for the diffusion process.
-            @ema (float):
-                Exponential moving average decay factor.
-            @margin (float):
-                Margin value used in loss calculations or regularization.
-            @embedding_dimension (int):
-                Dimensionality of the embedding space.
-            @train_stage (str, optional):
-             Current training stage ('all', 'diffusion', etc.), defaulting to 'all'.
-
-        Raises:
-            ValueError:
-                If time_steps is <= 0.
-                If ema is not within the (0,1) range.
-                If embedding_dimension is <= 0.
-        """
 
         self._ema = ema
         self._margin = margin
@@ -199,8 +81,27 @@ class AlgorithmDenoisingDiffusionTorch(nn.Module):
             dict: A dictionary with the computed loss for diffusion.
         """
         loss_diffusion = self.train_diffusion_model(data, labels)
+        self.sync_skip_projections()  # NEW: Sync skip projections before EMA update
         self.update_ema_weights()
         return {"Diffusion_loss": loss_diffusion.item() if loss_diffusion is not None else 0}
+
+    def sync_skip_projections(self):
+        """
+        Synchronizes dynamically created skip projection layers from the first UNet
+        to the second UNet (EMA model). This ensures both models have identical architectures.
+        """
+        # Copy all skip projections from first model to second model
+        for key, projection in self._network._skip_projections.items():
+            if key not in self._second_unet_model._skip_projections:
+                # Create a new projection in the second model with the same architecture
+                self._second_unet_model._skip_projections[key] = nn.Linear(
+                    projection.in_features,
+                    projection.out_features
+                ).to(projection.weight.device)
+                # Copy the weights from the first model
+                self._second_unet_model._skip_projections[key].load_state_dict(
+                    projection.state_dict()
+                )
 
     def train_diffusion_model(self, data, ground_truth):
         """
@@ -223,15 +124,8 @@ class AlgorithmDenoisingDiffusionTorch(nn.Module):
         # Batch size of the current data batch
         batch_size = data.shape[0]
 
-        embedding_data_expanded = self._padding_input_tensor(embedding_data_expanded)
+        # Convert to float
         embedding_data_expanded = embedding_data_expanded.float()
-
-        static_shape = embedding_data_expanded.shape
-
-        if len(static_shape) >= 2 and static_shape[-2] is not None:
-            self._output_shape = static_shape[-2]
-        else:
-            self._output_shape = embedding_data_expanded.shape[-2]
 
         # Sample random time steps for each sample in the batch
         random_time_steps = torch.randint(0, self._time_steps, (batch_size,),
@@ -251,8 +145,22 @@ class AlgorithmDenoisingDiffusionTorch(nn.Module):
         # Predict noise using the diffusion model
         predicted_noise = self._network(embedding_with_noise, random_time_steps, embedding_label)
 
+        # Ensure predicted_noise matches random_noise shape exactly
+        # Remove any extra channel dimensions if present
+        if len(predicted_noise.shape) > len(random_noise.shape):
+            predicted_noise = predicted_noise.squeeze(-1)
+
+        # Verify shapes match before computing loss
+        if predicted_noise.shape != random_noise.shape:
+            raise RuntimeError(
+                f"Shape mismatch: predicted_noise {predicted_noise.shape} "
+                f"!= random_noise {random_noise.shape}. "
+                f"Model output_shape: {self._network._output_shape}, "
+                f"Input shape: {embedding_data_expanded.shape}"
+            )
+
         # Compute the loss
-        loss_diffusion = self._loss_fn(random_noise, predicted_noise.squeeze(-1))
+        loss_diffusion = self._loss_fn(random_noise, predicted_noise)
 
         # Backward pass
         loss_diffusion.backward()
@@ -265,10 +173,26 @@ class AlgorithmDenoisingDiffusionTorch(nn.Module):
     def update_ema_weights(self):
         """
         Updates the weights of the second UNet model using exponential moving average.
+        Now safely handles dynamically created layers by only updating matching parameters.
         """
         with torch.no_grad():
-            for param, ema_param in zip(self._network.parameters(), self._second_unet_model.parameters()):
-                ema_param.data.mul_(self._ema).add_(param.data, alpha=1 - self._ema)
+            # Get all parameter names from both models
+            first_params = dict(self._network.named_parameters())
+            second_params = dict(self._second_unet_model.named_parameters())
+
+            # Only update parameters that exist in both models
+            for name in first_params.keys():
+                if name in second_params:
+                    param = first_params[name]
+                    ema_param = second_params[name]
+
+                    # Verify shapes match before updating
+                    if param.shape == ema_param.shape:
+                        ema_param.data.mul_(self._ema).add_(param.data, alpha=1 - self._ema)
+                    else:
+                        # This shouldn't happen after sync_skip_projections, but log if it does
+                        print(f"Warning: Skipping EMA update for {name} due to shape mismatch: "
+                              f"{param.shape} vs {ema_param.shape}")
 
     def generate_data(self, labels, batch_size):
         """
@@ -284,8 +208,11 @@ class AlgorithmDenoisingDiffusionTorch(nn.Module):
         """
         device = next(self._network.parameters()).device
 
+        # Use the model's output_shape
+        model_output_shape = self._network._output_shape
+
         # Start with random noise in the embedding space
-        synthetic_data = torch.randn(labels.shape[0], self._output_shape, 1,
+        synthetic_data = torch.randn(labels.shape[0], model_output_shape, 1,
                                      dtype=torch.float32, device=device)
 
         # Reshape labels
@@ -303,16 +230,20 @@ class AlgorithmDenoisingDiffusionTorch(nn.Module):
                 predicted_noise = self._network(synthetic_data, array_time, labels_vector)
 
                 # Apply reverse diffusion step
-                synthetic_data = self._gdf_util.p_sample(predicted_noise[0] if isinstance(predicted_noise, tuple)
-                                                         else predicted_noise,
-                                                         synthetic_data, array_time,
-                                                         clip_denoised=True)
+                synthetic_data = self._gdf_util.p_sample(
+                    predicted_noise[0] if isinstance(predicted_noise, tuple) else predicted_noise,
+                    synthetic_data,
+                    array_time,
+                    clip_denoised=True
+                )
 
         self._network.train()
 
         # Crop to original size
-        generated_data = self._crop_tensor_to_original_size(synthetic_data.cpu().numpy(),
-                                                            self._original_shape)
+        generated_data = self._crop_tensor_to_original_size(
+            synthetic_data.cpu().numpy(),
+            self._original_shape
+        )
 
         return generated_data
 
@@ -364,9 +295,8 @@ class AlgorithmDenoisingDiffusionTorch(nn.Module):
         if padding_needed == 0:
             return input_tensor
 
-        # Apply padding: (left, right, top, bottom, front, back)
-        # For 3D tensor (batch, seq, channels), pad seq dimension
-        pad = (0, 0, 0, padding_needed)  # pad only the second-to-last dimension
+        # Apply padding
+        pad = (0, 0, 0, padding_needed)
         padded_tensor = F.pad(input_tensor, pad, mode='constant', value=0)
 
         return padded_tensor
@@ -419,6 +349,7 @@ class AlgorithmDenoisingDiffusionTorch(nn.Module):
 
         print(f"Models saved to {directory}")
 
+    # Properties
     @property
     def ema(self) -> Any:
         return self._ema

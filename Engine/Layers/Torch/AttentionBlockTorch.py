@@ -32,9 +32,8 @@ __credits__ = ['Synthetic Ocean AI']
 
 try:
     import sys
-    import torch
-    import torch.nn as nn
-    import torch.nn.functional as F
+    import tensorflow as tf
+    from tensorflow.keras.layers import Layer, Dense
 
 except ImportError as error:
     print(error)
@@ -43,7 +42,7 @@ except ImportError as error:
 DEFAULT_GROUP_NORMALIZATION = 1
 
 
-class AttentionBlockTorch(nn.Module):
+class AttentionBlock(Layer):
     """
     AttentionBlock
 
@@ -63,13 +62,16 @@ class AttentionBlockTorch(nn.Module):
             The number of groups for normalization. Defaults to `DEFAULT_GROUP_NORMALIZATION`.
 
     Methods:
-        @forward(inputs):
+        @call(inputs):
             Computes the forward pass for the attention block. This method calculates the attention
             scores, applies them to the input, and returns the augmented input after normalization.
 
     Example:
+        >>> import tensorflow as tf
         >>> attention_block = AttentionBlock(units=64, groups=8)
+        >>> inputs = tf.random.normal((2, 10, 64))  # (batch_size, height, units)
         >>> output = attention_block(inputs)
+        >>> print(output.shape)  # Expected: (2, 10, 64)
     """
 
     def __init__(self, units, groups=DEFAULT_GROUP_NORMALIZATION, **kwargs):
@@ -82,19 +84,19 @@ class AttentionBlockTorch(nn.Module):
             groups (int, optional):
                 Number of groups for normalization. Defaults to `DEFAULT_GROUP_NORMALIZATION`.
             **kwargs:
-                Additional keyword arguments for the parent Module class.
+                Additional keyword arguments for the parent Layer class.
         """
-        super().__init__()
+        super(AttentionBlock, self).__init__(**kwargs)
         self.units = units
         self.groups = groups
 
-        # Define linear layers for query, key, value, and final projection
-        self.query_weights = nn.Linear(units, units)
-        self.key_weights = nn.Linear(units, units)
-        self.value_weights = nn.Linear(units, units)
-        self.projection_weights = nn.Linear(units, units)
+        # Define dense layers for query, key, value, and final projection
+        self.query_weights = Dense(units)
+        self.key_weights = Dense(units)
+        self.value_weights = Dense(units)
+        self.projection_weights = Dense(units)
 
-    def forward(self, inputs):
+    def call(self, inputs):
         """
         Performs the forward pass of the attention block.
 
@@ -105,9 +107,9 @@ class AttentionBlockTorch(nn.Module):
             Tensor: The output tensor after applying the attention mechanism and projection.
                     The shape is the same as the input tensor.
         """
-        batch_size = inputs.shape[0]
-        height = inputs.shape[1]
-        scale = float(self.units) ** (-0.5)
+        batch_size = tf.shape(inputs)[0]
+        height = tf.shape(inputs)[1]
+        scale = tf.cast(self.units, tf.float32) ** (-0.5)
 
         # Compute query, key, and value projections
         query = self.query_weights(inputs)  # (batch_size, height, units)
@@ -116,15 +118,29 @@ class AttentionBlockTorch(nn.Module):
 
         # Compute attention scores using scaled dot-product attention
         # einsum "bhc, bHc->bhH" means: batch, height_q, channels @ batch, height_k, channels -> batch, height_q, height_k
-        attention_score = torch.einsum("bhc,bHc->bhH", query, key) * scale
+        attention_score = tf.einsum("bhc,bHc->bhH", query, key) * scale
 
         # Apply softmax to obtain attention weights
-        attention_score = F.softmax(attention_score, dim=-1)
+        attention_score = tf.nn.softmax(attention_score, axis=-1)
 
         # Apply attention weights to the value tensor
         # einsum "bhH,bHc->bhc" means: batch, height_q, height_k @ batch, height_k, channels -> batch, height_q, channels
-        projection = torch.einsum("bhH,bHc->bhc", attention_score, value)
+        projection = tf.einsum("bhH,bHc->bhc", attention_score, value)
         projection = self.projection_weights(projection)
 
         # Add the original input to the projection to form the output (residual connection)
         return inputs + projection
+
+    def get_config(self):
+        """
+        Returns the configuration of the layer for serialization.
+
+        Returns:
+            dict: A dictionary containing the layer configuration.
+        """
+        config = super(AttentionBlock, self).get_config()
+        config.update({
+            "units": self.units,
+            "groups": self.groups
+        })
+        return config

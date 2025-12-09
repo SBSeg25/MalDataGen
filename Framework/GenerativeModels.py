@@ -249,7 +249,7 @@ class GenerativeModels(AdversarialInstance,
         WassersteinGPInstance.__init__(self, arguments)
         VariationalAutoencoderInstance.__init__(self, arguments)
         SmoteInstance.__init__(self, arguments)
-        DenoisingDiffusionInstance.__init__(self, arguments)
+        DenoisingDiffusionInstanceTorch.__init__(self, arguments)
 
         self._callback_model_monitor = None
         self._callback_resources_monitor = None
