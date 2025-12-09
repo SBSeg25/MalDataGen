@@ -353,15 +353,16 @@ class Wasserstein:
         if self._wasserstein_algorithm is None:
             raise ValueError("WassersteinAlgorithm instance is required but was not provided or created.")
 
-        # Setup optimizers
+        # Setup optimizers - FIXED: Changed from .generator_model to .generator
         generator_optimizer = optim.Adam(
-            self._wasserstein_algorithm.generator_model.parameters(),
+            self._wasserstein_algorithm.generator.parameters(),
             lr=self._wasserstein_optimizer_generator_learning_rate,
             betas=(self._wasserstein_optimizer_generator_beta, 0.9)
         )
 
+        # FIXED: Changed from .discriminator_model to .discriminator
         discriminator_optimizer = optim.Adam(
-            self._wasserstein_algorithm.discriminator_model.parameters(),
+            self._wasserstein_algorithm.discriminator.parameters(),
             lr=self._wasserstein_optimizer_discriminator_learning_rate,
             betas=(self._wasserstein_optimizer_discriminator_beta, 0.9)
         )
@@ -431,7 +432,6 @@ class Wasserstein:
         )
 
         print("\nTraining completed successfully!")
-
     # Additional getters for the algorithm and model
     @property
     def wasserstein_algorithm(self) -> WassersteinAlgorithm | None:

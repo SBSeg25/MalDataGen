@@ -387,7 +387,27 @@ class GenerativeModels(Adversarial,
 
 
 
-        VariationalAutoencoder.__init__(self, arguments)
+        VariationalAutoencoder.__init__(self,
+                                        arguments.variational_autoencoder_latent_dimension,
+                                        arguments.variational_autoencoder_training_algorithm,
+                                        arguments.variational_autoencoder_activation_function,
+                                        arguments.variational_autoencoder_dropout_decay_rate_encoder,
+                                        arguments.variational_autoencoder_dropout_decay_rate_decoder,
+                                        arguments.variational_autoencoder_dense_layer_sizes_encoder,
+                                        arguments.variational_autoencoder_dense_layer_sizes_decoder,
+                                        arguments.variational_autoencoder_batch_size,
+                                        arguments.variational_autoencoder_number_epochs,
+                                        arguments.variational_autoencoder_number_classes,
+                                        arguments.variational_autoencoder_loss_function,
+                                        arguments.variational_autoencoder_momentum,
+                                        arguments.variational_autoencoder_last_activation_layer,
+                                        arguments.variational_autoencoder_initializer_mean,
+                                        arguments.variational_autoencoder_initializer_deviation,
+                                        arguments.variational_autoencoder_mean_distribution,
+                                        arguments.variational_autoencoder_stander_deviation,
+                                        arguments.variational_autoencoder_file_name_encoder,
+                                        arguments.variational_autoencoder_file_name_decoder,
+                                        arguments.variational_autoencoder_path_output_models)
 
         Smote.__init__(self, arguments)
 

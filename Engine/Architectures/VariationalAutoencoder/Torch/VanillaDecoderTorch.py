@@ -8,16 +8,35 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
-from Engine.Architectures.QuantizedVAE.Torch.ActivationTorch import ActivationsTorch
 
-# MIT License - Copyright (c) 2025 Synthetic Ocean AI
+# MIT License
+#
+# Copyright (c) 2025 Synthetic Ocean AI
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
 
 try:
     import sys
     import numpy
     import torch
     import torch.nn as nn
-
+    from Engine.Architectures.QuantizedVAE.Torch.ActivationTorch import ActivationsTorch
 except ImportError as error:
     print(error)
     sys.exit(-1)
@@ -26,51 +45,83 @@ except ImportError as error:
 class DecoderNetwork(nn.Module):
     """Neural network implementation for the decoder."""
 
-    def __init__(self, parent):
+    def __init__(self,
+                 num_classes,
+                 output_shape,
+                 latent_dimension,
+                 number_neurons_decoder,
+                 activation_function,
+                 last_layer_activation,
+                 dropout_decay_rate,
+                 initializer_mean,
+                 initializer_deviation):
         super().__init__()
-        self.parent = parent
+
+        # Store configuration (not parent reference)
+        self.num_classes = num_classes
+        self.output_shape = output_shape
+        self.latent_dimension = latent_dimension
+        self.activation_function = activation_function
+        self.last_layer_activation = last_layer_activation
+
+        # Helper function for weight initialization
+        def init_weights(layer, mean, std):
+            nn.init.normal_(layer.weight, mean=mean, std=std)
+            if layer.bias is not None:
+                nn.init.zeros_(layer.bias)
+
+        # Helper function for activation
+        def get_activation(activation_name):
+            if callable(activation_name):
+                return activation_name
+
+            activations = {
+                'relu': nn.ReLU(),
+                'tanh': nn.Tanh(),
+                'sigmoid': nn.Sigmoid(),
+                'leaky_relu': nn.LeakyReLU(),
+                'swish': nn.SiLU(),
+                'linear': nn.Identity()
+            }
+            return activations.get(activation_name.lower(), nn.ReLU())
 
         # Label embedding layer
-        self.label_embedding = nn.Linear(
-            parent._decoder_number_samples_per_class["number_classes"],
-            8
-        )
-        parent._init_weights(self.label_embedding, parent._decoder_initializer_mean,
-                             parent._decoder_initializer_deviation)
+        self.label_embedding = nn.Linear(num_classes, 8)
+        init_weights(self.label_embedding, initializer_mean, initializer_deviation)
 
         # First layer after concatenation
-        input_size = parent._decoder_latent_dimension + 8
+        input_size = latent_dimension + 8
         layers = []
 
         # First layer
-        first_layer = nn.Linear(input_size, parent._decoder_number_neurons_decoder[0])
-        parent._init_weights(first_layer, parent._decoder_initializer_mean,
-                             parent._decoder_initializer_deviation)
+        first_layer = nn.Linear(input_size, number_neurons_decoder[0])
+        init_weights(first_layer, initializer_mean, initializer_deviation)
         layers.append(first_layer)
-        layers.append(parent._get_activation(parent._decoder_intermediary_activation_function))
-        layers.append(nn.Dropout(parent._decoder_dropout_decay_rate_decoder))
+        layers.append(get_activation(activation_function))
+        layers.append(nn.Dropout(dropout_decay_rate))
 
         # Hidden layers
-        for i in range(1, len(parent._decoder_number_neurons_decoder)):
+        for i in range(1, len(number_neurons_decoder)):
             layer = nn.Linear(
-                parent._decoder_number_neurons_decoder[i - 1],
-                parent._decoder_number_neurons_decoder[i]
+                number_neurons_decoder[i - 1],
+                number_neurons_decoder[i]
             )
-            parent._init_weights(layer, parent._decoder_initializer_mean,
-                                 parent._decoder_initializer_deviation)
+            init_weights(layer, initializer_mean, initializer_deviation)
             layers.append(layer)
-            layers.append(nn.Dropout(parent._decoder_dropout_decay_rate_decoder))
-            layers.append(parent._get_activation(parent._decoder_intermediary_activation_function))
+            layers.append(nn.Dropout(dropout_decay_rate))
+            layers.append(get_activation(activation_function))
 
         self.decoder_layers = nn.Sequential(*layers)
 
         # Output layer
         self.output_layer = nn.Linear(
-            parent._decoder_number_neurons_decoder[-1],
-            parent._decoder_output_shape
+            number_neurons_decoder[-1],
+            output_shape
         )
-        parent._init_weights(self.output_layer, parent._decoder_initializer_mean,
-                             parent._decoder_initializer_deviation)
+        init_weights(self.output_layer, initializer_mean, initializer_deviation)
+
+        # Store activation getter
+        self._get_activation = get_activation
 
     def forward(self, latent, label):
         """
@@ -94,7 +145,7 @@ class DecoderNetwork(nn.Module):
 
         # Output layer
         output = self.output_layer(decoded)
-        output = self.parent._get_activation(self.parent._decoder_last_layer_activation)(output)
+        output = self._get_activation(self.last_layer_activation)(output)
 
         return output
 
@@ -149,7 +200,6 @@ class VanillaDecoderTorch(nn.Module, ActivationsTorch):
             raise ValueError("number_neurons_decoder must be a list of positive integers.")
 
         if number_samples_per_class is not None:
-
             if not isinstance(number_samples_per_class, dict):
                 raise ValueError("number_samples_per_class must be a dictionary or None.")
 
@@ -169,27 +219,6 @@ class VanillaDecoderTorch(nn.Module, ActivationsTorch):
         self._decoder_number_samples_per_class = number_samples_per_class
         self._decoder_model = None
 
-    def _init_weights(self, layer, mean, std):
-        """Initialize layer weights with normal distribution."""
-        nn.init.normal_(layer.weight, mean=mean, std=std)
-        if layer.bias is not None:
-            nn.init.zeros_(layer.bias)
-
-    def _get_activation(self, activation_name):
-        """Get activation function by name."""
-        if callable(activation_name):
-            return activation_name
-
-        activations = {
-            'relu': nn.ReLU(),
-            'tanh': nn.Tanh(),
-            'sigmoid': nn.Sigmoid(),
-            'leaky_relu': nn.LeakyReLU(),
-            'swish': nn.SiLU(),
-            'linear': nn.Identity()
-        }
-        return activations.get(activation_name.lower(), nn.ReLU())
-
     def get_decoder(self, input_shape=None):
         """
         Builds and returns the decoder model.
@@ -200,9 +229,19 @@ class VanillaDecoderTorch(nn.Module, ActivationsTorch):
         Returns:
             nn.Module: The decoder model.
         """
-        # FIX: Create and cache the decoder network instance
+        # Create decoder network with configuration (no parent reference)
         if self._decoder_model is None:
-            self._decoder_model = DecoderNetwork(self)
+            self._decoder_model = DecoderNetwork(
+                num_classes=self._decoder_number_samples_per_class["number_classes"],
+                output_shape=self._decoder_output_shape,
+                latent_dimension=self._decoder_latent_dimension,
+                number_neurons_decoder=self._decoder_number_neurons_decoder,
+                activation_function=self._decoder_intermediary_activation_function,
+                last_layer_activation=self._decoder_last_layer_activation,
+                dropout_decay_rate=self._decoder_dropout_decay_rate_decoder,
+                initializer_mean=self._decoder_initializer_mean,
+                initializer_deviation=self._decoder_initializer_deviation
+            )
 
         return self._decoder_model
 
