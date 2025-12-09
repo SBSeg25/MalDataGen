@@ -53,7 +53,7 @@ DEFAULT_ADVERSARIAL_DENSE_LAYERS_SETTINGS_G = [128]
 DEFAULT_ADVERSARIAL_DENSE_LAYERS_SETTINGS_D = [128]
 
 
-class AdversarialModel(VanillaGenerator, VanillaDiscriminator):
+class AdversarialModelTensorflow(VanillaGenerator, VanillaDiscriminator):
     """
       AdversarialModel
 

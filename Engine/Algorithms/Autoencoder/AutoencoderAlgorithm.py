@@ -37,7 +37,7 @@ try:
 
     import logging
 
-    from Engine.Algorithms.Autoencoder.Tensorflow import AutoencoderAlgorithmTensorflow
+    from Engine.Algorithms.Autoencoder.Tensorflow.AutoencoderAlgorithmTensorflow import AutoencoderAlgorithmTensorflow
     from Engine.Algorithms.Autoencoder.Torch.AutoencoderAlgorithmTorch import AutoencoderAlgorithmTorch
 
     framework = os.getenv("ML_FRAMEWORK", "tensorflow").lower()

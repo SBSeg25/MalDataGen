@@ -9,7 +9,7 @@ __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
 from Engine.Algorithms.DenoisingDiffusion.Torch.GaussianDenoisingDiffusionTorch import GaussianDiffusionTorch
-from Engine.Models.DenoisingDiffusion.DiffusionModelUnetTorch import UNetDenoisingModelTorch
+from Engine.Models.DenoisingDiffusion.Torch.DiffusionModelUnetTorch import UNetDenoisingModelTorch
 
 # MIT License
 #
@@ -44,7 +44,7 @@ try:
 
     from Engine.Algorithms.DenoisingDiffusion.AlgorithmDenoisingDiffusion import AlgorithmDenoisingDiffusion
     from Engine.Algorithms.DenoisingDiffusion.GaussianDenoisingDiffusion import GaussianDiffusion
-    from Engine.Models.DenoisingDiffusion.DiffusionModelUnet import UNetDenoisingModel
+    from Engine.Models.DenoisingDiffusion.Tensorflow.DiffusionModelUnet import UNetDenoisingModel
 
 except ImportError as error:
     logging.error(error)

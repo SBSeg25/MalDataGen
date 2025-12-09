@@ -8,7 +8,6 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/12/07'
 __credits__ = ['Synthetic Ocean AI']
 
-
 # MIT License
 #
 # Copyright (c) 2025 Synthetic Ocean AI
@@ -37,22 +36,27 @@ try:
 
     import logging
 
-    from Engine.Algorithms.Adversarial.Tensorflow.AdversarialAlgorithmTensorflow import AdversarialAlgorithmTensorflow
-    from Engine.Algorithms.Adversarial.Torch.AdversarialAlgorithmTorch import AdversarialAlgorithmTorch
+    from Engine.Models.Adversarial.Tensorflow.AdversarialModelTensorflow import AdversarialModelTensorflow
+    from Engine.Models.Adversarial.Torch.AdversarialModelTorch import AdversarialModelTorch
 
     framework = os.getenv("ML_FRAMEWORK", "tensorflow").lower()
 
     if framework == "pytorch":
-        AdversarialAlgorithmBase = AdversarialAlgorithmTorch
+        AdversarialModelBase = AdversarialModelTorch
 
     else:
-        AdversarialAlgorithmBase = AdversarialAlgorithmTensorflow
+        AdversarialModelBase = AdversarialModelTensorflow
 
 except ImportError as error:
     logging.error(error)
     sys.exit(-1)
 
-class AdversarialAlgorithm(AdversarialAlgorithmBase):
+# Debug: Check what we're actually importing
+print(f"Framework selected: {framework}")
+print(f"AdversarialModelBase type: {type(AdversarialModelBase)}")
+print(f"AdversarialModelBase: {AdversarialModelBase}")
+
+class AdversarialModel(AdversarialModelBase):
     def __init__(self, *args, **kwargs):
 
         super().__init__(*args, **kwargs)
