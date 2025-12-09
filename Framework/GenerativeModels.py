@@ -289,13 +289,33 @@ class GenerativeModels(Adversarial,
                              arguments.autoencoder_file_name_decoder,
                              arguments.autoencoder_path_output_models)
 
+        DenoisingDiffusionInstanceTorch.__init__(self,
+                                                 arguments.denoising_diffusion_unet_last_layer_activation,
+                                                 arguments.denoising_diffusion_latent_dimension,
+                                                 arguments.denoising_diffusion_unet_num_embedding_channels,
+                                                 arguments.denoising_diffusion_unet_channels_per_level,
+                                                 arguments.denoising_diffusion_unet_batch_size,
+                                                 arguments.denoising_diffusion_unet_attention_mode,
+                                                 arguments.denoising_diffusion_unet_num_residual_blocks,
+                                                 arguments.denoising_diffusion_unet_group_normalization,
+                                                 arguments.denoising_diffusion_unet_intermediary_activation,
+                                                 arguments.denoising_diffusion_unet_intermediary_activation_alpha,
+                                                 arguments.denoising_diffusion_unet_epochs,
+                                                 arguments.denoising_diffusion_gaussian_beta_start,
+                                                 arguments.denoising_diffusion_gaussian_beta_end,
+                                                 arguments.denoising_diffusion_gaussian_time_steps,
+                                                 arguments.denoising_diffusion_gaussian_clip_min,
+                                                 arguments.denoising_diffusion_gaussian_clip_max,
+                                                 arguments.denoising_diffusion_margin,
+                                                 arguments.denoising_diffusion_ema,
+                                                 arguments.denoising_diffusion_time_steps)
+
         QuantizedVAE.__init__(self, arguments)
         LatentDiffusionInstance.__init__(self, arguments)
         Wasserstein.__init__(self, arguments)
         WassersteinGP.__init__(self, arguments)
         VariationalAutoencoder.__init__(self, arguments)
         Smote.__init__(self, arguments)
-        DenoisingDiffusionInstanceTorch.__init__(self, arguments)
 
         self._callback_model_monitor = None
         self._callback_resources_monitor = None
