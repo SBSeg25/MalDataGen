@@ -52,7 +52,7 @@ import logging
 #     print()
 #     sys.exit(-1)
 
-from ..Classifiers.Classifiers import Classifiers
+from Engine.Classifiers.Classifiers import Classifiers
 DEFAULT_VERBOSITY = logging.INFO
 TIME_FORMAT = '%Y-%m-%d,%H:%M:%S'
 DEFAULT_DATA_TYPE = "float32"

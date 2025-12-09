@@ -8,6 +8,7 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
+from Engine.Algorithms.Autoencoder.AutoencoderAlgorithm import AutoencoderAlgorithm
 from Engine.Architectures.Autoencoder.AutoencoderModel import AutoencoderModel
 
 # MIT License
@@ -35,26 +36,42 @@ from Engine.Architectures.Autoencoder.AutoencoderModel import AutoencoderModel
 
 try:
     import sys
-
     import keras
-    import numpy
-
+    import numpy as np
     import logging
-    import tensorflow
+    import tensorflow as tf
 
     from tensorflow.keras.optimizers import Adam
-
     from tensorflow.keras.utils import to_categorical
-
-    from tensorflow.python.keras.losses import MeanSquaredError
+    from tensorflow.python.keras.losses import MeanSquaredError, BinaryCrossentropy
     from Engine.Callbacks.CallbackEarlyStop import EarlyStopping
 
-    from tensorflow.python.keras.losses import BinaryCrossentropy
-
-    from Engine.Algorithms.Autoencoder.AutoencoderAlgorithm import AutoencoderAlgorithm
 except ImportError as error:
     logging.error(error)
     sys.exit(-1)
+
+# Default values from your constants file
+DEFAULT_AUTOENCODER_LATENT_DIMENSION = 64
+DEFAULT_AUTOENCODER_TRAINING_ALGORITHM = "Adam"
+DEFAULT_AUTOENCODER_MODEL_ACTIVATION = "swish"
+DEFAULT_AUTOENCODER_DROPOUT_DECAY_RATE_ENCODER = 0.25
+DEFAULT_AUTOENCODER_DROPOUT_DECAY_RATE_DECODER = 0.25
+DEFAULT_AUTOENCODER_BATCH_SIZE = 128
+DEFAULT_AUTOENCODER_NUMBER_CLASSES = 2
+DEFAULT_AUTOENCODER_DENSE_LAYERS_SETTINGS_ENCODER = [320, 160]
+DEFAULT_AUTOENCODER_DENSE_LAYERS_SETTINGS_DECODER = [160, 320]
+DEFAULT_AUTOENCODER_MOMENTUM = 0.8
+DEFAULT_AUTOENCODER_LAST_ACTIVATION_LAYER = "sigmoid"
+DEFAULT_AUTOENCODER_INITIALIZER_MEAN = 0.0
+DEFAULT_AUTOENCODER_INITIALIZER_DEVIATION = 0.125
+DEFAULT_AUTOENCODER_NUMBER_EPOCHS = 350
+DEFAULT_AUTOENCODER_LOSS_FUNCTION = "mse"
+DEFAULT_AUTOENCODER_FILE_NAME_ENCODER = "encoder_model"
+DEFAULT_AUTOENCODER_FILE_NAME_DECODER = "decoder_model"
+DEFAULT_AUTOENCODER_PATH_OUTPUT_MODELS = "models_saved/"
+DEFAULT_AUTOENCODER_LATENT_MEAN_DISTRIBUTION = 0.5
+DEFAULT_AUTOENCODER_STANDER_DEVIATION = 0.125
+
 
 class Autoencoder:
     """
@@ -72,8 +89,8 @@ class Autoencoder:
         _autoencoder_activation_function (str): Activation function for hidden layers
         _autoencoder_dropout_decay_rate_encoder (float): Encoder dropout rate
         _autoencoder_dropout_decay_rate_decoder (float): Decoder dropout rate
-        _autoencoder_dense_layer_sizes_encoder (list): Encoder layer sizes
-        _autoencoder_dense_layer_sizes_decoder (list): Decoder layer sizes
+        _autoencoder_dense_layer_sizes_encoder (list[int]): Encoder layer sizes
+        _autoencoder_dense_layer_sizes_decoder (list[int]): Decoder layer sizes
         _autoencoder_batch_size (int): Size of training batches
         _autoencoder_number_epochs (int): Number of training epochs
         _autoencoder_number_classes (int): Number of output classes
@@ -88,43 +105,101 @@ class Autoencoder:
         _autoencoder_file_name_decoder (str): Decoder model filename
         _autoencoder_path_output_models (str): Path for saving models
     """
-    def __init__(self, arguments):
+
+    def __init__(
+            self,
+            autoencoder_latent_dimension: int = DEFAULT_AUTOENCODER_LATENT_DIMENSION,
+            autoencoder_training_algorithm: str = DEFAULT_AUTOENCODER_TRAINING_ALGORITHM,
+            autoencoder_activation_function: str = DEFAULT_AUTOENCODER_MODEL_ACTIVATION,
+            autoencoder_dropout_decay_rate_encoder: float = DEFAULT_AUTOENCODER_DROPOUT_DECAY_RATE_ENCODER,
+            autoencoder_dropout_decay_rate_decoder: float = DEFAULT_AUTOENCODER_DROPOUT_DECAY_RATE_DECODER,
+            autoencoder_dense_layer_sizes_encoder: list[int] = None,
+            autoencoder_dense_layer_sizes_decoder: list[int] = None,
+            autoencoder_batch_size: int = DEFAULT_AUTOENCODER_BATCH_SIZE,
+            autoencoder_number_epochs: int = DEFAULT_AUTOENCODER_NUMBER_EPOCHS,
+            autoencoder_number_classes: int = DEFAULT_AUTOENCODER_NUMBER_CLASSES,
+            autoencoder_loss_function: str = DEFAULT_AUTOENCODER_LOSS_FUNCTION,
+            autoencoder_momentum: float = DEFAULT_AUTOENCODER_MOMENTUM,
+            autoencoder_last_activation_layer: str = DEFAULT_AUTOENCODER_LAST_ACTIVATION_LAYER,
+            autoencoder_initializer_mean: float = DEFAULT_AUTOENCODER_INITIALIZER_MEAN,
+            autoencoder_initializer_deviation: float = DEFAULT_AUTOENCODER_INITIALIZER_DEVIATION,
+            autoencoder_latent_mean_distribution: float = DEFAULT_AUTOENCODER_LATENT_MEAN_DISTRIBUTION,
+            autoencoder_latent_stander_deviation: float = DEFAULT_AUTOENCODER_STANDER_DEVIATION,
+            autoencoder_file_name_encoder: str = DEFAULT_AUTOENCODER_FILE_NAME_ENCODER,
+            autoencoder_file_name_decoder: str = DEFAULT_AUTOENCODER_FILE_NAME_DECODER,
+            autoencoder_path_output_models: str = DEFAULT_AUTOENCODER_PATH_OUTPUT_MODELS,
+            autoencoder_algorithm: AutoencoderAlgorithm | None = None,
+            autoencoder_model: AutoencoderModel | None = None
+    ) -> None:
         """
         Initializes the autoencoder instance with configuration parameters.
 
         Args:
-            arguments (Namespace): Configuration object containing all required parameters:
-                - autoencoder_latent_dimension: Latent space size
-                - autoencoder_training_algorithm: Training algorithm
-                - autoencoder_activation_function: Activation function
-                - [All other parameters matching attribute names]
+            autoencoder_latent_dimension: Latent space size (default: 64)
+            autoencoder_training_algorithm: Training algorithm (default: "Adam")
+            autoencoder_activation_function: Activation function (default: "swish")
+            autoencoder_dropout_decay_rate_encoder: Encoder dropout rate (default: 0.25)
+            autoencoder_dropout_decay_rate_decoder: Decoder dropout rate (default: 0.25)
+            autoencoder_dense_layer_sizes_encoder: Encoder layer sizes (default: [320, 160])
+            autoencoder_dense_layer_sizes_decoder: Decoder layer sizes (default: [160, 320])
+            autoencoder_batch_size: Size of training batches (default: 128)
+            autoencoder_number_epochs: Number of training epochs (default: 350)
+            autoencoder_number_classes: Number of output classes (default: 2)
+            autoencoder_loss_function: Loss function for reconstruction (default: "mse")
+            autoencoder_momentum: Momentum parameter for optimization (default: 0.8)
+            autoencoder_last_activation_layer: Last layer activation function (default: "sigmoid")
+            autoencoder_initializer_mean: Mean for weight initialization (default: 0.0)
+            autoencoder_initializer_deviation: Std dev for weight initialization (default: 0.125)
+            autoencoder_latent_mean_distribution: Latent space mean (default: 0.5)
+            autoencoder_latent_stander_deviation: Latent space std dev (default: 0.125)
+            autoencoder_file_name_encoder: Encoder model filename (default: "encoder_model")
+            autoencoder_file_name_decoder: Decoder model filename (default: "decoder_model")
+            autoencoder_path_output_models: Path for saving models (default: "models_saved/")
+            autoencoder_algorithm: Optional pre-initialized AutoencoderAlgorithm instance (default: None)
+            autoencoder_model: Optional pre-initialized AutoencoderModel instance (default: None)
         """
-        self._autoencoder_algorithm = None
-        self._autoencoder_model = None
+        # Store pre-initialized instances if provided
+        self._autoencoder_algorithm: AutoencoderAlgorithm | None = autoencoder_algorithm
+        self._autoencoder_model: AutoencoderModel | None = autoencoder_model
 
         # ** Autoencoder Model Configuration Parameters **
-        self._autoencoder_latent_dimension = arguments.autoencoder_latent_dimension
-        self._autoencoder_training_algorithm = arguments.autoencoder_training_algorithm
-        self._autoencoder_activation_function = arguments.autoencoder_activation_function
-        self._autoencoder_dropout_decay_rate_encoder = arguments.autoencoder_dropout_decay_rate_encoder
-        self._autoencoder_dropout_decay_rate_decoder = arguments.autoencoder_dropout_decay_rate_decoder
-        self._autoencoder_dense_layer_sizes_encoder = arguments.autoencoder_dense_layer_sizes_encoder
-        self._autoencoder_dense_layer_sizes_decoder = arguments.autoencoder_dense_layer_sizes_decoder
-        self._autoencoder_batch_size = arguments.autoencoder_batch_size
-        self._autoencoder_number_epochs = arguments.autoencoder_number_epochs
-        self._autoencoder_number_classes = arguments.autoencoder_number_classes
-        self._autoencoder_loss_function = arguments.autoencoder_loss_function
-        self._autoencoder_momentum = arguments.autoencoder_momentum
-        self._autoencoder_last_activation_layer = arguments.autoencoder_last_activation_layer
-        self._autoencoder_initializer_mean = arguments.autoencoder_initializer_mean
-        self._autoencoder_initializer_deviation = arguments.autoencoder_initializer_deviation
-        self._autoencoder_latent_mean_distribution = arguments.autoencoder_latent_mean_distribution
-        self._autoencoder_latent_stander_deviation = arguments.autoencoder_latent_stander_deviation
-        self._autoencoder_file_name_encoder = arguments.autoencoder_file_name_encoder
-        self._autoencoder_file_name_decoder = arguments.autoencoder_file_name_decoder
-        self._autoencoder_path_output_models = arguments.autoencoder_path_output_models
+        self._autoencoder_latent_dimension: int = autoencoder_latent_dimension
+        self._autoencoder_training_algorithm: str = autoencoder_training_algorithm
+        self._autoencoder_activation_function: str = autoencoder_activation_function
+        self._autoencoder_dropout_decay_rate_encoder: float = autoencoder_dropout_decay_rate_encoder
+        self._autoencoder_dropout_decay_rate_decoder: float = autoencoder_dropout_decay_rate_decoder
 
-    def _get_autoencoder(self, input_shape):
+        # Handle mutable default values safely
+        self._autoencoder_dense_layer_sizes_encoder: list[int] = (
+            autoencoder_dense_layer_sizes_encoder
+            if autoencoder_dense_layer_sizes_encoder is not None
+            else DEFAULT_AUTOENCODER_DENSE_LAYERS_SETTINGS_ENCODER.copy()
+        )
+        self._autoencoder_dense_layer_sizes_decoder: list[int] = (
+            autoencoder_dense_layer_sizes_decoder
+            if autoencoder_dense_layer_sizes_decoder is not None
+            else DEFAULT_AUTOENCODER_DENSE_LAYERS_SETTINGS_DECODER.copy()
+        )
+
+        self._autoencoder_batch_size: int = autoencoder_batch_size
+        self._autoencoder_number_epochs: int = autoencoder_number_epochs
+        self._autoencoder_number_classes: int = autoencoder_number_classes
+        self._autoencoder_loss_function: str = autoencoder_loss_function
+        self._autoencoder_momentum: float = autoencoder_momentum
+        self._autoencoder_last_activation_layer: str = autoencoder_last_activation_layer
+        self._autoencoder_initializer_mean: float = autoencoder_initializer_mean
+        self._autoencoder_initializer_deviation: float = autoencoder_initializer_deviation
+        self._autoencoder_latent_mean_distribution: float = autoencoder_latent_mean_distribution
+        self._autoencoder_latent_stander_deviation: float = autoencoder_latent_stander_deviation
+        self._autoencoder_file_name_encoder: str = autoencoder_file_name_encoder
+        self._autoencoder_file_name_decoder: str = autoencoder_file_name_decoder
+        self._autoencoder_path_output_models: str = autoencoder_path_output_models
+
+        # Flag to indicate if instances were provided
+        self._has_external_algorithm: bool = autoencoder_algorithm is not None
+        self._has_external_model: bool = autoencoder_model is not None
+
+    def _get_autoencoder(self, input_shape: tuple[int, ...]) -> None:
         """
         Initialize and configure the Autoencoder model, including encoder and decoder components.
 
@@ -132,9 +207,10 @@ class Autoencoder:
         class and links them with the `AutoencoderAlgorithm` class. The model is initialized with specified configurations
         such as latent dimension, activation functions, dropout rates, and layer sizes for both the encoder and decoder.
 
+        If pre-initialized instances were provided in the constructor, they are used instead of creating new ones.
+
         Args:
-            input_shape (tuple):
-                The shape of the input data, which determines the output shape for the models.
+            input_shape: The shape of the input data, which determines the output shape for the models.
 
         Initializes:
             self._autoencoder_model:
@@ -143,57 +219,94 @@ class Autoencoder:
             self._autoencoder_algorithm:
                 An instance of the `AutoencoderAlgorithm` class, managing the autoencoder training process, including
                 the encoder and decoder models, loss function, latent distributions, and model file paths.
-
         """
+        # Only create new model if none was provided
+        if not self._has_external_model:
+            # Autoencoder Model setup for Encoder and Decoder
+            self._autoencoder_model = AutoencoderModel(
+                latent_dimension=self._autoencoder_latent_dimension,
+                output_shape=input_shape,
+                activation_function=self._autoencoder_activation_function,
+                initializer_mean=self._autoencoder_initializer_mean,
+                initializer_deviation=self._autoencoder_initializer_deviation,
+                dropout_decay_encoder=self._autoencoder_dropout_decay_rate_encoder,
+                dropout_decay_decoder=self._autoencoder_dropout_decay_rate_decoder,
+                last_layer_activation=self._autoencoder_last_activation_layer,
+                number_neurons_encoder=self._autoencoder_dense_layer_sizes_encoder,
+                number_neurons_decoder=self._autoencoder_dense_layer_sizes_decoder,
+                dataset_type=np.float32,
+                number_samples_per_class=self._number_samples_per_class
+            )
 
-        # Autoencoder Model setup for Encoder and Decoder
-        self._autoencoder_model = AutoencoderModel(latent_dimension=self._autoencoder_latent_dimension,
-                                                   output_shape=input_shape,
-                                                   activation_function=self._autoencoder_activation_function,
-                                                   initializer_mean=self._autoencoder_initializer_mean,
-                                                   initializer_deviation=self._autoencoder_initializer_deviation,
-                                                   dropout_decay_encoder=self._autoencoder_dropout_decay_rate_encoder,
-                                                   dropout_decay_decoder=self._autoencoder_dropout_decay_rate_decoder,
-                                                   last_layer_activation=self._autoencoder_last_activation_layer,
-                                                   number_neurons_encoder=self._autoencoder_dense_layer_sizes_encoder,
-                                                   number_neurons_decoder=self._autoencoder_dense_layer_sizes_decoder,
-                                                   dataset_type=numpy.float32,
-                                                   number_samples_per_class = self._number_samples_per_class)
+        # Only create new algorithm if none was provided
+        if not self._has_external_algorithm:
+            # Ensure we have a model to get encoder and decoder from
+            if self._autoencoder_model is None:
+                raise ValueError("AutoencoderModel instance is required but was not provided.")
 
-        # Autoencoder Algorithm setup for training and model operations
-        self._autoencoder_algorithm = AutoencoderAlgorithm(encoder_model=self._autoencoder_model.get_encoder(input_shape),
-                                                           decoder_model=self._autoencoder_model.get_decoder(input_shape),
-                                                           loss_function=self._autoencoder_loss_function,
-                                                           file_name_encoder=self._autoencoder_file_name_encoder,
-                                                           file_name_decoder=self._autoencoder_file_name_decoder,
-                                                           models_saved_path=self._autoencoder_path_output_models,
-                                                           latent_mean_distribution=self._autoencoder_latent_mean_distribution,
-                                                           latent_stander_deviation=self._autoencoder_latent_stander_deviation,
-                                                           latent_dimension=self._autoencoder_latent_dimension)
+            # Autoencoder Algorithm setup for training and model operations
+            self._autoencoder_algorithm = AutoencoderAlgorithm(
+                encoder_model=self._autoencoder_model.get_encoder(input_shape),
+                decoder_model=self._autoencoder_model.get_decoder(input_shape),
+                loss_function=self._autoencoder_loss_function,
+                file_name_encoder=self._autoencoder_file_name_encoder,
+                file_name_decoder=self._autoencoder_file_name_decoder,
+                models_saved_path=self._autoencoder_path_output_models,
+                latent_mean_distribution=self._autoencoder_latent_mean_distribution,
+                latent_stander_deviation=self._autoencoder_latent_stander_deviation,
+                latent_dimension=self._autoencoder_latent_dimension
+            )
+        else:
+            # If algorithm was provided externally, update its configuration if needed
+            if hasattr(self._autoencoder_algorithm, 'loss_function'):
+                self._autoencoder_algorithm.loss_function = self._autoencoder_loss_function
+            if hasattr(self._autoencoder_algorithm, 'file_name_encoder'):
+                self._autoencoder_algorithm.file_name_encoder = self._autoencoder_file_name_encoder
+            if hasattr(self._autoencoder_algorithm, 'file_name_decoder'):
+                self._autoencoder_algorithm.file_name_decoder = self._autoencoder_file_name_decoder
+            if hasattr(self._autoencoder_algorithm, 'models_saved_path'):
+                self._autoencoder_algorithm.models_saved_path = self._autoencoder_path_output_models
+            if hasattr(self._autoencoder_algorithm, 'latent_mean_distribution'):
+                self._autoencoder_algorithm.latent_mean_distribution = self._autoencoder_latent_mean_distribution
+            if hasattr(self._autoencoder_algorithm, 'latent_stander_deviation'):
+                self._autoencoder_algorithm.latent_stander_deviation = self._autoencoder_latent_stander_deviation
+            if hasattr(self._autoencoder_algorithm, 'latent_dimension'):
+                self._autoencoder_algorithm.latent_dimension = self._autoencoder_latent_dimension
 
-    def _training_autoencoder_model(self, input_shape, arguments, x_real_samples, y_real_samples):
+    def _training_autoencoder_model(
+            self,
+            input_shape: tuple[int, ...],
+            arguments: 'argparse.Namespace',
+            x_real_samples: np.ndarray,
+            y_real_samples: np.ndarray
+    ) -> None:
         """
         Executes the complete autoencoder training process.
 
         Args:
-            input_shape (tuple): Shape of input data samples
-            arguments (Namespace): Configuration parameters
-            x_real_samples (ndarray): Training data samples
-            y_real_samples (ndarray): Corresponding class labels
+            input_shape: Shape of input data samples
+            arguments: Configuration parameters namespace
+            x_real_samples: Training data samples
+            y_real_samples: Corresponding class labels
 
         Process:
-            1. Initializes model architecture
+            1. Initializes model architecture (or uses provided)
             2. Configures loss function
             3. Sets up training callbacks
             4. Executes autoencoder training
             5. Manages model saving and monitoring
         """
-        # Initialize the autoencoder model
+        # Initialize the autoencoder model (or use provided)
         self._get_autoencoder(input_shape)
 
-        # Print the model summaries for the encoder and decoder
-        self._autoencoder_model.get_encoder(input_shape)
-        self._autoencoder_model.get_decoder(input_shape)
+        # Print the model summaries for the encoder and decoder if available
+        if self._autoencoder_model is not None:
+            self._autoencoder_model.get_encoder(input_shape)
+            self._autoencoder_model.get_decoder(input_shape)
+
+        # Ensure we have an algorithm
+        if self._autoencoder_algorithm is None:
+            raise ValueError("AutoencoderAlgorithm instance is required but was not provided or created.")
 
         # Compile the autoencoder algorithm with the specified loss function
         self._autoencoder_algorithm.compile(loss=arguments.autoencoder_loss_function)
@@ -205,179 +318,231 @@ class Autoencoder:
             callbacks_list.append(self._callback_early_stop)
 
         # Fit the autoencoder model
-        self._autoencoder_algorithm.fit((
-            x_real_samples, to_categorical(y_real_samples,
-                                           num_classes=self._number_samples_per_class["number_classes"])),
-            x_real_samples, epochs=self._autoencoder_number_epochs, batch_size=self._autoencoder_batch_size,
-            callbacks=callbacks_list)
+        self._autoencoder_algorithm.fit(
+            (x_real_samples,
+             to_categorical(y_real_samples, num_classes=self._number_samples_per_class["number_classes"])),
+            x_real_samples,
+            epochs=self._autoencoder_number_epochs,
+            batch_size=self._autoencoder_batch_size,
+            callbacks=callbacks_list
+        )
+
+    # Additional getters for the algorithm and model
+    @property
+    def autoencoder_algorithm(self) -> AutoencoderAlgorithm | None:
+        """Get the autoencoder algorithm instance."""
+        return self._autoencoder_algorithm
+
+    @property
+    def autoencoder_model(self) -> AutoencoderModel | None:
+        """Get the autoencoder model instance."""
+        return self._autoencoder_model
 
     # Getter and setter for autoencoder_latent_dimension
     @property
-    def autoencoder_latent_dimension(self):
+    def autoencoder_latent_dimension(self) -> int:
+        """Get the latent space dimension."""
         return self._autoencoder_latent_dimension
 
     @autoencoder_latent_dimension.setter
-    def autoencoder_latent_dimension(self, value):
+    def autoencoder_latent_dimension(self, value: int) -> None:
+        """Set the latent space dimension."""
         self._autoencoder_latent_dimension = value
 
     # Getter and setter for autoencoder_training_algorithm
     @property
-    def autoencoder_training_algorithm(self):
+    def autoencoder_training_algorithm(self) -> str:
+        """Get the training algorithm."""
         return self._autoencoder_training_algorithm
 
     @autoencoder_training_algorithm.setter
-    def autoencoder_training_algorithm(self, value):
+    def autoencoder_training_algorithm(self, value: str) -> None:
+        """Set the training algorithm."""
         self._autoencoder_training_algorithm = value
 
     # Getter and setter for autoencoder_activation_function
     @property
-    def autoencoder_activation_function(self):
+    def autoencoder_activation_function(self) -> str:
+        """Get the activation function."""
         return self._autoencoder_activation_function
 
     @autoencoder_activation_function.setter
-    def autoencoder_activation_function(self, value):
+    def autoencoder_activation_function(self, value: str) -> None:
+        """Set the activation function."""
         self._autoencoder_activation_function = value
 
     # Getter and setter for autoencoder_dropout_decay_rate_encoder
     @property
-    def autoencoder_dropout_decay_rate_encoder(self):
+    def autoencoder_dropout_decay_rate_encoder(self) -> float:
+        """Get the encoder dropout rate."""
         return self._autoencoder_dropout_decay_rate_encoder
 
     @autoencoder_dropout_decay_rate_encoder.setter
-    def autoencoder_dropout_decay_rate_encoder(self, value):
+    def autoencoder_dropout_decay_rate_encoder(self, value: float) -> None:
+        """Set the encoder dropout rate."""
         self._autoencoder_dropout_decay_rate_encoder = value
 
     # Getter and setter for autoencoder_dropout_decay_rate_decoder
     @property
-    def autoencoder_dropout_decay_rate_decoder(self):
+    def autoencoder_dropout_decay_rate_decoder(self) -> float:
+        """Get the decoder dropout rate."""
         return self._autoencoder_dropout_decay_rate_decoder
 
     @autoencoder_dropout_decay_rate_decoder.setter
-    def autoencoder_dropout_decay_rate_decoder(self, value):
+    def autoencoder_dropout_decay_rate_decoder(self, value: float) -> None:
+        """Set the decoder dropout rate."""
         self._autoencoder_dropout_decay_rate_decoder = value
 
     # Getter and setter for autoencoder_dense_layer_sizes_encoder
     @property
-    def autoencoder_dense_layer_sizes_encoder(self):
+    def autoencoder_dense_layer_sizes_encoder(self) -> list[int]:
+        """Get the encoder layer sizes."""
         return self._autoencoder_dense_layer_sizes_encoder
 
     @autoencoder_dense_layer_sizes_encoder.setter
-    def autoencoder_dense_layer_sizes_encoder(self, value):
+    def autoencoder_dense_layer_sizes_encoder(self, value: list[int]) -> None:
+        """Set the encoder layer sizes."""
         self._autoencoder_dense_layer_sizes_encoder = value
 
     # Getter and setter for autoencoder_dense_layer_sizes_decoder
     @property
-    def autoencoder_dense_layer_sizes_decoder(self):
+    def autoencoder_dense_layer_sizes_decoder(self) -> list[int]:
+        """Get the decoder layer sizes."""
         return self._autoencoder_dense_layer_sizes_decoder
 
     @autoencoder_dense_layer_sizes_decoder.setter
-    def autoencoder_dense_layer_sizes_decoder(self, value):
+    def autoencoder_dense_layer_sizes_decoder(self, value: list[int]) -> None:
+        """Set the decoder layer sizes."""
         self._autoencoder_dense_layer_sizes_decoder = value
 
     # Getter and setter for autoencoder_batch_size
     @property
-    def autoencoder_batch_size(self):
+    def autoencoder_batch_size(self) -> int:
+        """Get the batch size."""
         return self._autoencoder_batch_size
 
     @autoencoder_batch_size.setter
-    def autoencoder_batch_size(self, value):
+    def autoencoder_batch_size(self, value: int) -> None:
+        """Set the batch size."""
         self._autoencoder_batch_size = value
 
     # Getter and setter for autoencoder_number_classes
     @property
-    def autoencoder_number_classes(self):
+    def autoencoder_number_classes(self) -> int:
+        """Get the number of classes."""
         return self._autoencoder_number_classes
 
     @autoencoder_number_classes.setter
-    def autoencoder_number_classes(self, value):
+    def autoencoder_number_classes(self, value: int) -> None:
+        """Set the number of classes."""
         self._autoencoder_number_classes = value
 
     # Getter and setter for autoencoder_loss_function
     @property
-    def autoencoder_loss_function(self):
+    def autoencoder_loss_function(self) -> str:
+        """Get the loss function."""
         return self._autoencoder_loss_function
 
     @autoencoder_loss_function.setter
-    def autoencoder_loss_function(self, value):
+    def autoencoder_loss_function(self, value: str) -> None:
+        """Set the loss function."""
         self._autoencoder_loss_function = value
 
     # Getter and setter for autoencoder_momentum
     @property
-    def autoencoder_momentum(self):
+    def autoencoder_momentum(self) -> float:
+        """Get the momentum parameter."""
         return self._autoencoder_momentum
 
     @autoencoder_momentum.setter
-    def autoencoder_momentum(self, value):
+    def autoencoder_momentum(self, value: float) -> None:
+        """Set the momentum parameter."""
         self._autoencoder_momentum = value
 
     # Getter and setter for autoencoder_last_activation_layer
     @property
-    def autoencoder_last_activation_layer(self):
+    def autoencoder_last_activation_layer(self) -> str:
+        """Get the last layer activation function."""
         return self._autoencoder_last_activation_layer
 
     @autoencoder_last_activation_layer.setter
-    def autoencoder_last_activation_layer(self, value):
+    def autoencoder_last_activation_layer(self, value: str) -> None:
+        """Set the last layer activation function."""
         self._autoencoder_last_activation_layer = value
 
     # Getter and setter for autoencoder_initializer_mean
     @property
-    def autoencoder_initializer_mean(self):
+    def autoencoder_initializer_mean(self) -> float:
+        """Get the weight initialization mean."""
         return self._autoencoder_initializer_mean
 
     @autoencoder_initializer_mean.setter
-    def autoencoder_initializer_mean(self, value):
+    def autoencoder_initializer_mean(self, value: float) -> None:
+        """Set the weight initialization mean."""
         self._autoencoder_initializer_mean = value
 
     # Getter and setter for autoencoder_initializer_deviation
     @property
-    def autoencoder_initializer_deviation(self):
+    def autoencoder_initializer_deviation(self) -> float:
+        """Get the weight initialization standard deviation."""
         return self._autoencoder_initializer_deviation
 
     @autoencoder_initializer_deviation.setter
-    def autoencoder_initializer_deviation(self, value):
+    def autoencoder_initializer_deviation(self, value: float) -> None:
+        """Set the weight initialization standard deviation."""
         self._autoencoder_initializer_deviation = value
 
     # Getter and setter for autoencoder_latent_mean_distribution
     @property
-    def autoencoder_latent_mean_distribution(self):
+    def autoencoder_latent_mean_distribution(self) -> float:
+        """Get the latent space mean distribution."""
         return self._autoencoder_latent_mean_distribution
 
     @autoencoder_latent_mean_distribution.setter
-    def autoencoder_latent_mean_distribution(self, value):
+    def autoencoder_latent_mean_distribution(self, value: float) -> None:
+        """Set the latent space mean distribution."""
         self._autoencoder_latent_mean_distribution = value
 
     # Getter and setter for autoencoder_latent_stander_deviation
     @property
-    def autoencoder_latent_stander_deviation(self):
+    def autoencoder_latent_stander_deviation(self) -> float:
+        """Get the latent space standard deviation."""
         return self._autoencoder_latent_stander_deviation
 
     @autoencoder_latent_stander_deviation.setter
-    def autoencoder_latent_stander_deviation(self, value):
+    def autoencoder_latent_stander_deviation(self, value: float) -> None:
+        """Set the latent space standard deviation."""
         self._autoencoder_latent_stander_deviation = value
 
     # Getter and setter for autoencoder_file_name_encoder
     @property
-    def autoencoder_file_name_encoder(self):
+    def autoencoder_file_name_encoder(self) -> str:
+        """Get the encoder model filename."""
         return self._autoencoder_file_name_encoder
 
     @autoencoder_file_name_encoder.setter
-    def autoencoder_file_name_encoder(self, value):
+    def autoencoder_file_name_encoder(self, value: str) -> None:
+        """Set the encoder model filename."""
         self._autoencoder_file_name_encoder = value
 
     # Getter and setter for autoencoder_file_name_decoder
     @property
-    def autoencoder_file_name_decoder(self):
+    def autoencoder_file_name_decoder(self) -> str:
+        """Get the decoder model filename."""
         return self._autoencoder_file_name_decoder
 
     @autoencoder_file_name_decoder.setter
-    def autoencoder_file_name_decoder(self, value):
+    def autoencoder_file_name_decoder(self, value: str) -> None:
+        """Set the decoder model filename."""
         self._autoencoder_file_name_decoder = value
 
     # Getter and setter for autoencoder_path_output_models
     @property
-    def autoencoder_path_output_models(self):
+    def autoencoder_path_output_models(self) -> str:
+        """Get the path for saving models."""
         return self._autoencoder_path_output_models
 
     @autoencoder_path_output_models.setter
-    def autoencoder_path_output_models(self, value):
+    def autoencoder_path_output_models(self, value: str) -> None:
+        """Set the path for saving models."""
         self._autoencoder_path_output_models = value

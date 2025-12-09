@@ -8,18 +8,6 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
-from Engine.Models.DenoisingDiffusion import DenoisingDiffusionInstanceTorch
-from Engine.Models.Adversarial import Adversarial
-from Engine.Models.Autoencoder import Autoencoder
-from Engine.Algorithms.LatentDiffusion.LatentDiffusionInstance import LatentDiffusionInstance
-from Engine.Models.QuantizedVAE import QuantizedVAE
-from Engine.Algorithms.RandomNoise.AlgorithmRandomNoise import RandomNoiseAlgorithm
-from Engine.Callbacks.CallbackModel import ModelMonitorCallback
-from Engine.Callbacks.CallbackResources import ResourceMonitorCallback
-from Engine.Models.Smote import Smote
-from Engine.Models.VariationalAutoencoder import VariationalAutoencoder
-from Engine.Models.Wasserstein import Wasserstein
-from Engine.Models.WassersteinGP import WassersteinGP
 
 # MIT License
 #
@@ -63,6 +51,20 @@ try:
     from tensorflow.python.keras.losses import BinaryCrossentropy
 
     from Engine.Algorithms.Copy.CopyAlgorithm import CopyAlgorithm
+
+    from Engine.Models.DenoisingDiffusion import DenoisingDiffusionInstanceTorch
+    from Engine.Models.Adversarial import Adversarial
+    from Engine.Models.Autoencoder import Autoencoder
+    from Engine.Algorithms.LatentDiffusion.LatentDiffusionInstance import LatentDiffusionInstance
+    from Engine.Models.QuantizedVAE import QuantizedVAE
+    from Engine.Algorithms.RandomNoise.AlgorithmRandomNoise import RandomNoiseAlgorithm
+    from Engine.Callbacks.CallbackModel import ModelMonitorCallback
+    from Engine.Callbacks.CallbackResources import ResourceMonitorCallback
+    from Engine.Models.Smote import Smote
+    from Engine.Models.VariationalAutoencoder import VariationalAutoencoder
+    from Engine.Models.Wasserstein import Wasserstein
+    from Engine.Models.WassersteinGP import WassersteinGP
+
 
 except ImportError as error:
     logging.error(error)
@@ -241,8 +243,52 @@ class GenerativeModels(Adversarial,
                               settings necessary for training.
         """
 
-        Adversarial.__init__(self, arguments)
-        Autoencoder.__init__(self, arguments)
+        Adversarial.__init__(self,
+                             arguments.adversarial_number_epochs,
+                             arguments.adversarial_batch_size,
+                             arguments.adversarial_initializer_mean,
+                             arguments.adversarial_initializer_deviation,
+                             arguments.adversarial_latent_dimension,
+                             arguments.adversarial_training_algorithm,
+                             arguments.adversarial_activation_function,
+                             arguments.adversarial_dropout_decay_rate_g,
+                             arguments.adversarial_dropout_decay_rate_d,
+                             arguments.adversarial_dense_layer_sizes_g,
+                             arguments.adversarial_dense_layer_sizes_d,
+                             arguments.adversarial_loss_generator,
+                             arguments.adversarial_loss_discriminator,
+                             arguments.adversarial_smoothing_rate,
+                             arguments.adversarial_latent_mean_distribution,
+                             arguments.adversarial_latent_stander_deviation,
+                             arguments.adversarial_file_name_discriminator,
+                             arguments.adversarial_file_name_generator,
+                             arguments.adversarial_path_output_models,
+                             arguments.adversarial_last_layer_activation,
+                             arguments.variational_autoencoder_number_epochs)
+
+
+        Autoencoder.__init__(self,
+                             arguments.autoencoder_latent_dimension,
+                             arguments.autoencoder_training_algorithm,
+                             arguments.autoencoder_activation_function,
+                             arguments.autoencoder_dropout_decay_rate_encoder,
+                             arguments.autoencoder_dropout_decay_rate_decoder,
+                             arguments.autoencoder_dense_layer_sizes_encoder,
+                             arguments.autoencoder_dense_layer_sizes_decoder,
+                             arguments.autoencoder_batch_size,
+                             arguments.autoencoder_number_epochs,
+                             arguments.autoencoder_number_classes,
+                             arguments.autoencoder_loss_function,
+                             arguments.autoencoder_momentum,
+                             arguments.autoencoder_last_activation_layer,
+                             arguments.autoencoder_initializer_mean,
+                             arguments.autoencoder_initializer_deviation,
+                             arguments.autoencoder_latent_mean_distribution,
+                             arguments.autoencoder_latent_stander_deviation,
+                             arguments.autoencoder_file_name_encoder,
+                             arguments.autoencoder_file_name_decoder,
+                             arguments.autoencoder_path_output_models)
+
         QuantizedVAE.__init__(self, arguments)
         LatentDiffusionInstance.__init__(self, arguments)
         Wasserstein.__init__(self, arguments)

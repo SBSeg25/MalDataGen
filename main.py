@@ -8,8 +8,6 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Kayuã Oleques']
 
-import os
-
 # MIT License
 #
 # Copyright (c) 2025 Synthetic Ocean AI
@@ -50,8 +48,8 @@ try:
     from Engine.DataIO.CSVLoader import autosave
     from Engine.DataIO.CSVLoader import autoload
 
-    from Engine.Arguments.Arguments import Arguments
-    from Engine.Arguments.Arguments import arguments
+    from Framework.Arguments.Arguments import Arguments
+    from Framework.Arguments.Arguments import arguments
 
     from Engine.Metrics.Metrics import import_metrics
 

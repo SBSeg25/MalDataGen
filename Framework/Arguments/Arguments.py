@@ -40,50 +40,50 @@ try:
 
     from logging import FileHandler
 
-    from Engine.Arguments.LoggerSetup import LoggerSetup
+    from Framework.Arguments.LoggerSetup import LoggerSetup
 
     from Engine.DataIO.DirectoryManager import DirectoryManager
-    from Engine.Arguments.ArgumentsSMOTE import add_argument_smote
+    from Framework.Arguments.ArgumentsSMOTE import add_argument_smote
 
-    from Engine.Arguments.ArgumentsFramework import add_argument_framework
-    from Engine.Arguments.Classifiers.ArgumentsKNN import add_argument_knn
-    from Engine.Arguments.ArgumentsDataLoader import add_argument_data_load
-    from Engine.Arguments.ArgumentsEarlyStop import add_argument_early_stop
-    from Engine.Arguments.ArgumentsOptimizer import add_argument_optimizers
+    from Framework.Arguments.ArgumentsFramework import add_argument_framework
+    from Framework.Arguments.Classifiers.ArgumentsKNN import add_argument_knn
+    from Framework.Arguments.ArgumentsDataLoader import add_argument_data_load
+    from Framework.Arguments.ArgumentsEarlyStop import add_argument_early_stop
+    from Framework.Arguments.ArgumentsOptimizer import add_argument_optimizers
 
-    from Engine.Arguments.ArgumentsAdversarial import add_argument_adversarial
-    from Engine.Arguments.ArgumentsAutoencoder import add_argument_autoencoder
+    from Framework.Arguments.ArgumentsAdversarial import add_argument_adversarial
+    from Framework.Arguments.ArgumentsAutoencoder import add_argument_autoencoder
 
-    from Engine.Arguments.ArgumentsRandomNoise import add_argument_random_noise
+    from Framework.Arguments.ArgumentsRandomNoise import add_argument_random_noise
 
-    from Engine.Arguments.Classifiers.ArgumentsKMeans import add_argument_k_means
-    from Engine.Arguments.ArgumentsQuantizedVAE import add_argument_quantized_vae
+    from Framework.Arguments.Classifiers.ArgumentsKMeans import add_argument_k_means
+    from Framework.Arguments.ArgumentsQuantizedVAE import add_argument_quantized_vae
 
-    from Engine.Arguments.ArgumentsWassersteinGAN import add_argument_wasserstein_gan
+    from Framework.Arguments.ArgumentsWassersteinGAN import add_argument_wasserstein_gan
 
-    from Engine.Arguments.ArgumentsLatentDiffusion import add_argument_latent_diffusion
+    from Framework.Arguments.ArgumentsLatentDiffusion import add_argument_latent_diffusion
 
-    from Engine.Arguments.ArgumentsWassersteinGANGP import add_argument_wasserstein_gan_gp
+    from Framework.Arguments.ArgumentsWassersteinGANGP import add_argument_wasserstein_gan_gp
 
-    from Engine.Arguments.Classifiers.ArgumentsPerceptron import add_argument_perceptron
-    from Engine.Arguments.Classifiers.ArgumentsNaiveBayes import add_argument_naive_bayes
+    from Framework.Arguments.Classifiers.ArgumentsPerceptron import add_argument_perceptron
+    from Framework.Arguments.Classifiers.ArgumentsNaiveBayes import add_argument_naive_bayes
 
-    from Engine.Arguments.ArgumentsDenoisingDiffusion import add_argument_denoising_diffusion
-    from Engine.Arguments.Classifiers.ArgumentsDecisionTree import add_argument_decision_tree
-    from Engine.Arguments.Classifiers.ArgumentsRandomForest import add_argument_random_forest
+    from Framework.Arguments.ArgumentsDenoisingDiffusion import add_argument_denoising_diffusion
+    from Framework.Arguments.Classifiers.ArgumentsDecisionTree import add_argument_decision_tree
+    from Framework.Arguments.Classifiers.ArgumentsRandomForest import add_argument_random_forest
 
-    from Engine.Arguments.ArgumentsVariationalAutoencoder import add_argument_variation_autoencoder
-    from Engine.Arguments.Classifiers.ArgumentsGaussianProcess import add_argument_gaussian_process
+    from Framework.Arguments.ArgumentsVariationalAutoencoder import add_argument_variation_autoencoder
+    from Framework.Arguments.Classifiers.ArgumentsGaussianProcess import add_argument_gaussian_process
 
-    from Engine.Arguments.Classifiers.ArgumentsGradientBoosting import add_argument_gradient_boosting
-    from Engine.Arguments.Classifiers.ArgumentsLinearRegression import add_argument_linear_regression
+    from Framework.Arguments.Classifiers.ArgumentsGradientBoosting import add_argument_gradient_boosting
+    from Framework.Arguments.Classifiers.ArgumentsLinearRegression import add_argument_linear_regression
 
-    from Engine.Arguments.Classifiers.ArgumentsSpectralClustering import add_argument_spectral_clustering
-    from Engine.Arguments.Classifiers.ArgumentsSuportVectorMachine import add_argument_support_vector_machine
+    from Framework.Arguments.Classifiers.ArgumentsSpectralClustering import add_argument_spectral_clustering
+    from Framework.Arguments.Classifiers.ArgumentsSuportVectorMachine import add_argument_support_vector_machine
 
-    from Engine.Arguments.Classifiers.ArgumentsStochasticGradientDescent import add_argument_stochastic_gradient_descent
+    from Framework.Arguments.Classifiers.ArgumentsStochasticGradientDescent import add_argument_stochastic_gradient_descent
 
-    from Engine.Arguments.Classifiers.ArgumentsQuadraticDiscriminantAnalysis import add_argument_quadratic_discriminant_analysis
+    from Framework.Arguments.Classifiers.ArgumentsQuadraticDiscriminantAnalysis import add_argument_quadratic_discriminant_analysis
 
 except ImportError as error:
     print(error)

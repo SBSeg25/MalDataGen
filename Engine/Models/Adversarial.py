@@ -37,18 +37,14 @@ try:
     import sys
 
     import keras
-    import numpy
+    import numpy as np
 
     import logging
-    import tensorflow
+    import tensorflow as tf
 
     from tensorflow.keras.optimizers import Adam
-
     from tensorflow.keras.utils import to_categorical
-
-    from tensorflow.python.keras.losses import MeanSquaredError
-
-    from tensorflow.python.keras.losses import BinaryCrossentropy
+    from tensorflow.python.keras.losses import MeanSquaredError, BinaryCrossentropy
 
     from Engine.Algorithms.Adversarial.AdversarialAlgorithm import AdversarialAlgorithm
 
@@ -56,6 +52,29 @@ except ImportError as error:
     logging.error(error)
     sys.exit(-1)
 
+# Default values from your constants file
+DEFAULT_ADVERSARIAL_NUMBER_EPOCHS = 20
+DEFAULT_ADVERSARIAL_LATENT_DIMENSION = 128
+DEFAULT_ADVERSARIAL_TRAINING_ALGORITHM = "Adam"
+DEFAULT_ADVERSARIAL_INTERMEDIARY_ACTIVATION = "LeakyReLU"
+DEFAULT_ADVERSARIAL_LAST_ACTIVATION_LAYER = "Sigmoid"
+DEFAULT_ADVERSARIAL_DROPOUT_DECAY_RATE_G = 0.2
+DEFAULT_ADVERSARIAL_DROPOUT_DECAY_RATE_D = 0.4
+DEFAULT_ADVERSARIAL_INITIALIZER_MEAN = 0.0
+DEFAULT_ADVERSARIAL_INITIALIZER_DEVIATION = 0.5
+DEFAULT_ADVERSARIAL_BATCH_SIZE = 32
+DEFAULT_ADVERSARIAL_DENSE_LAYERS_SETTINGS_G = [128]
+DEFAULT_ADVERSARIAL_DENSE_LAYERS_SETTINGS_D = [128]
+DEFAULT_ADVERSARIAL_RANDOM_LATENT_STANDER_DEVIATION = 1.0
+DEFAULT_ADVERSARIAL_LOSS_GENERATOR = 'binary_crossentropy'
+DEFAULT_ADVERSARIAL_LOSS_DISCRIMINATOR = 'binary_crossentropy'
+DEFAULT_ADVERSARIAL_SMOOTHING_RATE = 0.15
+DEFAULT_ADVERSARIAL_LATENT_MEAN_DISTRIBUTION = 0.0
+DEFAULT_ADVERSARIAL_LATENT_STANDER_DEVIATION = 1.0
+DEFAULT_ADVERSARIAL_FILE_NAME_DISCRIMINATOR = "discriminator_model"
+DEFAULT_ADVERSARIAL_FILE_NAME_GENERATOR = "generator_model"
+DEFAULT_ADVERSARIAL_PATH_OUTPUT_MODELS = "models_saved/"
+DEFAULT_VARIATIONAL_AUTOENCODER_NUMBER_EPOCHS = 10
 
 
 class Adversarial:
@@ -78,8 +97,8 @@ class Adversarial:
         _adversarial_activation_function (str): Activation function for hidden layers
         _adversarial_dropout_decay_rate_g (float): Generator dropout rate
         _adversarial_dropout_decay_rate_d (float): Discriminator dropout rate
-        _adversarial_dense_layer_sizes_g (list): Generator layer sizes
-        _adversarial_dense_layer_sizes_d (list): Discriminator layer sizes
+        _adversarial_dense_layer_sizes_g (list[int]): Generator layer sizes
+        _adversarial_dense_layer_sizes_d (list[int]): Discriminator layer sizes
         _adversarial_loss_generator (str): Generator loss function
         _adversarial_loss_discriminator (str): Discriminator loss function
         _adversarial_smoothing_rate (float): Label smoothing rate
@@ -92,45 +111,103 @@ class Adversarial:
         _variational_autoencoder_number_epochs (int): Epochs for VAE pre-training
     """
 
-    def __init__(self, arguments):
+    def __init__(
+            self,
+            adversarial_number_epochs: int = DEFAULT_ADVERSARIAL_NUMBER_EPOCHS,
+            adversarial_batch_size: int = DEFAULT_ADVERSARIAL_BATCH_SIZE,
+            adversarial_initializer_mean: float = DEFAULT_ADVERSARIAL_INITIALIZER_MEAN,
+            adversarial_initializer_deviation: float = DEFAULT_ADVERSARIAL_INITIALIZER_DEVIATION,
+            adversarial_latent_dimension: int = DEFAULT_ADVERSARIAL_LATENT_DIMENSION,
+            adversarial_training_algorithm: str = DEFAULT_ADVERSARIAL_TRAINING_ALGORITHM,
+            adversarial_activation_function: str = DEFAULT_ADVERSARIAL_INTERMEDIARY_ACTIVATION,
+            adversarial_dropout_decay_rate_g: float = DEFAULT_ADVERSARIAL_DROPOUT_DECAY_RATE_G,
+            adversarial_dropout_decay_rate_d: float = DEFAULT_ADVERSARIAL_DROPOUT_DECAY_RATE_D,
+            adversarial_dense_layer_sizes_g: list[int] = None,
+            adversarial_dense_layer_sizes_d: list[int] = None,
+            adversarial_loss_generator: str = DEFAULT_ADVERSARIAL_LOSS_GENERATOR,
+            adversarial_loss_discriminator: str = DEFAULT_ADVERSARIAL_LOSS_DISCRIMINATOR,
+            adversarial_smoothing_rate: float = DEFAULT_ADVERSARIAL_SMOOTHING_RATE,
+            adversarial_latent_mean_distribution: float = DEFAULT_ADVERSARIAL_LATENT_MEAN_DISTRIBUTION,
+            adversarial_latent_stander_deviation: float = DEFAULT_ADVERSARIAL_LATENT_STANDER_DEVIATION,
+            adversarial_file_name_discriminator: str = DEFAULT_ADVERSARIAL_FILE_NAME_DISCRIMINATOR,
+            adversarial_file_name_generator: str = DEFAULT_ADVERSARIAL_FILE_NAME_GENERATOR,
+            adversarial_path_output_models: str = DEFAULT_ADVERSARIAL_PATH_OUTPUT_MODELS,
+            adversarial_last_layer_activation: str = DEFAULT_ADVERSARIAL_LAST_ACTIVATION_LAYER,
+            variational_autoencoder_number_epochs: int = DEFAULT_VARIATIONAL_AUTOENCODER_NUMBER_EPOCHS,
+            adversarial_algorithm: AdversarialAlgorithm | None = None,
+            adversarial_model: AdversarialModel | None = None
+    ) -> None:
         """
         Initializes the adversarial instance with configuration parameters.
 
         Args:
-            arguments (Namespace): Configuration object containing all required parameters:
-                - adversarial_number_epochs: Training epochs
-                - adversarial_batch_size: Batch size
-                - adversarial_initializer_mean: Weight init mean
-                - adversarial_initializer_deviation: Weight init std dev
-                - [All other parameters matching attribute names]
+            adversarial_number_epochs: Training epochs (default: 20)
+            adversarial_batch_size: Batch size (default: 32)
+            adversarial_initializer_mean: Weight init mean (default: 0.0)
+            adversarial_initializer_deviation: Weight init std dev (default: 0.5)
+            adversarial_latent_dimension: Size of the latent space (default: 128)
+            adversarial_training_algorithm: Training algorithm specification (default: "Adam")
+            adversarial_activation_function: Activation function for hidden layers (default: "LeakyReLU")
+            adversarial_dropout_decay_rate_g: Generator dropout rate (default: 0.2)
+            adversarial_dropout_decay_rate_d: Discriminator dropout rate (default: 0.4)
+            adversarial_dense_layer_sizes_g: Generator layer sizes (default: [128])
+            adversarial_dense_layer_sizes_d: Discriminator layer sizes (default: [128])
+            adversarial_loss_generator: Generator loss function (default: 'binary_crossentropy')
+            adversarial_loss_discriminator: Discriminator loss function (default: 'binary_crossentropy')
+            adversarial_smoothing_rate: Label smoothing rate (default: 0.15)
+            adversarial_latent_mean_distribution: Latent space mean (default: 0.0)
+            adversarial_latent_stander_deviation: Latent space std dev (default: 1.0)
+            adversarial_file_name_discriminator: Discriminator model filename (default: "discriminator_model")
+            adversarial_file_name_generator: Generator model filename (default: "generator_model")
+            adversarial_path_output_models: Path for saving models (default: "models_saved/")
+            adversarial_last_layer_activation: Last layer activation function (default: "Sigmoid")
+            variational_autoencoder_number_epochs: Epochs for VAE pre-training (default: 10)
+            adversarial_algorithm: Optional pre-initialized AdversarialAlgorithm instance (default: None)
+            adversarial_model: Optional pre-initialized AdversarialModel instance (default: None)
         """
-        self._adversarial_algorithm = None
-        self._adversarial_model = None
+        # Store pre-initialized instances if provided
+        self._adversarial_algorithm: AdversarialAlgorithm | None = adversarial_algorithm
+        self._adversarial_model: AdversarialModel | None = adversarial_model
 
         # ** Adversarial Model (GAN) Configuration Parameters **
-        self._adversarial_number_epochs = arguments.adversarial_number_epochs
-        self._adversarial_batch_size = arguments.adversarial_batch_size
-        self._adversarial_initializer_mean = arguments.adversarial_initializer_mean
-        self._adversarial_initializer_deviation = arguments.adversarial_initializer_deviation
-        self._adversarial_latent_dimension = arguments.adversarial_latent_dimension
-        self._adversarial_training_algorithm = arguments.adversarial_training_algorithm
-        self._adversarial_activation_function = arguments.adversarial_activation_function
-        self._adversarial_dropout_decay_rate_g = arguments.adversarial_dropout_decay_rate_g
-        self._adversarial_dropout_decay_rate_d = arguments.adversarial_dropout_decay_rate_d
-        self._adversarial_dense_layer_sizes_g = arguments.adversarial_dense_layer_sizes_g
-        self._adversarial_dense_layer_sizes_d = arguments.adversarial_dense_layer_sizes_d
-        self._adversarial_loss_generator = arguments.adversarial_loss_generator
-        self._adversarial_loss_discriminator = arguments.adversarial_loss_discriminator
-        self._adversarial_smoothing_rate = arguments.adversarial_smoothing_rate
-        self._adversarial_latent_mean_distribution = arguments.adversarial_latent_mean_distribution
-        self._adversarial_latent_stander_deviation = arguments.adversarial_latent_stander_deviation
-        self._adversarial_file_name_discriminator = arguments.adversarial_file_name_discriminator
-        self._adversarial_file_name_generator = arguments.adversarial_file_name_generator
-        self._adversarial_path_output_models = arguments.adversarial_path_output_models
-        self._adversarial_last_layer_activation = arguments.adversarial_last_layer_activation
-        self._variational_autoencoder_number_epochs = arguments.variational_autoencoder_number_epochs
+        self._adversarial_number_epochs: int = adversarial_number_epochs
+        self._adversarial_batch_size: int = adversarial_batch_size
+        self._adversarial_initializer_mean: float = adversarial_initializer_mean
+        self._adversarial_initializer_deviation: float = adversarial_initializer_deviation
+        self._adversarial_latent_dimension: int = adversarial_latent_dimension
+        self._adversarial_training_algorithm: str = adversarial_training_algorithm
+        self._adversarial_activation_function: str = adversarial_activation_function
+        self._adversarial_dropout_decay_rate_g: float = adversarial_dropout_decay_rate_g
+        self._adversarial_dropout_decay_rate_d: float = adversarial_dropout_decay_rate_d
 
-    def _get_adversarial_model(self, input_shape):
+        # Handle mutable default values safely
+        self._adversarial_dense_layer_sizes_g: list[int] = (
+            adversarial_dense_layer_sizes_g
+            if adversarial_dense_layer_sizes_g is not None
+            else DEFAULT_ADVERSARIAL_DENSE_LAYERS_SETTINGS_G.copy()
+        )
+        self._adversarial_dense_layer_sizes_d: list[int] = (
+            adversarial_dense_layer_sizes_d
+            if adversarial_dense_layer_sizes_d is not None
+            else DEFAULT_ADVERSARIAL_DENSE_LAYERS_SETTINGS_D.copy()
+        )
+
+        self._adversarial_loss_generator: str = adversarial_loss_generator
+        self._adversarial_loss_discriminator: str = adversarial_loss_discriminator
+        self._adversarial_smoothing_rate: float = adversarial_smoothing_rate
+        self._adversarial_latent_mean_distribution: float = adversarial_latent_mean_distribution
+        self._adversarial_latent_stander_deviation: float = adversarial_latent_stander_deviation
+        self._adversarial_file_name_discriminator: str = adversarial_file_name_discriminator
+        self._adversarial_file_name_generator: str = adversarial_file_name_generator
+        self._adversarial_path_output_models: str = adversarial_path_output_models
+        self._adversarial_last_layer_activation: str = adversarial_last_layer_activation
+        self._variational_autoencoder_number_epochs: int = variational_autoencoder_number_epochs
+
+        # Flag to indicate if instances were provided
+        self._has_external_algorithm: bool = adversarial_algorithm is not None
+        self._has_external_model: bool = adversarial_model is not None
+
+    def _get_adversarial_model(self, input_shape: tuple[int, ...]) -> None:
         """
         Initialize and configure the Adversarial model, including both the generator and discriminator components.
 
@@ -139,9 +216,10 @@ class Adversarial:
         with specified configurations such as latent dimension, activation functions, dropout rates, and layer sizes
         for both the generator and discriminator.
 
+        If pre-initialized instances were provided in the constructor, they are used instead of creating new ones.
+
         Args:
-            input_shape (tuple):
-                The shape of the input data, which determines the output shape for the models.
+            input_shape: The shape of the input data, which determines the output shape for the models.
 
         Initializes:
             self._adversarial_model:
@@ -150,70 +228,121 @@ class Adversarial:
             self._adversarial_algorithm:
                 An instance of the `AdversarialAlgorithm` class, managing the adversarial training process, including
                 the generator and discriminator models, loss functions, latent distributions, and model file paths.
-
         """
+        # Only create new model if none was provided
+        if not self._has_external_model:
+            # Adversarial Model setup for Generator and Discriminator
+            self._adversarial_model = AdversarialModel(
+                latent_dimension=self._adversarial_latent_dimension,
+                output_shape=input_shape,
+                activation_function=self._adversarial_activation_function,
+                initializer_mean=self._adversarial_initializer_mean,
+                initializer_deviation=self._adversarial_initializer_deviation,
+                dropout_decay_rate_g=self._adversarial_dropout_decay_rate_g,
+                dropout_decay_rate_d=self._adversarial_dropout_decay_rate_d,
+                last_layer_activation=self._adversarial_last_layer_activation,
+                dense_layer_sizes_g=self._adversarial_dense_layer_sizes_g,
+                dense_layer_sizes_d=self._adversarial_dense_layer_sizes_d,
+                dataset_type=np.float32,
+                number_samples_per_class=self._number_samples_per_class
+            )
 
-        # Adversarial Model setup for Generator and Discriminator
-        self._adversarial_model = AdversarialModel(latent_dimension=self._adversarial_latent_dimension,
-                                                   output_shape=input_shape,
-                                                   activation_function=self._adversarial_activation_function,
-                                                   initializer_mean=self._adversarial_initializer_mean,
-                                                   initializer_deviation=self._adversarial_initializer_deviation,
-                                                   dropout_decay_rate_g=self._adversarial_dropout_decay_rate_g,
-                                                   dropout_decay_rate_d=self._adversarial_dropout_decay_rate_d,
-                                                   last_layer_activation=self._adversarial_last_layer_activation,
-                                                   dense_layer_sizes_g=self._adversarial_dense_layer_sizes_g,
-                                                   dense_layer_sizes_d=self._adversarial_dense_layer_sizes_d,
-                                                   dataset_type=numpy.float32,
-                                                   number_samples_per_class = self._number_samples_per_class)
+        # Only create new algorithm if none was provided
+        if not self._has_external_algorithm:
+            # Ensure we have a model to get generator and discriminator from
+            if self._adversarial_model is None:
+                raise ValueError("AdversarialModel instance is required but was not provided.")
 
-        # Adversarial Algorithm setup for training and model operations
-        self._adversarial_algorithm = AdversarialAlgorithm(generator_model=self._adversarial_model.get_generator(),
-                                                           discriminator_model=self._adversarial_model.get_discriminator(),
-                                                           latent_dimension=self._adversarial_latent_dimension,
-                                                           loss_generator=self._adversarial_loss_generator,
-                                                           loss_discriminator=self._adversarial_loss_discriminator,
-                                                           file_name_discriminator=self._adversarial_file_name_discriminator,
-                                                           file_name_generator=self._adversarial_file_name_generator,
-                                                           models_saved_path=self._adversarial_path_output_models,
-                                                           latent_mean_distribution=self._adversarial_latent_mean_distribution,
-                                                           latent_stander_deviation=self._adversarial_latent_stander_deviation,
-                                                           smoothing_rate=self._adversarial_smoothing_rate)
+            # Adversarial Algorithm setup for training and model operations
+            self._adversarial_algorithm = AdversarialAlgorithm(
+                generator_model=self._adversarial_model.get_generator(),
+                discriminator_model=self._adversarial_model.get_discriminator(),
+                latent_dimension=self._adversarial_latent_dimension,
+                loss_generator=self._adversarial_loss_generator,
+                loss_discriminator=self._adversarial_loss_discriminator,
+                file_name_discriminator=self._adversarial_file_name_discriminator,
+                file_name_generator=self._adversarial_file_name_generator,
+                models_saved_path=self._adversarial_path_output_models,
+                latent_mean_distribution=self._adversarial_latent_mean_distribution,
+                latent_stander_deviation=self._adversarial_latent_stander_deviation,
+                smoothing_rate=self._adversarial_smoothing_rate
+            )
+        else:
+            # If algorithm was provided externally, update its configuration if needed
+            # (assuming AdversarialAlgorithm has setters for these properties)
+            if hasattr(self._adversarial_algorithm, 'latent_dimension'):
+                self._adversarial_algorithm.latent_dimension = self._adversarial_latent_dimension
 
+            if hasattr(self._adversarial_algorithm, 'loss_generator'):
+                self._adversarial_algorithm.loss_generator = self._adversarial_loss_generator
 
-    def _training_adversarial_modelo(self, input_shape, arguments, x_real_samples, y_real_samples):
+            if hasattr(self._adversarial_algorithm, 'loss_discriminator'):
+                self._adversarial_algorithm.loss_discriminator = self._adversarial_loss_discriminator
+
+            if hasattr(self._adversarial_algorithm, 'file_name_discriminator'):
+                self._adversarial_algorithm.file_name_discriminator = self._adversarial_file_name_discriminator
+
+            if hasattr(self._adversarial_algorithm, 'file_name_generator'):
+                self._adversarial_algorithm.file_name_generator = self._adversarial_file_name_generator
+
+            if hasattr(self._adversarial_algorithm, 'models_saved_path'):
+                self._adversarial_algorithm.models_saved_path = self._adversarial_path_output_models
+
+            if hasattr(self._adversarial_algorithm, 'latent_mean_distribution'):
+                self._adversarial_algorithm.latent_mean_distribution = self._adversarial_latent_mean_distribution
+
+            if hasattr(self._adversarial_algorithm, 'latent_stander_deviation'):
+                self._adversarial_algorithm.latent_stander_deviation = self._adversarial_latent_stander_deviation
+
+            if hasattr(self._adversarial_algorithm, 'smoothing_rate'):
+                self._adversarial_algorithm.smoothing_rate = self._adversarial_smoothing_rate
+
+    def _training_adversarial_modelo(
+            self,
+            input_shape: tuple[int, ...],
+            arguments: 'argparse.Namespace',
+            x_real_samples: np.ndarray,
+            y_real_samples: np.ndarray
+    ) -> None:
         """
         Executes the complete adversarial training process.
 
         Args:
-            input_shape (tuple): Shape of input data samples
-            arguments (Namespace): Configuration parameters
-            x_real_samples (ndarray): Training data samples
-            y_real_samples (ndarray): Corresponding class labels
+            input_shape: Shape of input data samples
+            arguments: Configuration parameters namespace
+            x_real_samples: Training data samples
+            y_real_samples: Corresponding class labels
 
         Process:
-            1. Initializes model architecture
+            1. Initializes model architecture (or uses provided)
             2. Configures optimizers and loss functions
             3. Sets up training callbacks
             4. Executes adversarial training
             5. Manages model saving and monitoring
         """
-
-        # Initialize the adversarial model
+        # Initialize the adversarial model (or use provided)
         self._get_adversarial_model(input_shape)
 
-        # Print the model summaries for the generator and discriminator
-        self._adversarial_model.get_generator()
-        self._adversarial_model.get_discriminator()
+        # Print the model summaries for the generator and discriminator if available
+        if self._adversarial_model is not None:
+            self._adversarial_model.get_generator()
+            self._adversarial_model.get_discriminator()
+
+        # Ensure we have an algorithm
+        if self._adversarial_algorithm is None:
+            raise ValueError("AdversarialAlgorithm instance is required but was not provided or created.")
 
         # Set up optimizers for the generator and discriminator
         generator_optimizer = keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5, beta_2=0.9)
         discriminator_optimizer = keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5, beta_2=0.9)
+
         # Compile the adversarial algorithm with binary cross-entropy loss
-        self._adversarial_algorithm.compile(generator_optimizer,
-                                            discriminator_optimizer,
-                                            BinaryCrossentropy(),
-                                            BinaryCrossentropy())
+        self._adversarial_algorithm.compile(
+            generator_optimizer,
+            discriminator_optimizer,
+            BinaryCrossentropy(),
+            BinaryCrossentropy()
+        )
 
         # callbacks_list = [self._callback_resources_monitor, self._callback_model_monitor]
         callbacks_list = [self._callback_model_monitor]
@@ -225,168 +354,216 @@ class Adversarial:
         self._adversarial_algorithm.fit(
             x_real_samples,
             to_categorical(y_real_samples, num_classes=self._number_samples_per_class["number_classes"]),
-            epochs=self._adversarial_number_epochs, batch_size=self._adversarial_batch_size,
-            callbacks=callbacks_list)
+            epochs=self._adversarial_number_epochs,
+            batch_size=self._adversarial_batch_size,
+            callbacks=callbacks_list
+        )
 
+    # Additional getters for the algorithm and model
+    @property
+    def adversarial_algorithm(self) -> AdversarialAlgorithm | None:
+        """Get the adversarial algorithm instance."""
+        return self._adversarial_algorithm
+
+    @property
+    def adversarial_model(self) -> AdversarialModel | None:
+        """Get the adversarial model instance."""
+        return self._adversarial_model
 
     # Getter and setter for adversarial_number_epochs
     @property
-    def adversarial_number_epochs(self):
+    def adversarial_number_epochs(self) -> int:
+        """Get the number of training epochs."""
         return self._adversarial_number_epochs
 
     @adversarial_number_epochs.setter
-    def adversarial_number_epochs(self, value):
+    def adversarial_number_epochs(self, value: int) -> None:
+        """Set the number of training epochs."""
         self._adversarial_number_epochs = value
 
     # Getter and setter for adversarial_initializer_mean
     @property
-    def adversarial_initializer_mean(self):
+    def adversarial_initializer_mean(self) -> float:
+        """Get the mean for weight initialization."""
         return self._adversarial_initializer_mean
 
     @adversarial_initializer_mean.setter
-    def adversarial_initializer_mean(self, value):
+    def adversarial_initializer_mean(self, value: float) -> None:
+        """Set the mean for weight initialization."""
         self._adversarial_initializer_mean = value
 
     # Getter and setter for adversarial_initializer_deviation
     @property
-    def adversarial_initializer_deviation(self):
+    def adversarial_initializer_deviation(self) -> float:
+        """Get the standard deviation for weight initialization."""
         return self._adversarial_initializer_deviation
 
     @adversarial_initializer_deviation.setter
-    def adversarial_initializer_deviation(self, value):
+    def adversarial_initializer_deviation(self, value: float) -> None:
+        """Set the standard deviation for weight initialization."""
         self._adversarial_initializer_deviation = value
 
     # Getter and setter for adversarial_latent_dimension
     @property
-    def adversarial_latent_dimension(self):
+    def adversarial_latent_dimension(self) -> int:
+        """Get the size of the latent space."""
         return self._adversarial_latent_dimension
 
     @adversarial_latent_dimension.setter
-    def adversarial_latent_dimension(self, value):
+    def adversarial_latent_dimension(self, value: int) -> None:
+        """Set the size of the latent space."""
         self._adversarial_latent_dimension = value
 
     # Getter and setter for adversarial_training_algorithm
     @property
-    def adversarial_training_algorithm(self):
+    def adversarial_training_algorithm(self) -> str:
+        """Get the training algorithm specification."""
         return self._adversarial_training_algorithm
 
     @adversarial_training_algorithm.setter
-    def adversarial_training_algorithm(self, value):
+    def adversarial_training_algorithm(self, value: str) -> None:
+        """Set the training algorithm specification."""
         self._adversarial_training_algorithm = value
 
     # Getter and setter for adversarial_activation_function
     @property
-    def adversarial_activation_function(self):
+    def adversarial_activation_function(self) -> str:
+        """Get the activation function for hidden layers."""
         return self._adversarial_activation_function
 
     @adversarial_activation_function.setter
-    def adversarial_activation_function(self, value):
+    def adversarial_activation_function(self, value: str) -> None:
+        """Set the activation function for hidden layers."""
         self._adversarial_activation_function = value
 
     # Getter and setter for adversarial_dropout_decay_rate_g
     @property
-    def adversarial_dropout_decay_rate_g(self):
+    def adversarial_dropout_decay_rate_g(self) -> float:
+        """Get the generator dropout rate."""
         return self._adversarial_dropout_decay_rate_g
 
     @adversarial_dropout_decay_rate_g.setter
-    def adversarial_dropout_decay_rate_g(self, value):
+    def adversarial_dropout_decay_rate_g(self, value: float) -> None:
+        """Set the generator dropout rate."""
         self._adversarial_dropout_decay_rate_g = value
 
     # Getter and setter for adversarial_dropout_decay_rate_d
     @property
-    def adversarial_dropout_decay_rate_d(self):
+    def adversarial_dropout_decay_rate_d(self) -> float:
+        """Get the discriminator dropout rate."""
         return self._adversarial_dropout_decay_rate_d
 
     @adversarial_dropout_decay_rate_d.setter
-    def adversarial_dropout_decay_rate_d(self, value):
+    def adversarial_dropout_decay_rate_d(self, value: float) -> None:
+        """Set the discriminator dropout rate."""
         self._adversarial_dropout_decay_rate_d = value
 
     # Getter and setter for adversarial_dense_layer_sizes_g
     @property
-    def adversarial_dense_layer_sizes_g(self):
+    def adversarial_dense_layer_sizes_g(self) -> list[int]:
+        """Get the generator layer sizes."""
         return self._adversarial_dense_layer_sizes_g
 
     @adversarial_dense_layer_sizes_g.setter
-    def adversarial_dense_layer_sizes_g(self, value):
+    def adversarial_dense_layer_sizes_g(self, value: list[int]) -> None:
+        """Set the generator layer sizes."""
         self._adversarial_dense_layer_sizes_g = value
 
     # Getter and setter for adversarial_dense_layer_sizes_d
     @property
-    def adversarial_dense_layer_sizes_d(self):
+    def adversarial_dense_layer_sizes_d(self) -> list[int]:
+        """Get the discriminator layer sizes."""
         return self._adversarial_dense_layer_sizes_d
 
     @adversarial_dense_layer_sizes_d.setter
-    def adversarial_dense_layer_sizes_d(self, value):
+    def adversarial_dense_layer_sizes_d(self, value: list[int]) -> None:
+        """Set the discriminator layer sizes."""
         self._adversarial_dense_layer_sizes_d = value
 
     # Getter and setter for adversarial_loss_generator
     @property
-    def adversarial_loss_generator(self):
+    def adversarial_loss_generator(self) -> str:
+        """Get the generator loss function."""
         return self._adversarial_loss_generator
 
     @adversarial_loss_generator.setter
-    def adversarial_loss_generator(self, value):
+    def adversarial_loss_generator(self, value: str) -> None:
+        """Set the generator loss function."""
         self._adversarial_loss_generator = value
 
     # Getter and setter for adversarial_loss_discriminator
     @property
-    def adversarial_loss_discriminator(self):
+    def adversarial_loss_discriminator(self) -> str:
+        """Get the discriminator loss function."""
         return self._adversarial_loss_discriminator
 
     @adversarial_loss_discriminator.setter
-    def adversarial_loss_discriminator(self, value):
+    def adversarial_loss_discriminator(self, value: str) -> None:
+        """Set the discriminator loss function."""
         self._adversarial_loss_discriminator = value
 
     # Getter and setter for adversarial_smoothing_rate
     @property
-    def adversarial_smoothing_rate(self):
+    def adversarial_smoothing_rate(self) -> float:
+        """Get the label smoothing rate."""
         return self._adversarial_smoothing_rate
 
     @adversarial_smoothing_rate.setter
-    def adversarial_smoothing_rate(self, value):
+    def adversarial_smoothing_rate(self, value: float) -> None:
+        """Set the label smoothing rate."""
         self._adversarial_smoothing_rate = value
 
     # Getter and setter for adversarial_latent_mean_distribution
     @property
-    def adversarial_latent_mean_distribution(self):
+    def adversarial_latent_mean_distribution(self) -> float:
+        """Get the latent space mean distribution."""
         return self._adversarial_latent_mean_distribution
 
     @adversarial_latent_mean_distribution.setter
-    def adversarial_latent_mean_distribution(self, value):
+    def adversarial_latent_mean_distribution(self, value: float) -> None:
+        """Set the latent space mean distribution."""
         self._adversarial_latent_mean_distribution = value
 
     # Getter and setter for adversarial_latent_stander_deviation
     @property
-    def adversarial_latent_stander_deviation(self):
+    def adversarial_latent_stander_deviation(self) -> float:
+        """Get the latent space standard deviation."""
         return self._adversarial_latent_stander_deviation
 
     @adversarial_latent_stander_deviation.setter
-    def adversarial_latent_stander_deviation(self, value):
+    def adversarial_latent_stander_deviation(self, value: float) -> None:
+        """Set the latent space standard deviation."""
         self._adversarial_latent_stander_deviation = value
 
     # Getter and setter for adversarial_file_name_discriminator
     @property
-    def adversarial_file_name_discriminator(self):
+    def adversarial_file_name_discriminator(self) -> str:
+        """Get the discriminator model filename."""
         return self._adversarial_file_name_discriminator
 
     @adversarial_file_name_discriminator.setter
-    def adversarial_file_name_discriminator(self, value):
+    def adversarial_file_name_discriminator(self, value: str) -> None:
+        """Set the discriminator model filename."""
         self._adversarial_file_name_discriminator = value
 
     # Getter and setter for adversarial_file_name_generator
     @property
-    def adversarial_file_name_generator(self):
+    def adversarial_file_name_generator(self) -> str:
+        """Get the generator model filename."""
         return self._adversarial_file_name_generator
 
     @adversarial_file_name_generator.setter
-    def adversarial_file_name_generator(self, value):
+    def adversarial_file_name_generator(self, value: str) -> None:
+        """Set the generator model filename."""
         self._adversarial_file_name_generator = value
 
     # Getter and setter for adversarial_path_output_models
     @property
-    def adversarial_path_output_models(self):
+    def adversarial_path_output_models(self) -> str:
+        """Get the path for saving models."""
         return self._adversarial_path_output_models
 
     @adversarial_path_output_models.setter
-    def adversarial_path_output_models(self, value):
+    def adversarial_path_output_models(self, value: str) -> None:
+        """Set the path for saving models."""
         self._adversarial_path_output_models = value
