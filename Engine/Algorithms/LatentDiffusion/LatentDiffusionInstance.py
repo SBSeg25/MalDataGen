@@ -52,8 +52,8 @@ try:
 
     from Engine.Algorithms.LatentDiffusion.AlgorithmVAELatentDiffusion import VAELatentDiffusionAlgorithm
     from Engine.Algorithms.LatentDiffusion.GaussianLatentDiffusion import GaussianDiffusion
-    from Engine.Models.LatentDiffusion.DiffusionModelUnet import UNetModel
-    from Engine.Models.LatentDiffusion.VariationalAutoencoderModel import VariationalModelDiffusion
+    from Engine.Architectures.LatentDiffusion.DiffusionModelUnet import UNetModel
+    from Engine.Architectures.LatentDiffusion.VariationalAutoencoderModel import VariationalModelDiffusion
 
 except ImportError as error:
     logging.error(error)

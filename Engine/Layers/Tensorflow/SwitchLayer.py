@@ -54,7 +54,7 @@ class Switch(Layer):
     Switch Transformer architecture.
 
     This layer implements the expert routing mechanism described in:
-    "Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient
+    "Switch Transformers: Scaling to Trillion Parameter Architectures with Simple and Efficient
     Sparsity" by Fedus et al. (2022). arXiv:2101.03961
 
     Mathematical Formulation:
@@ -69,7 +69,7 @@ class Switch(Layer):
 
     Reference:
         William Fedus, Barret Zoph, Noam Shazeer. "Switch Transformers: Scaling to
-        Trillion Parameter Models with Simple and Efficient Sparsity".
+        Trillion Parameter Architectures with Simple and Efficient Sparsity".
         arXiv:2101.03961, 2022.
 
     Example:

@@ -8,18 +8,18 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
-from Engine.Algorithms.DenoisingDiffusion.Torch.DenoisingDiffusionInstanceTorch import DenoisingDiffusionInstanceTorch
-from Framework.Instances.Adversarial import AdversarialInstance
-from Framework.Instances.Autoencoder import AutoencoderInstance
+from Engine.Models.DenoisingDiffusion import DenoisingDiffusionInstanceTorch
+from Engine.Models.Adversarial import Adversarial
+from Engine.Models.Autoencoder import Autoencoder
 from Engine.Algorithms.LatentDiffusion.LatentDiffusionInstance import LatentDiffusionInstance
-from Framework.Instances.QuantizedVAE import QuantizedVAEInstance
+from Engine.Models.QuantizedVAE import QuantizedVAE
 from Engine.Algorithms.RandomNoise.AlgorithmRandomNoise import RandomNoiseAlgorithm
 from Engine.Callbacks.CallbackModel import ModelMonitorCallback
 from Engine.Callbacks.CallbackResources import ResourceMonitorCallback
-from Framework.Instances.Smote import SmoteInstance
-from Framework.Instances.VariationalAutoencoder import VariationalAutoencoderInstance
-from Framework.Instances.Wasserstein import WassersteinInstance
-from Framework.Instances.WassersteinGP import WassersteinGPInstance
+from Engine.Models.Smote import Smote
+from Engine.Models.VariationalAutoencoder import VariationalAutoencoder
+from Engine.Models.Wasserstein import Wasserstein
+from Engine.Models.WassersteinGP import WassersteinGP
 
 # MIT License
 #
@@ -69,20 +69,20 @@ except ImportError as error:
     sys.exit(-1)
 
 
-class GenerativeModels(AdversarialInstance,
-                       AutoencoderInstance,
-                       QuantizedVAEInstance,
+class GenerativeModels(Adversarial,
+                       Autoencoder,
+                       QuantizedVAE,
                        LatentDiffusionInstance,
-                       WassersteinInstance,
-                       WassersteinGPInstance,
-                       VariationalAutoencoderInstance,
-                       SmoteInstance,
+                       Wasserstein,
+                       WassersteinGP,
+                       VariationalAutoencoder,
+                       Smote,
                        DenoisingDiffusionInstanceTorch):
 
     """
     A class to manage and facilitate the training and generation of various types of generative models,
     including Generative Adversarial Networks (GANs), Autoencoders (AEs), Variational Autoencoders (VAEs),
-    LatentDiffusion Models, and WassersteinGP GANs (WGANs). This class provides an interface to configure, initialize,
+    LatentDiffusion Architectures, and WassersteinGP GANs (WGANs). This class provides an interface to configure, initialize,
     and manage the training processes for these models, as well as to generate synthetic data from them.
 
     It supports flexibility in architecture selection and offers detailed configuration options for each model.
@@ -93,7 +93,7 @@ class GenerativeModels(AdversarialInstance,
     of these models, facilitating experiments with different generative approaches. Each model type is encapsulated
     with distinct algorithms and training strategies, enabling easy experimentation and comparison.
 
-    Supported Models:
+    Supported Architectures:
     ----------------
     - **Generative Adversarial Networks (GANs)**:
         A class of generative models that consists of a generator and a discriminator, trained in a competitive process.
@@ -107,7 +107,7 @@ class GenerativeModels(AdversarialInstance,
         data distribution more effectively by learning a latent space with continuous values. This is
         particularly useful for generating new data samples.
 
-    - **LatentDiffusion Models**: A family of generative models that gradually transform noise into data through
+    - **LatentDiffusion Architectures**: A family of generative models that gradually transform noise into data through
         a sequence of steps. They have gained significant attention for image generation tasks.
 
     - **Wasserstein GAN (WGAN)**: A type of GAN that uses the Wasserstein distance for training,
@@ -196,7 +196,7 @@ class GenerativeModels(AdversarialInstance,
         data, texts, or other data formats depending on the model.
 
     @save_models()
-        Saves the trained models to the specified output directory. Models are saved with their current weights,
+        Saves the trained models to the specified output directory. Architectures are saved with their current weights,
         training state, and hyperparameters, allowing easy restoration later.
 
     @load_models(model_directory: str)
@@ -230,7 +230,7 @@ class GenerativeModels(AdversarialInstance,
         Initializes the GenerativeModels class with model configuration parameters.
 
         The constructor accepts a dictionary of configuration arguments that contain necessary parameters
-        for initializing different types of generative models such as GANs, AEs, VAEs, and LatentDiffusion Models.
+        for initializing different types of generative models such as GANs, AEs, VAEs, and LatentDiffusion Architectures.
         It sets up placeholders for various components used in each model and algorithm, and it configures
         model-specific attributes based on the provided arguments.
 
@@ -241,14 +241,14 @@ class GenerativeModels(AdversarialInstance,
                               settings necessary for training.
         """
 
-        AdversarialInstance.__init__(self, arguments)
-        AutoencoderInstance.__init__(self, arguments)
-        QuantizedVAEInstance.__init__(self, arguments)
+        Adversarial.__init__(self, arguments)
+        Autoencoder.__init__(self, arguments)
+        QuantizedVAE.__init__(self, arguments)
         LatentDiffusionInstance.__init__(self, arguments)
-        WassersteinInstance.__init__(self, arguments)
-        WassersteinGPInstance.__init__(self, arguments)
-        VariationalAutoencoderInstance.__init__(self, arguments)
-        SmoteInstance.__init__(self, arguments)
+        Wasserstein.__init__(self, arguments)
+        WassersteinGP.__init__(self, arguments)
+        VariationalAutoencoder.__init__(self, arguments)
+        Smote.__init__(self, arguments)
         DenoisingDiffusionInstanceTorch.__init__(self, arguments)
 
         self._callback_model_monitor = None

@@ -57,7 +57,7 @@ class GaussianDiffusionTorch:
 
     Reference:
     ----------
-        Ho, J., Jain, A., & Abbeel, P. (2020). "Denoising LatentDiffusion Probabilistic Models."
+        Ho, J., Jain, A., & Abbeel, P. (2020). "Denoising LatentDiffusion Probabilistic Architectures."
         Advances in Neural Information Processing Systems (NeurIPS).
 
 

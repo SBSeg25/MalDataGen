@@ -143,12 +143,12 @@ class SynDataGen(Arguments, CSVDataProcessor, Metrics, GenerativeModels, Classif
                                                                 |
                                                                 |
                                 +-----------------+     +-------+--------+    +--------+-------+
-                                |    Arguments    |     |     Models     |    |      Loss      |
+                                |    Arguments    |     |     Architectures     |    |      Loss      |
                                 +--------+--------+     +--------+-------+    +--------+-------+
                                         |                        |                     |
         +---------------+       +-------+--------+               |            +--------+-------+         +--------+-------+
         | DataProcessor +-------+   Generative   +---------------@------------+   Algorithms   +---------+   Optimizers   |
-        +---------------+       |     Models     |                            +----------------+         +----------------+
+        +---------------+       |     Architectures     |                            +----------------+         +----------------+
                                 +-------+--------+
                                         |
         +-------v--------+      +-------v--------+               +----------------+
@@ -212,7 +212,7 @@ class SynDataGen(Arguments, CSVDataProcessor, Metrics, GenerativeModels, Classif
             It implements the WassersteinGP loss with gradient penalty to improve the training of the
             discriminator and generator.
 
-        7. Latent Diffusion Models [model_type='latent_diffusion']
+        7. Latent Diffusion Architectures [model_type='latent_diffusion']
 
             Implements a diffusion process using UNet architectures for generating synthetic data.
 

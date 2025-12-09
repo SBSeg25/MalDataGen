@@ -29,8 +29,8 @@ Please follow the instructions below to set up the environment and install the r
 
 ### 1. (Optional) Set up a virtual environment:
 ```bash
-python3 -m venv ~/Python3venv/Mosquitoes-Classification-Models
-source ~/Python3venv/Mosquitoes-Classification-Models/bin/activate
+python3 -m venv ~/Python3venv/Mosquitoes-Classification-Architectures
+source ~/Python3venv/Mosquitoes-Classification-Architectures/bin/activate
 ```
 
 ### 2. Install the dependencies:
@@ -42,7 +42,7 @@ pip3 install -r requirements.txt
 ### 3. Clone the Synthetic Ocean repository:
 ```bash
 git clone https://github.com/kayua/Mosquitoes-Classification-Models.git
-cd Mosquitoes-Classification-Models
+cd Mosquitoes-Classification-Architectures
 ```
 
 ### 4. Install the current release:

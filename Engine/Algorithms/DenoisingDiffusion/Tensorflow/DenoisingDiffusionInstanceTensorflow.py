@@ -51,7 +51,7 @@ try:
 
     from Engine.Algorithms.DenoisingDiffusion.Tensorflow.AlgorithmDenoisingDiffusionTensorflow import AlgorithmDenoisingDiffusion
     from Engine.Algorithms.DenoisingDiffusion.Tensorflow.GaussianDenoisingDiffusionTensorflow import GaussianDiffusionTensorflow
-    from Engine.Models.DenoisingDiffusion.Tensorflow.DiffusionModelUnet import UNetDenoisingModelTensorflow
+    from Engine.Architectures.DenoisingDiffusion.Tensorflow.DiffusionModelUnet import UNetDenoisingModelTensorflow
 
 except ImportError as error:
     logging.error(error)
