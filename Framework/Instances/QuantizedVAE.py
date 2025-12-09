@@ -8,6 +8,7 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
+from Engine.Models.QuantizedVAE.QuantizedVAEModel import QuantizedVAEModel
 
 # MIT License
 #
@@ -132,7 +133,7 @@ class QuantizedVAEInstance:
         """
 
         # Quantized VAE Model setup for Encoder, Decoder, and Quantization
-        self._quantized_vae_model = QuantizedVAEModelTorch(
+        self._quantized_vae_model = QuantizedVAEModel(
             latent_dimension=self._quantized_vae_latent_dimension,
             number_embeddings=self._quantized_vae_number_embeddings,
             output_shape=input_shape,
