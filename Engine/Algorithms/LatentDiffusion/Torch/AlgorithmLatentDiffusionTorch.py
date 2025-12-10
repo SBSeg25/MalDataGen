@@ -11,25 +11,6 @@ __credits__ = ['Kayuã Oleques']
 # MIT License
 #
 # Copyright (c) 2025 Synthetic Ocean AI
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 
 try:
     import os
@@ -55,64 +36,6 @@ class AlgorithmLatentDiffusionTorch(nn.Module):
 
     This class supports exponential moving average (EMA) updates for stable training,
     multiple training stages, and customizable hyperparameters to adapt to different tasks.
-
-    Attributes:
-        @ema (float):
-            Exponential moving average (EMA) decay rate for stabilizing training updates.
-        @margin (float):
-            Margin parameter used for loss computation or regularization purposes.
-        @gdf_util:
-            Utility object for Gaussian diffusion functions, handling noise scheduling and diffusion-related operations.
-        @time_steps (int):
-            Number of time steps used in the diffusion process.
-        @train_stage (str):
-            Defines the current training stage ('all', 'diffusion', etc.), determining whether only specific components are updated.
-        @network (Model):
-            Primary UNet model responsible for the diffusion process.
-        @second_unet_model (Model):
-            Secondary UNet model used for EMA-based weight updates to enhance training stability.
-        @embedding_dimension (int):
-            Dimensionality of the latent space used for encoding data.
-        @encoder_model_data (Model):
-            Encoder model responsible for feature extraction from input data.
-        @decoder_model_data (Model):
-            Decoder model used to reconstruct data from encoded representations.
-        @optimizer_diffusion (Optimizer):
-            Optimizer used for training the diffusion model.
-        @optimizer_autoencoder (Optimizer):
-            Optimizer responsible for training the autoencoder components.
-        @ensemble_encoder_decoder (Model):
-            Combined encoder-decoder model for data reconstruction.
-
-    Raises:
-        ValueError:
-            Raised in cases where:
-            - The number of time steps is non-positive.
-            - The EMA decay rate is outside the range (0,1).
-            - The embedding dimension is invalid (<=0).
-
-    References:
-        - Ho, J., Jain, A., & Abbeel, P. (2020). "Denoising LatentDiffusion Probabilistic Architectures."
-        Advances in Neural Information Processing Systems (NeurIPS).
-        Available at: https://arxiv.org/abs/2006.11239
-
-    Example:
-        >>> diffusion_model = LatentDiffusionAlgorithmTorch(
-        ...     first_unet_model=primary_unet,
-        ...     second_unet_model=ema_unet,
-        ...     encoder_model_image=encoder,
-        ...     decoder_model_image=decoder,
-        ...     gdf_util=gaussian_diffusion,
-        ...     optimizer_autoencoder=torch.optim.Adam(params, lr=1e-4),
-        ...     optimizer_diffusion=torch.optim.Adam(params, lr=2e-4),
-        ...     time_steps=1000,
-        ...     ema=0.999,
-        ...     margin=0.1,
-        ...     embedding_dimension=128,
-        ...     train_stage='all'
-        ... )
-        >>> diffusion_model.set_stage_training('diffusion')
-        >>> diffusion_model.train_step(data)
     """
 
     def __init__(self, first_unet_model,
@@ -129,41 +52,6 @@ class AlgorithmLatentDiffusionTorch(nn.Module):
                  train_stage='all'):
         """
         Initializes the DiffusionModel with provided sub-models, optimizers, and hyperparameters.
-
-        This constructor sets up the network structure, including the autoencoder, diffusion
-        models, and EMA components, ensuring flexibility for different training strategies.
-
-        Args:
-            @first_unet_model (Model):
-                Primary UNet model for diffusion-based generation.
-            @second_unet_model (Model):
-                Secondary UNet model for maintaining EMA-based weight updates.
-            @encoder_model_image (Model):
-                Encoder model used to extract meaningful feature representations.
-            @decoder_model_image (Model):
-                Decoder model reconstructing data from encoded embeddings.
-            @gdf_util:
-                Utility object responsible for Gaussian diffusion operations.
-            @optimizer_autoencoder (Optimizer):
-                Optimizer handling the training of the encoder-decoder network.
-            @optimizer_diffusion (Optimizer):
-                Optimizer applied to the diffusion process.
-            @time_steps (int):
-                Number of discrete time steps for the diffusion process.
-            @ema (float):
-                Exponential moving average decay factor.
-            @margin (float):
-                Margin value used in loss calculations or regularization.
-            @embedding_dimension (int):
-                Dimensionality of the embedding space.
-            @train_stage (str, optional):
-             Current training stage ('all', 'diffusion', etc.), defaulting to 'all'.
-
-        Raises:
-            ValueError:
-                If time_steps is <= 0.
-                If ema is not within the (0,1) range.
-                If embedding_dimension is <= 0.
         """
         super(AlgorithmLatentDiffusionTorch, self).__init__()
 
@@ -264,11 +152,43 @@ class AlgorithmLatentDiffusionTorch(nn.Module):
     def update_ema_weights(self):
         """
         Updates the weights of the second UNet model using exponential moving average.
+        Now properly handles dynamically created projection layers.
+
+        FIXED VERSION: Handles dynamic decoder_projections dictionary properly.
         """
         with torch.no_grad():
-            for param, ema_param in zip(self._network.parameters(),
-                                        self._second_unet_model.parameters()):
-                ema_param.data.mul_(self._ema).add_(param.data, alpha=1 - self._ema)
+            # First, ensure both models have the same dynamically created projection layers
+            if hasattr(self._network, 'decoder_projections'):
+                for key in self._network.decoder_projections.keys():
+                    if key not in self._second_unet_model.decoder_projections:
+                        # Copy the layer structure if it doesn't exist in EMA model
+                        layer = self._network.decoder_projections[key]
+                        self._second_unet_model.decoder_projections[key] = nn.Linear(
+                            layer.in_features,
+                            layer.out_features
+                        ).to(layer.weight.device)
+                        # Initialize with current weights
+                        self._second_unet_model.decoder_projections[key].load_state_dict(
+                            layer.state_dict()
+                        )
+
+            # Update all standard parameters
+            for (name1, param1), (name2, param2) in zip(
+                    self._network.named_parameters(),
+                    self._second_unet_model.named_parameters()
+            ):
+                # Only update if shapes match
+                if param1.shape == param2.shape:
+                    param2.data.mul_(self._ema).add_(param1.data, alpha=1 - self._ema)
+
+            # Update dynamically created projection layers
+            for key in self._network.decoder_projections.keys():
+                if key in self._second_unet_model.decoder_projections:
+                    for param1, param2 in zip(
+                            self._network.decoder_projections[key].parameters(),
+                            self._second_unet_model.decoder_projections[key].parameters()
+                    ):
+                        param2.data.mul_(self._ema).add_(param1.data, alpha=1 - self._ema)
 
     def generate_data(self, labels, batch_size):
         """
@@ -337,26 +257,6 @@ class AlgorithmLatentDiffusionTorch(nn.Module):
     def _crop_tensor_to_original_size(tensor: numpy.ndarray, original_size: int) -> numpy.ndarray:
         """
         Crops the input tensor along the second dimension (axis=1) to match the original size.
-
-        This function is useful for reversing padding operations or restoring tensors to
-        a fixed input size before feeding them into downstream models.
-
-        Args:
-            tensor (np.ndarray): A 3D NumPy array of shape (X, Y, Z), where:
-                - X is the batch size,
-                - Y is the sequence or time dimension (to be cropped),
-                - Z is the feature/channel dimension.
-            original_size (int): The desired size for the second dimension (Y).
-                If tensor.shape[1] <= original_size, the tensor is returned unchanged.
-
-        Returns:
-            np.ndarray: A cropped 3D tensor with shape (X, original_size, Z).
-
-        Example:
-            >>> tensor = np.random.rand(32, 120, 16)
-            >>> cropped = crop_tensor_to_original_size(tensor, original_size=100)
-            >>> cropped.shape
-            (32, 100, 16)
         """
         # Validate input dimensions
         if tensor.ndim != 3:
@@ -375,20 +275,11 @@ class AlgorithmLatentDiffusionTorch(nn.Module):
         """
         Pads the input tensor along the feature dimension to match the expected input shape
         required by the diffusion network.
-
-        Args:
-            input_tensor (torch.Tensor): Tensor of shape (batch_size, seq_len, channels),
-                                         or similar.
-
-        Returns:
-            torch.Tensor: A tensor padded along the feature dimension to match the model's
-                         expected input shape.
         """
         # Ensure tensor is in float32 for consistency with model expectations
         input_tensor = input_tensor.float()
 
         # Get the target dimension from the network's expected input
-        # Assuming the network has an attribute or method to get input shape
         if hasattr(self._network, 'embedding_dimension'):
             target_dimension = self._network.embedding_dimension
         else:
@@ -406,8 +297,6 @@ class AlgorithmLatentDiffusionTorch(nn.Module):
             return input_tensor
 
         # Apply padding: pad along the second-to-last dimension
-        # F.pad format: (left, right, top, bottom, front, back)
-        # We want to pad the second dimension from the end
         padded_tensor = F.pad(input_tensor, (0, 0, 0, padding_needed), mode='constant', value=0)
 
         return padded_tensor
@@ -509,13 +398,6 @@ class AlgorithmLatentDiffusionTorch(nn.Module):
     def _save_model_to_json(model, file_path):
         """
         Save model architecture information to a JSON file.
-
-        Note: PyTorch doesn't have direct JSON serialization like Keras.
-        This saves basic model information instead.
-
-        Args:
-            model (nn.Module): Model to save.
-            file_path (str): Path to the JSON file.
         """
         try:
             model_info = {
@@ -536,222 +418,126 @@ class AlgorithmLatentDiffusionTorch(nn.Module):
     # Properties
     @property
     def ema(self) -> Any:
-        """Get the Exponential Moving Average (EMA) decay rate.
-
-        Returns:
-            The EMA decay rate.
-        """
+        """Get the Exponential Moving Average (EMA) decay rate."""
         return self._ema
 
     @ema.setter
     def ema(self, value: Any) -> None:
-        """Set the Exponential Moving Average (EMA) decay rate.
-
-        Args:
-            value: The EMA decay rate to set.
-        """
+        """Set the Exponential Moving Average (EMA) decay rate."""
         self._ema = value
 
     @property
     def margin(self) -> float:
-        """Get the margin value used in contrastive loss.
-
-        Returns:
-            The margin value.
-        """
+        """Get the margin value used in contrastive loss."""
         return self._margin
 
     @margin.setter
     def margin(self, value: float) -> None:
-        """Set the margin value for contrastive loss.
-
-        Args:
-            value: The margin value to set (must be positive).
-        """
+        """Set the margin value for contrastive loss."""
         if value <= 0:
             raise ValueError("Margin must be positive")
         self._margin = value
 
     @property
     def gdf_util(self) -> Any:
-        """Get the Gradient Descent Filter utility.
-
-        Returns:
-            The GDF utility instance.
-        """
+        """Get the Gradient Descent Filter utility."""
         return self._gdf_util
 
     @gdf_util.setter
     def gdf_util(self, value: Any) -> None:
-        """Set the Gradient Descent Filter utility.
-
-        Args:
-            value: The GDF utility instance to set.
-        """
+        """Set the Gradient Descent Filter utility."""
         self._gdf_util = value
 
     @property
     def time_steps(self) -> int:
-        """Get the number of diffusion time steps.
-
-        Returns:
-            The number of time steps.
-        """
+        """Get the number of diffusion time steps."""
         return self._time_steps
 
     @time_steps.setter
     def time_steps(self, value: int) -> None:
-        """Set the number of diffusion time steps.
-
-        Args:
-            value: The number of time steps (must be positive).
-        """
+        """Set the number of diffusion time steps."""
         if value <= 0:
             raise ValueError("Time steps must be positive")
         self._time_steps = value
 
     @property
     def train_stage(self) -> str:
-        """Get the current training stage.
-
-        Returns:
-            The current training stage identifier.
-        """
+        """Get the current training stage."""
         return self._train_stage
 
     @train_stage.setter
     def train_stage(self, value: str) -> None:
-        """Set the current training stage.
-
-        Args:
-            value: The training stage identifier to set.
-        """
+        """Set the current training stage."""
         self._train_stage = value
 
     @property
     def network(self) -> Any:
-        """Get the primary U-Net model.
-
-        Returns:
-            The first U-Net model instance.
-        """
+        """Get the primary U-Net model."""
         return self._network
 
     @network.setter
     def network(self, value: Any) -> None:
-        """Set the primary U-Net model.
-
-        Args:
-            value: The U-Net model instance to set.
-        """
+        """Set the primary U-Net model."""
         self._network = value
 
     @property
     def second_unet_model(self) -> Any:
-        """Get the secondary U-Net model.
-
-        Returns:
-            The second U-Net model instance.
-        """
+        """Get the secondary U-Net model."""
         return self._second_unet_model
 
     @second_unet_model.setter
     def second_unet_model(self, value: Any) -> None:
-        """Set the secondary U-Net model.
-
-        Args:
-            value: The second U-Net model instance to set.
-        """
+        """Set the secondary U-Net model."""
         self._second_unet_model = value
 
     @property
     def embedding_dimension(self) -> int:
-        """Get the embedding dimension size.
-
-        Returns:
-            The dimension of the embedding space.
-        """
+        """Get the embedding dimension size."""
         return self._embedding_dimension
 
     @embedding_dimension.setter
     def embedding_dimension(self, value: int) -> None:
-        """Set the embedding dimension size.
-
-        Args:
-            value: The dimension size (must be positive).
-        """
+        """Set the embedding dimension size."""
         if value <= 0:
             raise ValueError("Embedding dimension must be positive")
         self._embedding_dimension = value
 
     @property
     def encoder_model_data(self) -> Any:
-        """Get the image encoder model.
-
-        Returns:
-            The encoder model instance.
-        """
+        """Get the image encoder model."""
         return self._encoder_model_data
 
     @encoder_model_data.setter
     def encoder_model_data(self, value: Any) -> None:
-        """Set the image encoder model.
-
-        Args:
-            value: The encoder model instance to set.
-        """
+        """Set the image encoder model."""
         self._encoder_model_data = value
 
     @property
     def decoder_model_data(self) -> Any:
-        """Get the image decoder model.
-
-        Returns:
-            The decoder model instance.
-        """
+        """Get the image decoder model."""
         return self._decoder_model_data
 
     @decoder_model_data.setter
     def decoder_model_data(self, value: Any) -> None:
-        """Set the image decoder model.
-
-        Args:
-            value: The decoder model instance to set.
-        """
+        """Set the image decoder model."""
         self._decoder_model_data = value
 
     @property
     def optimizer_diffusion(self) -> Any:
-        """Get the diffusion model optimizer.
-
-        Returns:
-            The optimizer instance for the diffusion model.
-        """
+        """Get the diffusion model optimizer."""
         return self._optimizer_diffusion
 
     @optimizer_diffusion.setter
     def optimizer_diffusion(self, value: Any) -> None:
-        """Set the diffusion model optimizer.
-
-        Args:
-            value: The optimizer instance to set.
-        """
+        """Set the diffusion model optimizer."""
         self._optimizer_diffusion = value
 
     @property
     def optimizer_autoencoder(self) -> Any:
-        """Get the autoencoder optimizer.
-
-        Returns:
-            The optimizer instance for the autoencoder.
-        """
+        """Get the autoencoder optimizer."""
         return self._optimizer_autoencoder
 
     @optimizer_autoencoder.setter
     def optimizer_autoencoder(self, value: Any) -> None:
-        """Set the autoencoder optimizer.
-
-        Args:
-            value: The optimizer instance to set.
-        """
+        """Set the autoencoder optimizer."""
         self._optimizer_autoencoder = value

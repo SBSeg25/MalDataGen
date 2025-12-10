@@ -11,24 +11,6 @@ __credits__ = ['Synthetic Ocean AI']
 # MIT License
 #
 # Copyright (c) 2025 Synthetic Ocean AI
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
 
 try:
     import sys
@@ -38,7 +20,6 @@ try:
 
     from Engine.Layers.Torch.Activations import Activations
     from Engine.Layers.Torch.TimeEmbedding import TimeEmbedding
-    from Engine.Layers.Torch.CrossAttentionBlock import CrossAttentionBlock
 
 except ImportError as error:
     print(error)
@@ -57,49 +38,13 @@ DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION_ALPHA = 0.05
 
 class UNetModelTorch(nn.Module, Activations):
     """
-    UNetModel - PyTorch Implementation
+    UNetModel - PyTorch Implementation with Dynamic Projection Layers
 
-    Implements a deep learning architecture designed for image processing tasks such
-    as image segmentation or generation. The model follows the U-Net style with
-    modifications, including attention blocks, time embedding, and description embeddings.
-    The architecture is flexible and configurable, supporting various numbers of layers,
-    attention mechanisms, residual blocks, and normalization strategies.
-
-    Attributes:
-        @embedding_dimension (int):
-            The size of the input image dimensions.
-        @embedding_channels (int):
-            The number of channels in the input image.
-        @list_neurons_per_level (List[int]):
-            The number of neurons or filters at each level of the network.
-        @list_attentions (List[bool]):
-            Indicates whether attention mechanisms should be applied at each level of the network.
-        @number_residual_blocks (int):
-            The number of residual blocks to apply at each level of the network.
-        @normalization_groups (int):
-            The number of groups used for normalization in residual blocks.
-        @intermediary_activation_function (str):
-            The activation function to use for intermediate layers (e.g., 'ReLU', 'LeakyReLU').
-        @intermediary_activation_alpha (float):
-            The alpha parameter for activation functions like LeakyReLU.
-        @last_layer_activation (str):
-            The activation function to use for the final output layer.
-        @number_samples_per_class (Dict[str, int]):
-            Contains metadata about the dataset, including the "number_classes" key to specify the number of classes.
-
-    Example:
-        >>> unet_model = UNetModelTorch(
-        ...     embedding_dimension=256,
-        ...     embedding_channels=3,
-        ...     list_neurons_per_level=[64, 128, 256],
-        ...     list_attentions=[True, False, True],
-        ...     number_residual_blocks=2,
-        ...     normalization_groups=4,
-        ...     intermediary_activation_function="leaky_relu",
-        ...     intermediary_activation_alpha=0.2,
-        ...     last_layer_activation="sigmoid",
-        ...     number_samples_per_class={"number_classes": 10}
-        ... )
+    This fixed version properly handles:
+    - 3D embeddings (batch, seq_len, channels)
+    - Dynamically created projection layers for variable tensor sizes
+    - Proper encoder-decoder skip connection matching
+    - EMA-compatible layer management
     """
 
     def __init__(self,
@@ -115,18 +60,6 @@ class UNetModelTorch(nn.Module, Activations):
                  number_samples_per_class=None):
         """
         Initializes the UNetModel class with the provided parameters.
-
-        Args:
-            @embedding_dimension (int): The dimension of the input image.
-            @embedding_channels (int): The number of channels in the input image.
-            @list_neurons_per_level (List[int]): Number of neurons/filters at each level.
-            @list_attentions (List[bool]): Attention blocks at each level.
-            @number_residual_blocks (int): Number of residual blocks per level.
-            @normalization_groups (int): Groups for normalization.
-            @intermediary_activation_function (str): Activation for intermediate layers.
-            @intermediary_activation_alpha (float): Alpha parameter for activation.
-            @last_layer_activation (str): Activation for the last layer.
-            @number_samples_per_class (Dict[str, int]): Dataset metadata with "number_classes".
         """
         super(UNetModelTorch, self).__init__()
 
@@ -182,11 +115,19 @@ class UNetModelTorch(nn.Module, Activations):
         self._build_model()
 
     def _build_model(self):
-        """Constructs the U-Net model architecture."""
+        """Constructs the U-Net model architecture with dynamic projection layers."""
         first_conv_channels = self._list_neurons_per_level[0]
 
-        # Initial convolution
-        self.first_dense = nn.Linear(self._embedding_dimension, self._embedding_dimension)
+        # Initial convolution - handles flattened input
+        input_features = self._embedding_dimension * self._embedding_channels
+        output_features = self._embedding_dimension * first_conv_channels
+
+        print(f"[UNet Build] Creating first_dense: input={input_features}, output={output_features}")
+        print(
+            f"[UNet Build] embedding_dimension={self._embedding_dimension}, embedding_channels={self._embedding_channels}")
+        print(f"[UNet Build] first_conv_channels={first_conv_channels}")
+
+        self.first_dense = nn.Linear(input_features, output_features)
 
         # Time embedding
         self.time_embedding = TimeEmbedding(first_conv_channels * 4)
@@ -195,7 +136,9 @@ class UNetModelTorch(nn.Module, Activations):
         # Description embedding
         self.description_mlp = self._label_embedding_MLP(self._number_samples_per_class["number_classes"])
 
-        # Encoder blocks
+        # ========================================================================
+        # ENCODER BLOCKS
+        # ========================================================================
         self.down_blocks = nn.ModuleList()
         self.down_samples = nn.ModuleList()
 
@@ -213,12 +156,16 @@ class UNetModelTorch(nn.Module, Activations):
             if level_idx != len(self._list_neurons_per_level) - 1:
                 self.down_samples.append(DownSampleBlock(num_neurons))
 
-        # Middle blocks
+        # ========================================================================
+        # MIDDLE BLOCKS
+        # ========================================================================
         self.mid_block1 = ResidualBlockTorch(self._list_neurons_per_level[-1], self._intermediary_activation_function)
         self.mid_attn = CrossAttentionBlock(self._list_neurons_per_level[-1])
         self.mid_block2 = ResidualBlockTorch(self._list_neurons_per_level[-1], self._intermediary_activation_function)
 
-        # Decoder blocks
+        # ========================================================================
+        # DECODER BLOCKS
+        # ========================================================================
         self.up_blocks = nn.ModuleList()
         self.up_samples = nn.ModuleList()
 
@@ -238,8 +185,20 @@ class UNetModelTorch(nn.Module, Activations):
             if level_idx != 0:
                 self.up_samples.append(UpSampleBlock(num_neurons))
 
-        # Final output
-        self.final_dense = nn.Linear(self._embedding_dimension, self._embedding_dimension)
+        # ========================================================================
+        # DECODER PROJECTION CACHE (DYNAMIC CREATION - FIX)
+        # ========================================================================
+        # Use a cache dictionary to store dynamically created projection layers
+        # This allows EMA to work while handling variable tensor sizes
+        self.decoder_projections = {}
+
+        # ========================================================================
+        # FINAL OUTPUT LAYER
+        # ========================================================================
+        self.final_dense = nn.Linear(
+            self._embedding_dimension * first_conv_channels,
+            self._embedding_dimension * self._embedding_channels
+        )
 
     def _time_MLP(self, units):
         """Creates time embedding MLP."""
@@ -259,7 +218,7 @@ class UNetModelTorch(nn.Module, Activations):
 
     def forward(self, image_input, time_input, description_input):
         """
-        Forward pass through the U-Net model.
+        Forward pass through the U-Net model with fixed shape handling.
 
         Args:
             image_input (Tensor): Image input [batch, embedding_dimension, embedding_channels]
@@ -269,68 +228,116 @@ class UNetModelTorch(nn.Module, Activations):
         Returns:
             Tensor: Output [batch, embedding_dimension, embedding_channels]
         """
-        # Initial processing
-        x = image_input.view(image_input.shape[0], -1)
-        x = self.first_dense(x)
+        batch_size = image_input.shape[0]
+        first_conv_channels = self._list_neurons_per_level[0]
+
+        # ========================================================================
+        # INITIAL PROCESSING
+        # ========================================================================
+        # Flatten and process initial input
+        x = image_input.view(batch_size, -1)  # (batch, embedding_dimension * embedding_channels)
+        x = self.first_dense(x)  # (batch, embedding_dimension * first_conv_channels)
         x = self._get_activation(self._intermediary_activation_function)(x)
-        x = x.view(image_input.shape[0], self._embedding_dimension, self._embedding_channels)
+        x = x.view(batch_size, self._embedding_dimension, first_conv_channels)
 
         # Time and description embeddings
         t_emb = self.time_embedding(time_input)
         t_emb = self.time_mlp(t_emb)
         d_emb = self.description_mlp(description_input)
 
-        # Skip connections
-        skip_connections = [x]
+        # Skip connections storage
+        skip_connections = []
 
-        # Encoder
+        # ========================================================================
+        # ENCODER PATH
+        # ========================================================================
         for level_idx, level_blocks in enumerate(self.down_blocks):
+            # Process all blocks at this level
             for block in level_blocks:
                 if isinstance(block, ResidualBlockTorch):
                     x = block(x, t_emb)
                 else:  # CrossAttentionBlock
                     x = block(x, d_emb)
 
-            skip_connections.append(x)
+            # Save skip connection BEFORE downsampling
+            skip_connections.append(x.clone())
 
+            # Downsample for next level (except last level)
             if level_idx < len(self.down_samples):
                 x = self.down_samples[level_idx](x)
-                skip_connections.append(x)
 
-        # Middle
+        # ========================================================================
+        # BOTTLENECK (Middle)
+        # ========================================================================
         x = self.mid_block1(x, t_emb)
         x = self.mid_attn(x, d_emb)
         x = self.mid_block2(x, t_emb)
 
-        # Decoder
-        for level_idx, level_blocks in enumerate(self.up_blocks):
-            for _ in range(self._number_residual_blocks + 1):
-                skip = skip_connections.pop()
-                x = torch.cat([x, skip], dim=-1)
+        # ========================================================================
+        # DECODER PATH WITH DYNAMIC PROJECTIONS (FIX)
+        # ========================================================================
+        num_levels = len(self._list_neurons_per_level)
 
-                # Project concatenated features
-                batch_size, seq_len, channels = x.shape
-                x = x.view(batch_size, -1)
-                proj_layer = nn.Linear(seq_len * channels, seq_len * self._list_neurons_per_level[
-                    len(self._list_neurons_per_level) - 1 - level_idx]).to(x.device)
-                x = proj_layer(x)
-                x = self._get_activation(self._intermediary_activation_function)(x)
-                x = x.view(batch_size, seq_len,
-                           self._list_neurons_per_level[len(self._list_neurons_per_level) - 1 - level_idx])
+        for level_idx in range(num_levels):
+            # Upsample FIRST (except for first decoder level which is at bottleneck)
+            if level_idx > 0:
+                upsampler_idx = level_idx - 1
+                if upsampler_idx < len(self.up_samples):
+                    x = self.up_samples[upsampler_idx](x)
 
-                for block in level_blocks:
-                    if isinstance(block, ResidualBlockTorch):
-                        x = block(x, t_emb)
-                    else:  # CrossAttentionBlock
-                        x = block(x, d_emb)
+            # Get corresponding skip connection (pop from end = reverse order)
+            skip = skip_connections.pop()
 
-            if level_idx < len(self.up_samples):
-                x = self.up_samples[level_idx](x)
+            # Ensure skip and x have matching sequence lengths
+            if x.shape[1] != skip.shape[1]:
+                if x.shape[1] < skip.shape[1]:
+                    # Upsample x to match skip's sequence length
+                    ratio = skip.shape[1] // x.shape[1]
+                    x = x.repeat_interleave(ratio, dim=1)
+                else:
+                    # This shouldn't happen in a properly designed U-Net
+                    x = x[:, :skip.shape[1], :]
 
-        # Final output
-        x = x.view(x.shape[0], -1)
-        x = self.final_dense(x)
-        x = x.view(x.shape[0], self._embedding_dimension, self._embedding_channels)
+            # Concatenate along channel dimension
+            x_concat = torch.cat([x, skip], dim=-1)
+
+            # Get target channels for this decoder level
+            decoder_level = num_levels - 1 - level_idx
+            target_channels = self._list_neurons_per_level[decoder_level]
+
+            # Project concatenated features using dynamically created projection layer
+            batch_sz, seq_len, concat_channels = x_concat.shape
+            x_flat = x_concat.view(batch_sz, -1)
+
+            # Create a unique key for this projection based on actual dimensions
+            proj_key = f'decoder_proj_{seq_len}_{concat_channels}_{target_channels}'
+
+            # Create projection layer if it doesn't exist
+            if proj_key not in self.decoder_projections:
+                self.decoder_projections[proj_key] = nn.Linear(
+                    seq_len * concat_channels,
+                    seq_len * target_channels
+                ).to(x_flat.device)
+
+            # Use the dynamically created projection
+            x = self.decoder_projections[proj_key](x_flat)
+            x = self._get_activation(self._intermediary_activation_function)(x)
+            x = x.view(batch_sz, seq_len, target_channels)
+
+            # Process through all residual and attention blocks at this level
+            level_blocks = self.up_blocks[level_idx]
+            for block in level_blocks:
+                if isinstance(block, ResidualBlockTorch):
+                    x = block(x, t_emb)
+                else:  # CrossAttentionBlock
+                    x = block(x, d_emb)
+
+        # ========================================================================
+        # FINAL OUTPUT
+        # ========================================================================
+        x = x.view(batch_size, -1)  # Flatten
+        x = self.final_dense(x)  # Project back to original space
+        x = x.view(batch_size, self._embedding_dimension, self._embedding_channels)
 
         return x
 
@@ -351,7 +358,9 @@ class UNetModelTorch(nn.Module, Activations):
         """Returns the model (for compatibility with original interface)."""
         return self
 
-    # Properties
+    # ========================================================================
+    # PROPERTIES
+    # ========================================================================
     @property
     def embedding_dimension(self):
         return self._embedding_dimension
@@ -453,6 +462,10 @@ class UNetModelTorch(nn.Module, Activations):
         self._number_samples_per_class = value
 
 
+# ============================================================================
+# HELPER CLASSES
+# ============================================================================
+
 class ResidualBlockTorch(nn.Module):
     """Residual block for U-Net."""
 
@@ -552,3 +565,126 @@ class UpSampleBlock(nn.Module):
         x = F.silu(x)
         x = x.view(batch_size, seq_len * 2, width)
         return x
+# !/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+__author__ = 'Kayuã Oleques Paim'
+__email__ = 'kayuaolequesp@gmail.com'
+__version__ = '{1}.{0}.{1}'
+__initial_data__ = '2022/06/01'
+__last_update__ = '2025/03/29'
+__credits__ = ['Kayuã Oleques']
+
+# MIT License
+#
+# Copyright (c) 2025 Synthetic Ocean AI
+
+try:
+    import sys
+    import torch
+    import torch.nn as nn
+    import torch.nn.functional as F
+
+except ImportError as error:
+    print(error)
+    sys.exit(-1)
+
+
+class CrossAttentionBlock(nn.Module):
+    """
+    A custom PyTorch module that implements a Cross-Attention mechanism.
+
+    This layer computes cross-attention between two sets of input sequences:
+    queries and key-value pairs. The cross-attention mechanism computes attention
+    scores between the queries and keys and uses the resulting attention weights
+    to perform weighted aggregation of the values. The output of the attention is
+    projected into a desired number of units. It also incorporates a residual
+    connection between the input and the attention output.
+
+    References:
+        - Vaswani, A., et al. (2017). Attention is all you need.
+          Advances in Neural Information Processing Systems, 30.
+          URL: https://arxiv.org/abs/1706.03762
+    """
+
+    def __init__(self, units):
+        """
+        Initializes the CrossAttentionBlock layer.
+
+        Args:
+            units (int): The number of output units for the attention block.
+        """
+        super(CrossAttentionBlock, self).__init__()
+        self.units = units
+
+        # Initialize the weight matrices for query, key, value, and output projection
+        # Note: PyTorch Linear layers will be created dynamically in forward pass
+        # to handle variable input dimensions
+        self.query_weights = None
+        self.key_weights = None
+        self.value_weights = None
+        self.projection_weights = nn.Linear(units, units)
+
+    def forward(self, query_inputs, key_value_inputs):
+        """
+        Performs the forward pass of the CrossAttentionBlock layer.
+
+        Args:
+            query_inputs (torch.Tensor): The query tensor of shape (batch_size, seq_len, num_channels).
+            key_value_inputs (torch.Tensor): The key-value tensor, expected shape (batch_size, embedding_dim).
+
+        Returns:
+            torch.Tensor: The resulting tensor of shape (batch_size, seq_len, units),
+                         which is the sum of the original query inputs and the attention output.
+        """
+        # Get the dimensions for batch size, sequence length, and number of channels
+        batch_size, seq_len, num_channels = query_inputs.shape
+
+        # FIX: Ensure key_value_inputs is 2D (batch_size, embedding_dim)
+        # Squeeze out any extra dimensions that may have been added
+        while key_value_inputs.dim() > 2:
+            key_value_inputs = key_value_inputs.squeeze(1)
+
+        # Now key_value_inputs should be (batch_size, embedding_dim)
+        embedding_dim = key_value_inputs.shape[-1]
+
+        # Expand key_value_inputs to match query shape: (batch_size, seq_len, embedding_dim)
+        # We broadcast across the sequence length dimension
+        key_value_inputs = key_value_inputs.unsqueeze(1).expand(batch_size, seq_len, embedding_dim)
+
+        # Initialize linear layers if not already created
+        # Use embedding_dim instead of num_channels for key/value projections
+        if self.query_weights is None:
+            self.query_weights = nn.Linear(num_channels, self.units).to(query_inputs.device)
+            self.key_weights = nn.Linear(embedding_dim, self.units).to(query_inputs.device)
+            self.value_weights = nn.Linear(embedding_dim, self.units).to(query_inputs.device)
+
+        # Calculate scaling factor for attention scores
+        scale = self.units ** -0.5
+
+        # Apply linear projections to queries, keys, and values
+        query = self.query_weights(query_inputs)  # (batch_size, seq_len, units)
+        key = self.key_weights(key_value_inputs)  # (batch_size, seq_len, units)
+        value = self.value_weights(key_value_inputs)  # (batch_size, seq_len, units)
+
+        # Compute attention scores
+        # query: (batch_size, seq_len, units)
+        # key.transpose(-2, -1): (batch_size, units, seq_len)
+        attention_scores = torch.matmul(query, key.transpose(-2, -1)) * scale  # (batch_size, seq_len, seq_len)
+
+        # Apply softmax to obtain attention weights
+        attention_weights = F.softmax(attention_scores, dim=-1)  # (batch_size, seq_len, seq_len)
+
+        # Compute attention output by applying attention weights to values
+        attention_output = torch.matmul(attention_weights, value)  # (batch_size, seq_len, units)
+
+        # Project the attention output to the desired dimensionality
+        attention_output = self.projection_weights(attention_output)  # (batch_size, seq_len, units)
+
+        # Apply residual connection by adding the input query values to the attention output
+        # Note: If query_inputs has different dimensions than attention_output, we need to project it
+        if query_inputs.shape[-1] != self.units:
+            residual_proj = nn.Linear(query_inputs.shape[-1], self.units).to(query_inputs.device)
+            return residual_proj(query_inputs) + attention_output
+
+        return query_inputs + attention_output

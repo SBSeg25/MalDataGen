@@ -189,70 +189,52 @@ class LatentDiffusionTorch:
         self._latent_diffusion_VAE_dropout_decay_rate_encoder = arguments.latent_diffusion_autoencoder_dropout_decay_rate_encoder
         self._latent_diffusion_VAE_dropout_decay_rate_decoder = arguments.latent_diffusion_autoencoder_dropout_decay_rate_decoder
 
-    def _get_latent_diffusion(self, input_shape):
+    def _detect_embedding_shape(self, x_real_samples):
         """
-        Initializes and configures the LatentDiffusion model using UNet architecture for image generation.
-
-        This method initializes multiple components required for the diffusion process, including
-        two UNet instances, a VariationalModelDiffusion, and a GaussianDiffusion utility.
+        Helper method to detect the actual embedding shape from VAE.
 
         Args:
-            input_shape (int): The shape of the input data (feature dimension).
+            x_real_samples: Training samples
 
-        Initializes:
-            self._latent_first_instance_unet: The first instance of the UNet model
-            self._latent_second_instance_unet: The second instance of the UNet model
-            self._latent_first_unet_model: The first UNet model
-            self._latent_second_unet_model: The second UNet model with synchronized weights
-            self._latent_gaussian_diffusion_util: Utility for managing the diffusion process
-            self._latent_variation_model_diffusion: The VAE model for latent representation
+        Returns:
+            tuple: (seq_len, channels) of the embeddings
         """
+        # Create a small sample to test
+        if len(x_real_samples) > 32:
+            sample = x_real_samples[:32]
+        else:
+            sample = x_real_samples
 
-        # Initialize the first instance of UNet for the diffusion model
-        self._latent_first_instance_unet = UNetModelTorch(
-            embedding_dimension=self._latent_diffusion_latent_dimension,
-            embedding_channels=self._latent_diffusion_unet_num_embedding_channels,
-            list_neurons_per_level=self._latent_diffusion_unet_channels_per_level,
-            list_attentions=self._latent_diffusion_unet_attention_mode,
-            number_residual_blocks=self._latent_diffusion_unet_num_residual_blocks,
-            normalization_groups=self._latent_diffusion_unet_group_normalization,
-            intermediary_activation_function=self._latent_diffusion_unet_intermediary_activation,
-            intermediary_activation_alpha=self._latent_diffusion_unet_intermediary_activation_alpha,
-            last_layer_activation=self._latent_diffusion_unet_last_layer_activation,
-            number_samples_per_class=self._number_samples_per_class
-        ).to(self._device)
+        # Create embedding from sample
+        test_embedding = self._latent_variational_algorithm.create_embedding(
+            sample,
+            batch_size=min(16, len(sample))
+        )
 
-        # Initialize the second instance of UNet with the same configuration
-        self._latent_second_instance_unet = UNetModelTorch(
-            embedding_dimension=self._latent_diffusion_latent_dimension,
-            embedding_channels=self._latent_diffusion_unet_num_embedding_channels,
-            list_neurons_per_level=self._latent_diffusion_unet_channels_per_level,
-            list_attentions=self._latent_diffusion_unet_attention_mode,
-            number_residual_blocks=self._latent_diffusion_unet_num_residual_blocks,
-            normalization_groups=self._latent_diffusion_unet_group_normalization,
-            intermediary_activation_function=self._latent_diffusion_unet_intermediary_activation,
-            intermediary_activation_alpha=self._latent_diffusion_unet_intermediary_activation_alpha,
-            last_layer_activation=self._latent_diffusion_unet_last_layer_activation,
-            number_samples_per_class=self._number_samples_per_class
-        ).to(self._device)
+        test_embedding = torch.from_numpy(test_embedding).float()
+        if len(test_embedding.shape) == 2:
+            test_embedding = test_embedding.unsqueeze(-1)
 
-        # Build the models for both UNet instances
-        self._latent_first_unet_model = self._latent_first_instance_unet.build_model()
-        self._latent_second_unet_model = self._latent_second_instance_unet.build_model()
+        # Return shape (excluding batch dimension)
+        actual_shape = test_embedding.shape[1:]
+        print(f"\n🔍 Detected embedding shape: {actual_shape}")
+        print(f"   Full shape with batch: {test_embedding.shape}")
 
-        # Synchronize the weights of the second UNet model with the first one
-        self._latent_second_unet_model.load_state_dict(self._latent_first_unet_model.state_dict())
+        return actual_shape
 
-        # Initialize the GaussianDiffusion utility for the diffusion process
-        self._latent_gaussian_diffusion_util = GaussianDiffusionTorch(
-            beta_start=self._latent_diffusion_gaussian_beta_start,
-            beta_end=self._latent_diffusion_gaussian_beta_end,
-            time_steps=self._latent_diffusion_gaussian_time_steps,
-            clip_min=self._latent_diffusion_gaussian_clip_min,
-            clip_max=self._latent_diffusion_gaussian_clip_max
-        ).to(self._device)
+    def _training_latent_diffusion_model(self, input_shape, arguments, x_real_samples, y_real_samples):
+        """
+        Complete fixed training pipeline that detects embedding shape before creating UNets.
+        """
+        print("=" * 80)
+        print("LATENT DIFFUSION TRAINING - FIXED VERSION")
+        print("=" * 80)
 
-        # Initialize the VariationalModelDiffusion for embedding learning and reconstruction
+        # ========================================================================
+        # PHASE 1: Initialize and Train VAE
+        # ========================================================================
+        print("\n[PHASE 1] Initializing VAE...")
+
         self._latent_variation_model_diffusion = VariationalModelDiffusionTorch(
             latent_dimension=self._latent_diffusion_latent_dimension,
             output_shape=input_shape,
@@ -268,7 +250,6 @@ class LatentDiffusionTorch:
             number_samples_per_class=self._number_samples_per_class
         ).to(self._device)
 
-        # Initialize the VAE algorithm for training
         self._latent_variational_algorithm = VAELatentDiffusionAlgorithmPyTorch(
             encoder_model=self._latent_variation_model_diffusion.get_encoder(),
             decoder_model=self._latent_variation_model_diffusion.get_decoder(),
@@ -282,100 +263,75 @@ class LatentDiffusionTorch:
             models_saved_path=self._latent_diffusion_VAE_path_output_models
         ).to(self._device)
 
-    def _training_latent_diffusion_model(self, input_shape, arguments, x_real_samples, y_real_samples):
-        """
-        Executes the complete training pipeline for latent diffusion.
+        print("✓ VAE initialized")
+        print(f"  Encoder: {self._latent_variation_model_diffusion.get_encoder()}")
+        print(f"  Decoder: {self._latent_variation_model_diffusion.get_decoder()}")
 
-        Process:
-        1. Initializes diffusion models
-        2. Trains variational autoencoder
-        3. Creates latent embeddings
-        4. Trains diffusion models on latent space
-        5. Manages callbacks and monitoring
-
-        Args:
-            input_shape (int): Input data shape
-            arguments (Namespace): Training configuration
-            x_real_samples (ndarray): Training samples
-            y_real_samples (ndarray): Corresponding labels
-        """
-        print("---------------------------------------------------------")
-        # Initialize the diffusion model
-        self._get_latent_diffusion(input_shape)
-
-        # Print model information
-        print("First UNet Model:")
-        print(self._latent_first_unet_model)
-        print("\nSecond UNet Model:")
-        print(self._latent_second_unet_model)
-
-        print("\nEncoder Model:")
-        print(self._latent_variation_model_diffusion.get_encoder())
-        print("\nDecoder Model:")
-        print(self._latent_variation_model_diffusion.get_decoder())
-
-        # Convert data to PyTorch tensors
+        # Convert data
         x_real_samples = torch.from_numpy(x_real_samples).float().to(self._device)
         y_real_samples = torch.from_numpy(y_real_samples).long().to(self._device)
-
-        # One-hot encode labels
         y_real_samples_onehot = F.one_hot(
             y_real_samples,
             num_classes=self._number_samples_per_class["number_classes"]
         ).float()
 
-        # Setup optimizer for VAE
+        # Train VAE
+        print(f"\n[PHASE 1] Training VAE for {self._latent_diffusion_VAE_epochs} epochs...")
         vae_optimizer = Adam(
             list(self._latent_variation_model_diffusion.get_encoder().parameters()) +
             list(self._latent_variation_model_diffusion.get_decoder().parameters()),
             lr=0.0001
         )
 
-        # Training loop for VAE
-        print("\n=== Training VAE ===")
         num_batches = len(x_real_samples) // self._latent_diffusion_VAE_batch_size_training
 
         for epoch in range(self._latent_diffusion_VAE_epochs):
             epoch_losses = []
-
             for batch_idx in range(num_batches):
                 start_idx = batch_idx * self._latent_diffusion_VAE_batch_size_training
                 end_idx = start_idx + self._latent_diffusion_VAE_batch_size_training
-
                 batch_x = x_real_samples[start_idx:end_idx]
                 batch_y = y_real_samples_onehot[start_idx:end_idx]
 
-                # Train step
-
                 loss_dict = self._latent_variational_algorithm.train_step(
-                    (batch_x, batch_x),
-                    batch_y,
-                    vae_optimizer
+                    (batch_x, batch_x), batch_y, vae_optimizer
                 )
-
                 epoch_losses.append(loss_dict['loss'])
 
             avg_loss = sum(epoch_losses) / len(epoch_losses)
             if (epoch + 1) % 10 == 0 or epoch == 0:
-                print(f"Epoch [{epoch + 1}/{self._latent_diffusion_VAE_epochs}], Loss: {avg_loss:.4f}")
+                print(f"  Epoch [{epoch + 1}/{self._latent_diffusion_VAE_epochs}], Loss: {avg_loss:.4f}")
 
-            # Early stopping check
             if hasattr(arguments, 'use_early_stop') and arguments.use_early_stop:
                 if hasattr(self, '_callback_early_stop') and self._callback_early_stop.should_stop(avg_loss):
-                    print(f"Early stopping at epoch {epoch + 1}")
+                    print(f"  Early stopping at epoch {epoch + 1}")
                     break
 
-        # Get trained encoder and decoder
         self._encoder_latent_diffusion = self._latent_variational_algorithm.get_encoder_trained()
         self._decoder_latent_diffusion = self._latent_variational_algorithm.get_decoder_trained()
+        print("✓ VAE training complete")
 
-        print("\nTrained Encoder:")
-        print(self._encoder_latent_diffusion)
-        print("\nTrained Decoder:")
-        print(self._decoder_latent_diffusion)
+        # ========================================================================
+        # PHASE 2: Detect Actual Embedding Shape
+        # ========================================================================
+        print("\n[PHASE 2] Detecting actual embedding shape...")
+        actual_embedding_shape = self._detect_embedding_shape(x_real_samples)
 
-        # Create embeddings
-        print("\n=== Creating Embeddings ===")
+        print(f"\n📊 Shape Analysis:")
+        print(
+            f"   Configured dimensions: ({self._latent_diffusion_latent_dimension}, {self._latent_diffusion_unet_num_embedding_channels})")
+        print(f"   Actual VAE output:     {actual_embedding_shape}")
+
+        if actual_embedding_shape != (self._latent_diffusion_latent_dimension,
+                                      self._latent_diffusion_unet_num_embedding_channels):
+            print(f"   ⚠️  MISMATCH DETECTED - Using actual shape for UNet!")
+        else:
+            print(f"   ✓ Shapes match")
+
+        # ========================================================================
+        # PHASE 3: Create Full Embeddings
+        # ========================================================================
+        print(f"\n[PHASE 3] Creating embeddings for all data...")
         data_embedding = self._latent_variational_algorithm.create_embedding(
             x_real_samples,
             batch_size=self._latent_diffusion_VAE_batch_size_create_embedding
@@ -385,7 +341,65 @@ class LatentDiffusionTorch:
         if len(data_embedding.shape) == 2:
             data_embedding = data_embedding.unsqueeze(-1)
 
-        # Initialize the final diffusion algorithm
+        print(f"✓ Created embeddings with shape: {data_embedding.shape}")
+
+        # ========================================================================
+        # PHASE 4: Initialize UNets with Correct Dimensions
+        # ========================================================================
+        print(f"\n[PHASE 4] Initializing UNets with shape {actual_embedding_shape}...")
+
+        embedding_seq_len, embedding_channels = actual_embedding_shape
+
+        # Create first UNet
+        self._latent_first_instance_unet = UNetModelTorch(
+            embedding_dimension=embedding_seq_len,
+            embedding_channels=embedding_channels,
+            list_neurons_per_level=self._latent_diffusion_unet_channels_per_level,
+            list_attentions=self._latent_diffusion_unet_attention_mode,
+            number_residual_blocks=self._latent_diffusion_unet_num_residual_blocks,
+            normalization_groups=self._latent_diffusion_unet_group_normalization,
+            intermediary_activation_function=self._latent_diffusion_unet_intermediary_activation,
+            intermediary_activation_alpha=self._latent_diffusion_unet_intermediary_activation_alpha,
+            last_layer_activation=self._latent_diffusion_unet_last_layer_activation,
+            number_samples_per_class=self._number_samples_per_class
+        ).to(self._device)
+
+        # Create second UNet
+        self._latent_second_instance_unet = UNetModelTorch(
+            embedding_dimension=embedding_seq_len,
+            embedding_channels=embedding_channels,
+            list_neurons_per_level=self._latent_diffusion_unet_channels_per_level,
+            list_attentions=self._latent_diffusion_unet_attention_mode,
+            number_residual_blocks=self._latent_diffusion_unet_num_residual_blocks,
+            normalization_groups=self._latent_diffusion_unet_group_normalization,
+            intermediary_activation_function=self._latent_diffusion_unet_intermediary_activation,
+            intermediary_activation_alpha=self._latent_diffusion_unet_intermediary_activation_alpha,
+            last_layer_activation=self._latent_diffusion_unet_last_layer_activation,
+            number_samples_per_class=self._number_samples_per_class
+        ).to(self._device)
+
+        self._latent_first_unet_model = self._latent_first_instance_unet.build_model()
+        self._latent_second_unet_model = self._latent_second_instance_unet.build_model()
+        self._latent_second_unet_model.load_state_dict(self._latent_first_unet_model.state_dict())
+
+        print("✓ UNets initialized")
+        print(f"  First UNet input layer: {self._latent_first_unet_model.first_dense}")
+        print(f"  Expected input: (batch, {embedding_seq_len * embedding_channels})")
+
+        # Initialize GaussianDiffusion
+        self._latent_gaussian_diffusion_util = GaussianDiffusionTorch(
+            beta_start=self._latent_diffusion_gaussian_beta_start,
+            beta_end=self._latent_diffusion_gaussian_beta_end,
+            time_steps=self._latent_diffusion_gaussian_time_steps,
+            clip_min=self._latent_diffusion_gaussian_clip_min,
+            clip_max=self._latent_diffusion_gaussian_clip_max
+        ).to(self._device)
+
+        # ========================================================================
+        # PHASE 5: Initialize Diffusion Algorithm
+        # ========================================================================
+        print(f"\n[PHASE 5] Initializing diffusion algorithm...")
+
         self._latent_diffusion_algorithm = AlgorithmLatentDiffusionTorch(
             first_unet_model=self._latent_first_unet_model,
             second_unet_model=self._latent_second_unet_model,
@@ -401,11 +415,18 @@ class LatentDiffusionTorch:
             time_steps=self._latent_diffusion_gaussian_time_steps,
             ema=self._latent_diffusion_ema,
             margin=self._latent_diffusion_margin,
-            embedding_dimension=self._latent_diffusion_latent_dimension
+            embedding_dimension=embedding_seq_len  # Use actual dimension
         )
 
-        # Training loop for diffusion model
-        print("\n=== Training Diffusion Model ===")
+        print("✓ Diffusion algorithm initialized")
+
+        # ========================================================================
+        # PHASE 6: Train Diffusion Model
+        # ========================================================================
+        print(f"\n[PHASE 6] Training diffusion model for {self._latent_diffusion_unet_epochs} epochs...")
+        print(f"  Embedding shape: {data_embedding.shape}")
+        print(f"  Batch size: {self._latent_diffusion_unet_batch_size}")
+
         num_batches = len(data_embedding) // self._latent_diffusion_unet_batch_size
 
         for epoch in range(self._latent_diffusion_unet_epochs):
@@ -418,7 +439,14 @@ class LatentDiffusionTorch:
                 batch_embedding = data_embedding[start_idx:end_idx]
                 batch_labels = y_real_samples_onehot[start_idx:end_idx]
 
-                # Train step
+                # Verify shape before training
+                if batch_idx == 0 and epoch == 0:
+                    print(f"\n  First batch check:")
+                    print(f"    Embedding shape: {batch_embedding.shape}")
+                    print(
+                        f"    Flattened would be: {batch_embedding.shape[0]}x{batch_embedding.shape[1] * batch_embedding.shape[2]}")
+                    print(f"    UNet expects: {batch_embedding.shape[0]}x{embedding_seq_len * embedding_channels}")
+
                 loss_dict = self._latent_diffusion_algorithm.train_step(
                     (batch_embedding, batch_labels)
                 )
@@ -426,15 +454,18 @@ class LatentDiffusionTorch:
 
             avg_loss = sum(epoch_losses) / len(epoch_losses)
             if (epoch + 1) % 10 == 0 or epoch == 0:
-                print(f"Epoch [{epoch + 1}/{self._latent_diffusion_unet_epochs}], Diffusion Loss: {avg_loss:.4f}")
+                print(f"  Epoch [{epoch + 1}/{self._latent_diffusion_unet_epochs}], Diffusion Loss: {avg_loss:.4f}")
 
-            # Early stopping check
             if hasattr(arguments, 'use_early_stop') and arguments.use_early_stop:
                 if hasattr(self, '_callback_early_stop') and self._callback_early_stop.should_stop(avg_loss):
-                    print(f"Early stopping at epoch {epoch + 1}")
+                    print(f"  Early stopping at epoch {epoch + 1}")
                     break
 
+        print("\n" + "=" * 80)
+        print("✓ TRAINING COMPLETED SUCCESSFULLY")
+        print("=" * 80)
     # Property getters and setters (same as original, no changes needed)
+
     @property
     def device(self):
         """Get the device being used (cuda or cpu)"""

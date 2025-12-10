@@ -253,7 +253,8 @@ class GaussianDiffusionTorch:
     @staticmethod
     def _extract(a, t, x_shape):
         """
-        Extracts values from a tensor based on the time index and reshapes them to match the input batch.
+        Extracts values from a tensor based on the time index and reshapes them
+        to match the input batch dimensions.
 
         Parameters:
         -----------
@@ -267,14 +268,20 @@ class GaussianDiffusionTorch:
         Returns:
         --------
             torch.Tensor
-                Extracted and reshaped values.
+                Extracted and reshaped values with appropriate dimensions.
         """
-
         batch_size = x_shape[0]
-
         out = a[t]
 
-        return out.reshape(batch_size, 1, 1, 1)
+        # Dynamically determine the number of dimensions to add
+        # For 3D tensors (batch, seq, channels): reshape to (batch, 1, 1)
+        # For 4D tensors (batch, C, H, W): reshape to (batch, 1, 1, 1)
+        ndim = len(x_shape)
+        reshape_dims = [batch_size] + [1] * (ndim - 1)
+
+        ndim = len(x_shape)
+        reshape_dims = [batch_size] + [1] * (ndim - 1)
+        return out.reshape(*reshape_dims)
 
     def q_mean_variance(self, x_start, t):
         """
