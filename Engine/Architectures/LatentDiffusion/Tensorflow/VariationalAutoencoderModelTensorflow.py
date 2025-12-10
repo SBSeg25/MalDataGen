@@ -44,7 +44,7 @@ except ImportError as error:
     sys.exit(-1)
 
 
-class VariationalModelDiffusion(VanillaDecoderDiffusion, VanillaEncoderDiffusion):
+class VariationalModelDiffusionTensorflow(VanillaDecoderDiffusion, VanillaEncoderDiffusion):
     """
     A Variational Model that integrates both VanillaEncoder and VanillaDecoder
     functionalities. This class enables flexible configuration of encoder and

@@ -56,7 +56,7 @@ try:
     from Engine.Models.DenoisingDiffusion import DenoisingDiffusionInstanceTorch
     from Engine.Models.Adversarial import Adversarial
     from Engine.Models.Autoencoder import Autoencoder
-    from Engine.Models.LatentDiffusionInstanceTensorflow import LatentDiffusion
+    from Engine.Models.LatentDiffusionInstanceTensorflow import LatentDiffusionTensorflow
     from Engine.Models.QuantizedVAE import QuantizedVAE
     from Engine.Algorithms.RandomNoise.AlgorithmRandomNoise import RandomNoiseAlgorithm
     from Engine.Callbacks.CallbackModel import ModelMonitorCallback
@@ -75,13 +75,12 @@ except ImportError as error:
 class GenerativeModels(Adversarial,
                        Autoencoder,
                        QuantizedVAE,
-                       LatentDiffusionTorch,
+                       LatentDiffusionTensorflow,
                        Wasserstein,
                        WassersteinGP,
                        VariationalAutoencoder,
                        Smote,
                        DenoisingDiffusionInstanceTorch):
-
     """
     A class to manage and facilitate the training and generation of various types of generative models,
     including Generative Adversarial Networks (GANs), Autoencoders (AEs), Variational Autoencoders (VAEs),
@@ -267,7 +266,6 @@ class GenerativeModels(Adversarial,
                              arguments.adversarial_last_layer_activation,
                              arguments.variational_autoencoder_number_epochs)
 
-
         Autoencoder.__init__(self,
                              arguments.autoencoder_latent_dimension,
                              arguments.autoencoder_training_algorithm,
@@ -329,7 +327,57 @@ class GenerativeModels(Adversarial,
                               arguments.quantized_vae_file_name_decoder,
                               arguments.quantized_vae_path_output_models)
 
-        LatentDiffusion.__init__(self, arguments)
+        LatentDiffusionTensorflow.__init__(
+            self,
+            # UNet Parameters
+            unet_last_layer_activation=arguments.latent_diffusion_unet_last_layer_activation,
+            latent_dimension=arguments.latent_diffusion_latent_dimension,
+            unet_num_embedding_channels=arguments.latent_diffusion_unet_num_embedding_channels,
+            unet_channels_per_level=arguments.latent_diffusion_unet_channels_per_level,
+            unet_batch_size=arguments.latent_diffusion_unet_batch_size,
+            unet_attention_mode=arguments.latent_diffusion_unet_attention_mode,
+            unet_num_residual_blocks=arguments.latent_diffusion_unet_num_residual_blocks,
+            unet_group_normalization=arguments.latent_diffusion_unet_group_normalization,
+            unet_intermediary_activation=arguments.latent_diffusion_unet_intermediary_activation,
+            unet_intermediary_activation_alpha=arguments.latent_diffusion_unet_intermediary_activation_alpha,
+            unet_epochs=arguments.latent_diffusion_unet_epochs,
+
+            # Gaussian Diffusion Parameters
+            gaussian_beta_start=arguments.latent_diffusion_gaussian_beta_start,
+            gaussian_beta_end=arguments.latent_diffusion_gaussian_beta_end,
+            gaussian_time_steps=arguments.latent_diffusion_gaussian_time_steps,
+            gaussian_clip_min=arguments.latent_diffusion_gaussian_clip_min,
+            gaussian_clip_max=arguments.latent_diffusion_gaussian_clip_max,
+
+            # VAE Parameters
+            VAE_loss_function=arguments.latent_diffusion_autoencoder_loss,
+            VAE_encoder_filters=arguments.latent_diffusion_autoencoder_encoder_filters,
+            VAE_decoder_filters=arguments.latent_diffusion_autoencoder_decoder_filters,
+            VAE_last_layer_activation=arguments.latent_diffusion_autoencoder_last_layer_activation,
+            VAE_latent_dimension=arguments.latent_diffusion_autoencoder_latent_dimension,
+            VAE_batch_size_create_embedding=arguments.latent_diffusion_autoencoder_batch_size_create_embedding,
+            VAE_batch_size_training=arguments.latent_diffusion_autoencoder_batch_size_training,
+            VAE_epochs=arguments.latent_diffusion_autoencoder_epochs,
+            VAE_intermediary_activation_function=arguments.latent_diffusion_autoencoder_intermediary_activation_function,
+            VAE_intermediary_activation_alpha=arguments.latent_diffusion_autoencoder_intermediary_activation_alpha,
+            VAE_activation_output_encoder=arguments.latent_diffusion_autoencoder_activation_output_encoder,
+
+            # Additional VAE Parameters
+            VAE_initializer_mean=arguments.latent_diffusion_autoencoder_initializer_mean,
+            VAE_initializer_deviation=arguments.latent_diffusion_autoencoder_initializer_deviation,
+            VAE_dropout_decay_rate_encoder=arguments.latent_diffusion_autoencoder_dropout_decay_rate_encoder,
+            VAE_dropout_decay_rate_decoder=arguments.latent_diffusion_autoencoder_dropout_decay_rate_decoder,
+            VAE_file_name_encoder=arguments.latent_diffusion_autoencoder_file_name_encoder,
+            VAE_file_name_decoder=arguments.latent_diffusion_autoencoder_file_name_decoder,
+            VAE_path_output_models=arguments.latent_diffusion_autoencoder_path_output_models,
+            VAE_mean_distribution=arguments.latent_diffusion_autoencoder_mean_distribution,
+            VAE_stander_deviation=arguments.latent_diffusion_autoencoder_stander_deviation,
+
+            # Diffusion Training Parameters
+            margin=arguments.latent_diffusion_margin,
+            ema=arguments.latent_diffusion_ema,
+            time_steps=arguments.latent_diffusion_time_steps
+        )
 
         Wasserstein.__init__(self,
                              arguments.wasserstein_latent_dimension,
@@ -359,9 +407,6 @@ class GenerativeModels(Adversarial,
                              arguments.wasserstein_file_name_generator,
                              arguments.wasserstein_path_output_models)
 
-
-
-
         WassersteinGP.__init__(self, arguments.wasserstein_gp_latent_dimension,
                                arguments.wasserstein_gp_training_algorithm,
                                arguments.wasserstein_gp_activation_function,
@@ -382,11 +427,6 @@ class GenerativeModels(Adversarial,
                                arguments.wasserstein_gp_optimizer_generator_beta,
                                arguments.wasserstein_gp_optimizer_discriminator_beta,
                                arguments.wasserstein_gp_discriminator_steps)
-
-
-
-
-
 
         VariationalAutoencoder.__init__(self,
                                         arguments.variational_autoencoder_latent_dimension,
@@ -412,7 +452,6 @@ class GenerativeModels(Adversarial,
 
         Smote.__init__(self, arguments)
 
-
         self._callback_model_monitor = None
         self._callback_resources_monitor = None
         self._callback_early_stop = None
@@ -427,12 +466,10 @@ class GenerativeModels(Adversarial,
 
         self._number_samples_per_class = arguments.number_samples_per_class
 
-
     def _get_random_noise(self, input_shape):
 
         self._random_noise_algorithm = RandomNoiseAlgorithm(noise_level=self._random_noise_level,
                                                             noise_type=self._random_noise_type_noise)
-
 
     def training_model(self, arguments, input_shape, x_real_samples, y_real_samples, monitor_path, k_fold):
         """
@@ -497,7 +534,8 @@ class GenerativeModels(Adversarial,
             # Fit the autoencoder model
             self._random_noise_algorithm.fit(x_real_samples,
                                              to_categorical(y_real_samples,
-                                                            num_classes=self._number_samples_per_class["number_classes"]))
+                                                            num_classes=self._number_samples_per_class[
+                                                                "number_classes"]))
 
         # Smote model training
         elif arguments.model_type == 'smote':
@@ -545,7 +583,6 @@ class GenerativeModels(Adversarial,
         else:
             # If no valid model type is selected, do nothing
             pass
-
 
     def get_samples(self, number_samples_per_class):
         """
@@ -628,10 +665,6 @@ class GenerativeModels(Adversarial,
             pass
 
 
-
-
-
-
 def import_models(function):
     """
     Decorator to create an instance of the Metrics class
@@ -643,6 +676,7 @@ def import_models(function):
     Returns:
         callable: The wrapped function that initializes Metrics.
     """
+
     def wrapper(self, *args, **kwargs):
         # Create an instance of Metrics, passing the arguments from the instance
         GenerativeModels.__init__(self, self.arguments)
@@ -650,6 +684,3 @@ def import_models(function):
         return function(self, *args, **kwargs)
 
     return wrapper
-
-
-

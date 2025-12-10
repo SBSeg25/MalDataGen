@@ -8,7 +8,6 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
-from Engine.Algorithms.LatentDiffusion.Tensorflow.AlgorithmLatentDiffusionTensorflow import LatentDiffusionAlgorithmTensorflow
 
 # MIT License
 #
@@ -53,16 +52,115 @@ try:
     from Engine.Algorithms.LatentDiffusion.Tensorflow.AlgorithmVAELatentDiffusionTensorflow import VAELatentDiffusionAlgorithmTensorflow
     from Engine.Algorithms.LatentDiffusion.Tensorflow.GaussianLatentDiffusionTensorflow import GaussianDiffusionTensorflow
     from Engine.Architectures.LatentDiffusion.Tensorflow.DiffusionModelUnetTensorflow import UNetModel
-    from Engine.Architectures.LatentDiffusion.Tensorflow.VariationalAutoencoderModelTensorflow import VariationalModelDiffusion
+    from Engine.Algorithms.LatentDiffusion.Tensorflow.AlgorithmLatentDiffusionTensorflow import \
+        LatentDiffusionAlgorithmTensorflow
 
 except ImportError as error:
     logging.error(error)
     sys.exit(-1)
 
+# !/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+__author__ = 'Synthetic Ocean AI - Team'
+__email__ = 'syntheticoceanai@gmail.com'
+__version__ = '{1}.{0}.{1}'
+__initial_data__ = '2022/06/01'
+__last_update__ = '2025/03/29'
+__credits__ = ['Synthetic Ocean AI']
+
+# MIT License
+#
+# Copyright (c) 2025 Synthetic Ocean AI
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+try:
+    import sys
+    import keras
+    import numpy as np
+    import logging
+    import tensorflow as tf
+
+    from tensorflow.keras.optimizers import Adam
+    from tensorflow.keras.utils import to_categorical
+    from tensorflow.python.keras.losses import MeanSquaredError, BinaryCrossentropy
+
+    from Engine.Algorithms.LatentDiffusion.Tensorflow.AlgorithmVAELatentDiffusionTensorflow import \
+        VAELatentDiffusionAlgorithmTensorflow
+    from Engine.Algorithms.LatentDiffusion.Tensorflow.GaussianLatentDiffusionTensorflow import \
+        GaussianDiffusionTensorflow
+    from Engine.Architectures.LatentDiffusion.Tensorflow.DiffusionModelUnetTensorflow import UNetModel
+    from Engine.Architectures.LatentDiffusion.Tensorflow.VariationalAutoencoderModelTensorflow import VariationalModelDiffusionTensorflow
+    from Engine.Algorithms.LatentDiffusion.Tensorflow.AlgorithmLatentDiffusionTensorflow import \
+        LatentDiffusionAlgorithmTensorflow
+
+except ImportError as error:
+    logging.error(error)
+    sys.exit(-1)
+
+# Default values from your constants file
+DEFAULT_LATENT_DIFFUSION_UNET_LAST_LAYER_ACTIVATION = 'linear'
+DEFAULT_LATENT_DIFFUSION_LATENT_DIMENSION = 64
+DEFAULT_LATENT_DIFFUSION_UNET_NUMBER_EMBEDDING_CHANNELS = 1
+DEFAULT_LATENT_DIFFUSION_UNET_CHANNELS_PER_LEVEL = [1, 2, 4]
+DEFAULT_LATENT_DIFFUSION_UNET_BATCH_SIZE = 128
+DEFAULT_LATENT_DIFFUSION_UNET_ATTENTION_MODE = [False, True, True]
+DEFAULT_LATENT_DIFFUSION_UNET_NUMBER_RESIDUAL_BLOCKS = 2
+DEFAULT_LATENT_DIFFUSION_UNET_GROUP_NORMALIZATION = 1
+DEFAULT_LATENT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION = 'swish'
+DEFAULT_LATENT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION_ALPHA = 0.05
+DEFAULT_LATENT_DIFFUSION_UNET_NUMBER_EPOCHS = 1000
+
+DEFAULT_LATENT_DIFFUSION_GAUSSIAN_BETA_START = 1e-4
+DEFAULT_LATENT_DIFFUSION_GAUSSIAN_BETA_END = 0.02
+DEFAULT_LATENT_DIFFUSION_GAUSSIAN_TIME_STEPS = 1000
+DEFAULT_LATENT_DIFFUSION_GAUSSIAN_CLIP_MIN = -1.0
+DEFAULT_LATENT_DIFFUSION_GAUSSIAN_CLIP_MAX = 1.0
+
+DEFAULT_LATENT_DIFFUSION_AUTOENCODER_LOSS = 'mse'
+DEFAULT_LATENT_DIFFUSION_AUTOENCODER_ENCODER_FILTERS = [320, 160]
+DEFAULT_LATENT_DIFFUSION_AUTOENCODER_DECODER_FILTERS = [160, 320]
+DEFAULT_LATENT_DIFFUSION_AUTOENCODER_LAST_LAYER_ACTIVATION = 'sigmoid'
+DEFAULT_LATENT_DIFFUSION_AUTOENCODER_LATENT_DIMENSION = 64
+DEFAULT_LATENT_DIFFUSION_AUTOENCODER_BATCH_SIZE_CREATE_EMBEDDING = 128
+DEFAULT_LATENT_DIFFUSION_AUTOENCODER_BATCH_SIZE_TRAINING = 64
+DEFAULT_LATENT_DIFFUSION_AUTOENCODER_EPOCHS = 1000
+DEFAULT_LATENT_DIFFUSION_AUTOENCODER_INTERMEDIARY_ACTIVATION = 'swish'
+DEFAULT_LATENT_DIFFUSION_AUTOENCODER_INTERMEDIARY_ACTIVATION_ALPHA = 0.05
+DEFAULT_LATENT_DIFFUSION_AUTOENCODER_ACTIVATION_OUTPUT_ENCODER = 'sigmoid'
+DEFAULT_LATENT_DIFFUSION_AUTOENCODER_INITIALIZER_MEAN = 0.0
+DEFAULT_LATENT_DIFFUSION_AUTOENCODER_INITIALIZER_DEVIATION = 0.125
+DEFAULT_LATENT_DIFFUSION_AUTOENCODER_DROPOUT_DECAY_RATE_ENCODER = 0.2
+DEFAULT_LATENT_DIFFUSION_AUTOENCODER_DROPOUT_DECAY_RATE_DECODER = 0.4
+DEFAULT_LATENT_DIFFUSION_AUTOENCODER_FILE_NAME_ENCODER = "encoder_model"
+DEFAULT_LATENT_DIFFUSION_AUTOENCODER_FILE_NAME_DECODER = "decoder_model"
+DEFAULT_LATENT_DIFFUSION_AUTOENCODER_PATH_OUTPUT_MODELS = "models_saved/"
+DEFAULT_LATENT_DIFFUSION_AUTOENCODER_MEAN_DISTRIBUTION = 0.5
+DEFAULT_LATENT_DIFFUSION_AUTOENCODER_STANDER_DEVIATION = 0.125
+
+DEFAULT_LATENT_DIFFUSION_MARGIN = 0.5
+DEFAULT_LATENT_DIFFUSION_EMA = 0.999
+DEFAULT_LATENT_DIFFUSION_TIME_STEPS = 1000
 
 
-
-class LatentDiffusion:
+class LatentDiffusionTensorflow:
     """
     A class that implements a Latent Denoising Probabilistic Diffusion (LDPD) model for generative tasks.
     This implementation combines variational autoencoders with diffusion models in latent space for
@@ -129,174 +227,303 @@ class LatentDiffusion:
         _latent_diffusion_VAE_initializer_deviation: Initial std deviation for model weights
         _latent_diffusion_VAE_dropout_decay_rate_encoder: Dropout decay schedule for encoder
         _latent_diffusion_VAE_dropout_decay_rate_decoder: Dropout decay schedule for decoder
-
     """
 
-    def __init__(self, arguments):
+    def __init__(self,
+                 # UNet Parameters
+                 unet_last_layer_activation: str = DEFAULT_LATENT_DIFFUSION_UNET_LAST_LAYER_ACTIVATION,
+                 latent_dimension: int = DEFAULT_LATENT_DIFFUSION_LATENT_DIMENSION,
+                 unet_num_embedding_channels: int = DEFAULT_LATENT_DIFFUSION_UNET_NUMBER_EMBEDDING_CHANNELS,
+                 unet_channels_per_level: list[int] = None,
+                 unet_batch_size: int = DEFAULT_LATENT_DIFFUSION_UNET_BATCH_SIZE,
+                 unet_attention_mode: list[bool] = None,
+                 unet_num_residual_blocks: int = DEFAULT_LATENT_DIFFUSION_UNET_NUMBER_RESIDUAL_BLOCKS,
+                 unet_group_normalization: int = DEFAULT_LATENT_DIFFUSION_UNET_GROUP_NORMALIZATION,
+                 unet_intermediary_activation: str = DEFAULT_LATENT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION,
+                 unet_intermediary_activation_alpha: float = DEFAULT_LATENT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION_ALPHA,
+                 unet_epochs: int = DEFAULT_LATENT_DIFFUSION_UNET_NUMBER_EPOCHS,
+
+                 # Gaussian Diffusion Parameters
+                 gaussian_beta_start: float = DEFAULT_LATENT_DIFFUSION_GAUSSIAN_BETA_START,
+                 gaussian_beta_end: float = DEFAULT_LATENT_DIFFUSION_GAUSSIAN_BETA_END,
+                 gaussian_time_steps: int = DEFAULT_LATENT_DIFFUSION_GAUSSIAN_TIME_STEPS,
+                 gaussian_clip_min: float = DEFAULT_LATENT_DIFFUSION_GAUSSIAN_CLIP_MIN,
+                 gaussian_clip_max: float = DEFAULT_LATENT_DIFFUSION_GAUSSIAN_CLIP_MAX,
+
+                 # VAE Parameters
+                 VAE_loss_function: str = DEFAULT_LATENT_DIFFUSION_AUTOENCODER_LOSS,
+                 VAE_encoder_filters: list[int] = None,
+                 VAE_decoder_filters: list[int] = None,
+                 VAE_last_layer_activation: str = DEFAULT_LATENT_DIFFUSION_AUTOENCODER_LAST_LAYER_ACTIVATION,
+                 VAE_latent_dimension: int = DEFAULT_LATENT_DIFFUSION_AUTOENCODER_LATENT_DIMENSION,
+                 VAE_batch_size_create_embedding: int = DEFAULT_LATENT_DIFFUSION_AUTOENCODER_BATCH_SIZE_CREATE_EMBEDDING,
+                 VAE_batch_size_training: int = DEFAULT_LATENT_DIFFUSION_AUTOENCODER_BATCH_SIZE_TRAINING,
+                 VAE_epochs: int = DEFAULT_LATENT_DIFFUSION_AUTOENCODER_EPOCHS,
+                 VAE_intermediary_activation_function: str = DEFAULT_LATENT_DIFFUSION_AUTOENCODER_INTERMEDIARY_ACTIVATION,
+                 VAE_intermediary_activation_alpha: float = DEFAULT_LATENT_DIFFUSION_AUTOENCODER_INTERMEDIARY_ACTIVATION_ALPHA,
+                 VAE_activation_output_encoder: str = DEFAULT_LATENT_DIFFUSION_AUTOENCODER_ACTIVATION_OUTPUT_ENCODER,
+
+                 # Additional VAE Parameters
+                 VAE_initializer_mean: float = DEFAULT_LATENT_DIFFUSION_AUTOENCODER_INITIALIZER_MEAN,
+                 VAE_initializer_deviation: float = DEFAULT_LATENT_DIFFUSION_AUTOENCODER_INITIALIZER_DEVIATION,
+                 VAE_dropout_decay_rate_encoder: float = DEFAULT_LATENT_DIFFUSION_AUTOENCODER_DROPOUT_DECAY_RATE_ENCODER,
+                 VAE_dropout_decay_rate_decoder: float = DEFAULT_LATENT_DIFFUSION_AUTOENCODER_DROPOUT_DECAY_RATE_DECODER,
+                 VAE_file_name_encoder: str = DEFAULT_LATENT_DIFFUSION_AUTOENCODER_FILE_NAME_ENCODER,
+                 VAE_file_name_decoder: str = DEFAULT_LATENT_DIFFUSION_AUTOENCODER_FILE_NAME_DECODER,
+                 VAE_path_output_models: str = DEFAULT_LATENT_DIFFUSION_AUTOENCODER_PATH_OUTPUT_MODELS,
+                 VAE_mean_distribution: float = DEFAULT_LATENT_DIFFUSION_AUTOENCODER_MEAN_DISTRIBUTION,
+                 VAE_stander_deviation: float = DEFAULT_LATENT_DIFFUSION_AUTOENCODER_STANDER_DEVIATION,
+
+                 # Diffusion Training Parameters
+                 margin: float = DEFAULT_LATENT_DIFFUSION_MARGIN,
+                 ema: float = DEFAULT_LATENT_DIFFUSION_EMA,
+                 time_steps: int = DEFAULT_LATENT_DIFFUSION_TIME_STEPS,
+
+                 # Optional pre-initialized components
+                 variational_algorithm: VAELatentDiffusionAlgorithmTensorflow | None = None,
+                 variation_model: VariationalModelDiffusionTensorflow | None = None,
+                 first_unet: UNetModel | None = None,
+                 second_unet: UNetModel | None = None,
+                 gaussian_diffusion_util: GaussianDiffusionTensorflow | None = None
+                 ) -> None:
         """
         Initializes the latent diffusion instance with configuration parameters.
 
         Args:
-            arguments (Namespace): Configuration object containing:
-                - UNet architecture parameters
-                - VAE configuration
-                - Gaussian diffusion settings
-                - Training hyperparameters
-                - Model saving paths
+            # UNet Parameters
+            unet_last_layer_activation: Activation for the last layer of U-Net (default: 'linear')
+            latent_dimension: Dimension of the latent space (default: 64)
+            unet_num_embedding_channels: Number of embedding channels for U-Net (default: 1)
+            unet_channels_per_level: List of channels per level in U-Net (default: [1, 2, 4])
+            unet_batch_size: Batch size for U-Net training (default: 128)
+            unet_attention_mode: Attention mode for U-Net (default: [False, True, True])
+            unet_num_residual_blocks: Number of residual blocks in U-Net (default: 2)
+            unet_group_normalization: Group normalization value for U-Net (default: 1)
+            unet_intermediary_activation: Intermediary activation for U-Net (default: 'swish')
+            unet_intermediary_activation_alpha: Alpha value for intermediary activation (default: 0.05)
+            unet_epochs: Number of epochs for U-Net training (default: 1000)
+
+            # Gaussian Diffusion Parameters
+            gaussian_beta_start: Starting value of beta for Gaussian diffusion (default: 1e-4)
+            gaussian_beta_end: Ending value of beta for Gaussian diffusion (default: 0.02)
+            gaussian_time_steps: Number of time steps for Gaussian diffusion (default: 1000)
+            gaussian_clip_min: Minimum clipping value for Gaussian noise (default: -1.0)
+            gaussian_clip_max: Maximum clipping value for Gaussian noise (default: 1.0)
+
+            # VAE Parameters
+            VAE_loss_function: Loss function for Autoencoder (default: 'mse')
+            VAE_encoder_filters: List of filters for Autoencoder encoder (default: [320, 160])
+            VAE_decoder_filters: List of filters for Autoencoder decoder (default: [160, 320])
+            VAE_last_layer_activation: Activation function for last layer of Autoencoder (default: 'sigmoid')
+            VAE_latent_dimension: Dimension of the latent in Autoencoder (default: 64)
+            VAE_batch_size_create_embedding: Batch size for creating embeddings in Autoencoder (default: 128)
+            VAE_batch_size_training: Batch size for training Autoencoder (default: 64)
+            VAE_epochs: Number of epochs for Autoencoder training (default: 1000)
+            VAE_intermediary_activation_function: Intermediary activation function for Autoencoder (default: 'swish')
+            VAE_intermediary_activation_alpha: Alpha value for intermediary activation (default: 0.05)
+            VAE_activation_output_encoder: Activation function for output of encoder in Autoencoder (default: 'sigmoid')
+
+            # Additional VAE Parameters
+            VAE_initializer_mean: Initializer mean for VAE (default: 0.0)
+            VAE_initializer_deviation: Initializer deviation for VAE (default: 0.125)
+            VAE_dropout_decay_rate_encoder: Dropout decay rate for encoder (default: 0.2)
+            VAE_dropout_decay_rate_decoder: Dropout decay rate for decoder (default: 0.4)
+            VAE_file_name_encoder: File name for encoder model (default: 'encoder_model')
+            VAE_file_name_decoder: File name for decoder model (default: 'decoder_model')
+            VAE_path_output_models: Path for output models (default: 'models_saved/')
+            VAE_mean_distribution: Mean distribution for VAE (default: 0.5)
+            VAE_stander_deviation: Standard deviation for VAE (default: 0.125)
+
+            # Diffusion Training Parameters
+            margin: Margin for diffusion process (default: 0.5)
+            ema: Exponential moving average for diffusion (default: 0.999)
+            time_steps: Number of time steps for diffusion (default: 1000)
+
+            # Optional pre-initialized components
+            variational_algorithm: Optional pre-initialized VAELatentDiffusionAlgorithmTensorflow instance
+            variation_model: Optional pre-initialized VariationalModelDiffusion instance
+            first_unet: Optional pre-initialized UNetModel instance
+            second_unet: Optional pre-initialized UNetModel instance
+            gaussian_diffusion_util: Optional pre-initialized GaussianDiffusionTensorflow instance
         """
+        # Store pre-initialized instances if provided
+        self._latent_variational_algorithm: VAELatentDiffusionAlgorithmTensorflow | None = variational_algorithm
+        self._latent_variation_model_diffusion: VariationalModelDiffusionTensorflow | None = variation_model
+        self._latent_first_instance_unet: UNetModel | None = first_unet
+        self._latent_second_instance_unet: UNetModel | None = second_unet
+        self._latent_gaussian_diffusion_util: GaussianDiffusionTensorflow | None = gaussian_diffusion_util
 
-        self._latent_variational_algorithm = None
-        self._latent_variation_model_diffusion = None
-
-        self._latent_autoencoder_diffusion = None
-        self._latent_gaussian_diffusion_util = None
-
-        self._latent_second_unet_model = None
         self._latent_first_unet_model = None
+        self._latent_second_unet_model = None
+        self._latent_autoencoder_diffusion = None
 
-        # ** Latent Denoising Probabilistic LatentDiffusion (LDPD) Configuration Parameters **
-        self._latent_diffusion_unet_last_layer_activation = arguments.latent_diffusion_unet_last_layer_activation
-        self._latent_diffusion_latent_dimension = arguments.latent_diffusion_latent_dimension
-        self._latent_diffusion_unet_num_embedding_channels = arguments.latent_diffusion_unet_num_embedding_channels
-        self._latent_diffusion_unet_channels_per_level = arguments.latent_diffusion_unet_channels_per_level
-        self._latent_diffusion_unet_batch_size = arguments.latent_diffusion_unet_batch_size
-        self._latent_diffusion_unet_attention_mode = arguments.latent_diffusion_unet_attention_mode
-        self._latent_diffusion_unet_num_residual_blocks = arguments.latent_diffusion_unet_num_residual_blocks
-        self._latent_diffusion_unet_group_normalization = arguments.latent_diffusion_unet_group_normalization
-        self._latent_diffusion_unet_intermediary_activation = arguments.latent_diffusion_unet_intermediary_activation
-        self._latent_diffusion_unet_intermediary_activation_alpha = arguments.latent_diffusion_unet_intermediary_activation_alpha
-        self._latent_diffusion_unet_epochs = arguments.latent_diffusion_unet_epochs
+        # ** Latent Diffusion - UNet Parameters **
+        self._latent_diffusion_unet_last_layer_activation: str = unet_last_layer_activation
+        self._latent_diffusion_latent_dimension: int = latent_dimension
+        self._latent_diffusion_unet_num_embedding_channels: int = unet_num_embedding_channels
 
-        self._latent_diffusion_VAE_mean_distribution = arguments.latent_diffusion_autoencoder_mean_distribution
-        self._latent_diffusion_VAE_stander_deviation = arguments.latent_diffusion_autoencoder_stander_deviation
-        self._latent_diffusion_VAE_file_name_encoder = arguments.latent_diffusion_autoencoder_file_name_encoder
-        self._latent_diffusion_VAE_file_name_decoder = arguments.latent_diffusion_autoencoder_file_name_decoder
-        self._latent_diffusion_VAE_path_output_models = arguments.latent_diffusion_autoencoder_path_output_models
+        # Handle mutable default values safely
+        self._latent_diffusion_unet_channels_per_level: list[int] = (
+            unet_channels_per_level
+            if unet_channels_per_level is not None
+            else DEFAULT_LATENT_DIFFUSION_UNET_CHANNELS_PER_LEVEL.copy()
+        )
 
-        # Gaussian Diffusion - Scheduling and Initializer
-        self._latent_diffusion_gaussian_beta_start = arguments.latent_diffusion_gaussian_beta_start
-        self._latent_diffusion_gaussian_beta_end = arguments.latent_diffusion_gaussian_beta_end
-        self._latent_diffusion_gaussian_time_steps = arguments.latent_diffusion_gaussian_time_steps
-        self._latent_diffusion_gaussian_clip_min = arguments.latent_diffusion_gaussian_clip_min
-        self._latent_diffusion_gaussian_clip_max = arguments.latent_diffusion_gaussian_clip_max
+        self._latent_diffusion_unet_batch_size: int = unet_batch_size
 
+        self._latent_diffusion_unet_attention_mode: list[bool] = (
+            unet_attention_mode
+            if unet_attention_mode is not None
+            else DEFAULT_LATENT_DIFFUSION_UNET_ATTENTION_MODE.copy()
+        )
 
-        self._latent_diffusion_VAE_loss_function = arguments.latent_diffusion_autoencoder_loss
-        self._latent_diffusion_VAE_encoder_filters = arguments.latent_diffusion_autoencoder_encoder_filters
-        self._latent_diffusion_VAE_decoder_filters = arguments.latent_diffusion_autoencoder_decoder_filters
-        self._latent_diffusion_VAE_last_layer_activation = arguments.latent_diffusion_autoencoder_last_layer_activation
-        self._latent_diffusion_VAE_latent_dimension = arguments.latent_diffusion_autoencoder_latent_dimension
-        self._latent_diffusion_VAE_batch_size_create_embedding = arguments.latent_diffusion_autoencoder_batch_size_create_embedding
-        self._latent_diffusion_VAE_batch_size_training = arguments.latent_diffusion_autoencoder_batch_size_training
-        self._latent_diffusion_VAE_epochs = arguments.latent_diffusion_autoencoder_epochs
-        self._latent_diffusion_VAE_intermediary_activation_function = arguments.latent_diffusion_autoencoder_intermediary_activation_function
-        self._latent_diffusion_VAE_intermediary_activation_alpha = arguments.latent_diffusion_autoencoder_intermediary_activation_alpha
-        self._latent_diffusion_VAE_activation_output_encoder = arguments.latent_diffusion_autoencoder_activation_output_encoder
-        self._latent_diffusion_margin = arguments.latent_diffusion_margin
-        self._latent_diffusion_ema = arguments.latent_diffusion_ema
-        self._latent_diffusion_time_steps = arguments.latent_diffusion_time_steps
+        self._latent_diffusion_unet_num_residual_blocks: int = unet_num_residual_blocks
+        self._latent_diffusion_unet_group_normalization: int = unet_group_normalization
+        self._latent_diffusion_unet_intermediary_activation: str = unet_intermediary_activation
+        self._latent_diffusion_unet_intermediary_activation_alpha: float = unet_intermediary_activation_alpha
+        self._latent_diffusion_unet_epochs: int = unet_epochs
 
-        # ** Gaussian LatentDiffusion Configuration Parameters **
-        self._latent_diffusion_VAE_initializer_mean = arguments.latent_diffusion_autoencoder_initializer_mean
-        self._latent_diffusion_VAE_initializer_deviation = arguments.latent_diffusion_autoencoder_initializer_deviation
-        self._latent_diffusion_VAE_dropout_decay_rate_encoder = arguments.latent_diffusion_autoencoder_dropout_decay_rate_encoder
-        self._latent_diffusion_VAE_dropout_decay_rate_decoder = arguments.latent_diffusion_autoencoder_dropout_decay_rate_decoder
+        # ** Gaussian Diffusion Parameters **
+        self._latent_diffusion_gaussian_beta_start: float = gaussian_beta_start
+        self._latent_diffusion_gaussian_beta_end: float = gaussian_beta_end
+        self._latent_diffusion_gaussian_time_steps: int = gaussian_time_steps
+        self._latent_diffusion_gaussian_clip_min: float = gaussian_clip_min
+        self._latent_diffusion_gaussian_clip_max: float = gaussian_clip_max
+
+        # ** VAE Parameters **
+        self._latent_diffusion_VAE_loss_function: str = VAE_loss_function
+
+        self._latent_diffusion_VAE_encoder_filters: list[int] = (
+            VAE_encoder_filters
+            if VAE_encoder_filters is not None
+            else DEFAULT_LATENT_DIFFUSION_AUTOENCODER_ENCODER_FILTERS.copy()
+        )
+
+        self._latent_diffusion_VAE_decoder_filters: list[int] = (
+            VAE_decoder_filters
+            if VAE_decoder_filters is not None
+            else DEFAULT_LATENT_DIFFUSION_AUTOENCODER_DECODER_FILTERS.copy()
+        )
+
+        self._latent_diffusion_VAE_last_layer_activation: str = VAE_last_layer_activation
+        self._latent_diffusion_VAE_latent_dimension: int = VAE_latent_dimension
+        self._latent_diffusion_VAE_batch_size_create_embedding: int = VAE_batch_size_create_embedding
+        self._latent_diffusion_VAE_batch_size_training: int = VAE_batch_size_training
+        self._latent_diffusion_VAE_epochs: int = VAE_epochs
+        self._latent_diffusion_VAE_intermediary_activation_function: str = VAE_intermediary_activation_function
+        self._latent_diffusion_VAE_intermediary_activation_alpha: float = VAE_intermediary_activation_alpha
+        self._latent_diffusion_VAE_activation_output_encoder: str = VAE_activation_output_encoder
+
+        # ** Additional VAE Parameters **
+        self._latent_diffusion_VAE_initializer_mean: float = VAE_initializer_mean
+        self._latent_diffusion_VAE_initializer_deviation: float = VAE_initializer_deviation
+        self._latent_diffusion_VAE_dropout_decay_rate_encoder: float = VAE_dropout_decay_rate_encoder
+        self._latent_diffusion_VAE_dropout_decay_rate_decoder: float = VAE_dropout_decay_rate_decoder
+        self._latent_diffusion_VAE_file_name_encoder: str = VAE_file_name_encoder
+        self._latent_diffusion_VAE_file_name_decoder: str = VAE_file_name_decoder
+        self._latent_diffusion_VAE_path_output_models: str = VAE_path_output_models
+        self._latent_diffusion_VAE_mean_distribution: float = VAE_mean_distribution
+        self._latent_diffusion_VAE_stander_deviation: float = VAE_stander_deviation
+
+        # ** Diffusion Training Parameters **
+        self._latent_diffusion_margin: float = margin
+        self._latent_diffusion_ema: float = ema
+        self._latent_diffusion_time_steps: int = time_steps
+
+        # Flags to indicate if instances were provided externally
+        self._has_external_variational_algorithm: bool = variational_algorithm is not None
+        self._has_external_variation_model: bool = variation_model is not None
+        self._has_external_first_unet: bool = first_unet is not None
+        self._has_external_second_unet: bool = second_unet is not None
+        self._has_external_gaussian_diffusion_util: bool = gaussian_diffusion_util is not None
 
 
     def _get_latent_diffusion(self, input_shape):
         """
-         Initializes and configures the LatentDiffusion model using UNet architecture for image generation.
+        Initializes and configures the LatentDiffusion model using UNet architecture for image generation.
 
-         This method initializes multiple components required for the diffusion process, including
-         two UNet instances, a DiffusionAutoencoderModel, and a GaussianDiffusion utility. The UNet
-         instances are configured with the specified hyperparameters for building the model. The
-         weights of the second UNet model are synchronized with the first one. Additionally, the method
-         sets up the variational model diffusion and the associated variational algorithm diffusion
-         for image generation and embedding reconstruction.
+        Args:
+            input_shape (tuple): The shape of the input data, typically the dimensions of the images (height, width, channels).
+        """
+        # Initialize UNet instances if not provided
+        if not self._has_external_first_unet:
+            self._latent_first_instance_unet = UNetModel(
+                embedding_dimension=self._latent_diffusion_latent_dimension,
+                embedding_channels=self._latent_diffusion_unet_num_embedding_channels,
+                list_neurons_per_level=self._latent_diffusion_unet_channels_per_level,
+                list_attentions=self._latent_diffusion_unet_attention_mode,
+                number_residual_blocks=self._latent_diffusion_unet_num_residual_blocks,
+                normalization_groups=self._latent_diffusion_unet_group_normalization,
+                intermediary_activation_function=self._latent_diffusion_unet_intermediary_activation,
+                intermediary_activation_alpha=self._latent_diffusion_unet_intermediary_activation_alpha,
+                last_layer_activation=self._latent_diffusion_unet_last_layer_activation,
+                number_samples_per_class=self._number_samples_per_class
+            )
+            self._latent_first_unet_model = self._latent_first_instance_unet.build_model()
 
-         Args:
-             input_shape (tuple):
-              The shape of the input data, typically the dimensions of the images (height, width, channels).
+        if not self._has_external_second_unet:
+            self._latent_second_instance_unet = UNetModel(
+                embedding_dimension=self._latent_diffusion_latent_dimension,
+                embedding_channels=self._latent_diffusion_unet_num_embedding_channels,
+                list_neurons_per_level=self._latent_diffusion_unet_channels_per_level,
+                list_attentions=self._latent_diffusion_unet_attention_mode,
+                number_residual_blocks=self._latent_diffusion_unet_num_residual_blocks,
+                normalization_groups=self._latent_diffusion_unet_group_normalization,
+                intermediary_activation_function=self._latent_diffusion_unet_intermediary_activation,
+                intermediary_activation_alpha=self._latent_diffusion_unet_intermediary_activation_alpha,
+                last_layer_activation=self._latent_diffusion_unet_last_layer_activation,
+                number_samples_per_class=self._number_samples_per_class
+            )
+            self._latent_second_unet_model = self._latent_second_instance_unet.build_model()
 
-         Initializes:
-             self._first_instance_unet (UNetModel):
-                The first instance of the UNet model used for the diffusion process.
-             self._second_instance_unet (UNetModel):
-                The second instance of the UNet model, which is a copy of the first one.
-             self._first_unet_model (Model):
-                The compiled UNet model for the first instance.
-             self._second_unet_model (Model):
-                The compiled UNet model for the second instance, with synchronized weights from the first model.
-             self._gaussian_diffusion_util (GaussianDiffusion):
-                Utility for managing the diffusion process with Gaussian noise.
-             self._variation_model_diffusion (VariationalModelDiffusion):
-                The diffusion model with variational autoencoder for latent representation learning.
-             self._variational_algorithm_diffusion (VariationalAlgorithmDiffusion):
-                The algorithm for variational inference during the diffusion process.
-         """
+        # Synchronize weights if both models are internal
+        if not self._has_external_first_unet and not self._has_external_second_unet:
+            self._latent_second_unet_model.set_weights(self._latent_first_unet_model.get_weights())
 
-        # Initialize the first instance of UNet for the diffusion model
-        self._latent_first_instance_unet = UNetModel(embedding_dimension=self._latent_diffusion_latent_dimension,
-                                                     embedding_channels= self._latent_diffusion_unet_num_embedding_channels,
-                                                     list_neurons_per_level=self._latent_diffusion_unet_channels_per_level,
-                                                     list_attentions=self._latent_diffusion_unet_attention_mode,
-                                                     number_residual_blocks=self._latent_diffusion_unet_num_residual_blocks,
-                                                     normalization_groups=self._latent_diffusion_unet_group_normalization,
-                                                     intermediary_activation_function=self._latent_diffusion_unet_intermediary_activation,
-                                                     intermediary_activation_alpha= self._latent_diffusion_unet_intermediary_activation_alpha,
-                                                     last_layer_activation=self._latent_diffusion_unet_last_layer_activation,
-                                                     number_samples_per_class=self._number_samples_per_class)
+        # Initialize GaussianDiffusion utility if not provided
+        if not self._has_external_gaussian_diffusion_util:
+            self._latent_gaussian_diffusion_util = GaussianDiffusionTensorflow(
+                beta_start=self._latent_diffusion_gaussian_beta_start,
+                beta_end=self._latent_diffusion_gaussian_beta_end,
+                time_steps=self._latent_diffusion_gaussian_time_steps,
+                clip_min=self._latent_diffusion_gaussian_clip_min,
+                clip_max=self._latent_diffusion_gaussian_clip_max
+            )
 
-        # Initialize the second instance of UNet with the same configuration
-        self._latent_second_instance_unet = UNetModel(embedding_dimension=self._latent_diffusion_latent_dimension,
-                                                      embedding_channels= self._latent_diffusion_unet_num_embedding_channels,
-                                                      list_neurons_per_level=self._latent_diffusion_unet_channels_per_level,
-                                                      list_attentions=self._latent_diffusion_unet_attention_mode,
-                                                      number_residual_blocks=self._latent_diffusion_unet_num_residual_blocks,
-                                                      normalization_groups=self._latent_diffusion_unet_group_normalization,
-                                                      intermediary_activation_function=self._latent_diffusion_unet_intermediary_activation,
-                                                      intermediary_activation_alpha= self._latent_diffusion_unet_intermediary_activation_alpha,
-                                                      last_layer_activation=self._latent_diffusion_unet_last_layer_activation,
-                                                      number_samples_per_class=self._number_samples_per_class)
+        # Initialize VariationalModelDiffusion if not provided
+        if not self._has_external_variation_model:
+            self._latent_variation_model_diffusion = VariationalModelDiffusionTensorflow(
+                latent_dimension=self._latent_diffusion_latent_dimension,
+                output_shape=input_shape,
+                activation_function=self._latent_diffusion_VAE_intermediary_activation_function,
+                initializer_mean=self._latent_diffusion_VAE_initializer_mean,
+                initializer_deviation=self._latent_diffusion_VAE_initializer_deviation,
+                dropout_decay_encoder=self._latent_diffusion_VAE_dropout_decay_rate_encoder,
+                dropout_decay_decoder=self._latent_diffusion_VAE_dropout_decay_rate_decoder,
+                last_layer_activation=self._latent_diffusion_VAE_activation_output_encoder,
+                number_neurons_encoder=self._latent_diffusion_VAE_encoder_filters,
+                number_neurons_decoder=self._latent_diffusion_VAE_decoder_filters,
+                dataset_type=np.float32,
+                number_samples_per_class=self._number_samples_per_class
+            )
 
-        # Build the models for both UNet instances
-        self._latent_first_unet_model = self._latent_first_instance_unet.build_model()
-        self._latent_second_unet_model = self._latent_second_instance_unet.build_model()
+        # Initialize VariationalAlgorithmDiffusion if not provided
+        if not self._has_external_variational_algorithm:
+            if self._latent_variation_model_diffusion is None:
+                raise ValueError("VariationalModelDiffusion instance is required but was not provided.")
 
-        # Synchronize the weights of the second UNet model with the first one
-        self._latent_second_unet_model.set_weights(self._latent_first_unet_model.get_weights())
-
-        # Initialize the GaussianDiffusion utility for the diffusion process
-        self._latent_gaussian_diffusion_util = GaussianDiffusionTensorflow(beta_start=self._latent_diffusion_gaussian_beta_start,
-                                                                           beta_end=self._latent_diffusion_gaussian_beta_end,
-                                                                           time_steps=self._latent_diffusion_gaussian_time_steps,
-                                                                           clip_min=self._latent_diffusion_gaussian_clip_min,
-                                                                           clip_max=self._latent_diffusion_gaussian_clip_max)
-
-        # Initialize the VariationalModelDiffusion for embedding learning and reconstructor
-        self._latent_variation_model_diffusion = VariationalModelDiffusion(latent_dimension=self._latent_diffusion_latent_dimension, output_shape=input_shape,
-                                                                           activation_function=self._latent_diffusion_VAE_intermediary_activation_function,
-                                                                           initializer_mean=self._latent_diffusion_VAE_initializer_mean,
-                                                                           initializer_deviation=self._latent_diffusion_VAE_initializer_deviation,
-                                                                           dropout_decay_encoder=self._latent_diffusion_VAE_dropout_decay_rate_encoder,
-                                                                           dropout_decay_decoder=self._latent_diffusion_VAE_dropout_decay_rate_decoder,
-                                                                           last_layer_activation=self._latent_diffusion_VAE_activation_output_encoder,
-                                                                           number_neurons_encoder=self._latent_diffusion_VAE_encoder_filters,
-                                                                           number_neurons_decoder=self._latent_diffusion_VAE_decoder_filters,
-                                                                           dataset_type=numpy.float32,
-                                                                           number_samples_per_class = self._number_samples_per_class)
-
-        # Initialize the VariationalAlgorithmDiffusion for the training and diffusion process
-        self._latent_variational_algorithm = VAELatentDiffusionAlgorithmTensorflow(encoder_model=self._latent_variation_model_diffusion.get_encoder(),
-                                                                                   decoder_model=self._latent_variation_model_diffusion.get_decoder(),
-                                                                                   loss_function=self._latent_diffusion_VAE_loss_function,
-                                                                                   latent_dimension=self._latent_diffusion_latent_dimension,
-                                                                                   decoder_latent_dimension = self._latent_diffusion_latent_dimension,
-                                                                                   latent_mean_distribution=self._latent_diffusion_VAE_mean_distribution,
-                                                                                   latent_stander_deviation=self._latent_diffusion_VAE_stander_deviation,
-                                                                                   file_name_encoder=self._latent_diffusion_VAE_file_name_encoder,
-                                                                                   file_name_decoder=self._latent_diffusion_VAE_file_name_decoder,
-                                                                                   models_saved_path=self._latent_diffusion_VAE_path_output_models)
+            self._latent_variational_algorithm = VAELatentDiffusionAlgorithmTensorflow(
+                encoder_model=self._latent_variation_model_diffusion.get_encoder(),
+                decoder_model=self._latent_variation_model_diffusion.get_decoder(),
+                loss_function=self._latent_diffusion_VAE_loss_function,
+                latent_dimension=self._latent_diffusion_latent_dimension,
+                decoder_latent_dimension=self._latent_diffusion_latent_dimension,
+                latent_mean_distribution=self._latent_diffusion_VAE_mean_distribution,
+                latent_stander_deviation=self._latent_diffusion_VAE_stander_deviation,
+                file_name_encoder=self._latent_diffusion_VAE_file_name_encoder,
+                file_name_decoder=self._latent_diffusion_VAE_file_name_decoder,
+                models_saved_path=self._latent_diffusion_VAE_path_output_models
+            )
 
     def _get_variational_autoencoder(self, input_shape):
         """
@@ -321,32 +548,30 @@ class LatentDiffusion:
         """
 
         # # Variational Model setup for the VAE's encoder and decoder
-        # self._variation_model = VariationalAutoencoderModelTorch(latent_dimension=self._latent_diffusion_VAE_latent_dimension,
-        #                                                          output_shape=input_shape,
-        #                                                          activation_function=self._latent_diffusion_VAE_intermediary_activation_function,
-        #                                                          initializer_mean=self._latent_diffusion_VAE_initializer_mean,
-        #                                                          initializer_deviation=self._latent_diffusion_VAE_initializer_deviation,
-        #                                                          dropout_decay_encoder=self._latent_diffusion_VAE_dropout_decay_rate_encoder,
-        #                                                          dropout_decay_decoder=self._latent_diffusion_VAE_dropout_decay_rate_decoder,
-        #                                                          last_layer_activation=self._latent_diffusion_VAE_last_layer_activation,
-        #                                                          number_neurons_encoder=self._latent_diffusion_VAE_encoder_filters,
-        #                                                          number_neurons_decoder=self._latent_diffusion_VAE_decoder_filters,
-        #                                                          dataset_type=numpy.float32,
-        #                                                          number_samples_per_class = self._number_samples_per_class)
-        print("---------------------------------------------------------")
+        self._variation_model = VariationalModelDiffusionTensorflow(latent_dimension=self._latent_diffusion_VAE_latent_dimension,
+                                                                 output_shape=input_shape,
+                                                                 activation_function=self._latent_diffusion_VAE_intermediary_activation_function,
+                                                                 initializer_mean=self._latent_diffusion_VAE_initializer_mean,
+                                                                 initializer_deviation=self._latent_diffusion_VAE_initializer_deviation,
+                                                                 dropout_decay_encoder=self._latent_diffusion_VAE_dropout_decay_rate_encoder,
+                                                                 dropout_decay_decoder=self._latent_diffusion_VAE_dropout_decay_rate_decoder,
+                                                                 last_layer_activation=self._latent_diffusion_VAE_last_layer_activation,
+                                                                 number_neurons_encoder=self._latent_diffusion_VAE_encoder_filters,
+                                                                 number_neurons_decoder=self._latent_diffusion_VAE_decoder_filters,
+                                                                 dataset_type=numpy.float32,
+                                                                 number_samples_per_class = self._number_samples_per_class)
+
         # Variational Algorithm setup for training and model operations
-        # self._variational_algorithm = VariationalAlgorithmTorch(encoder_model=self._variation_model.get_encoder(),
-        #                                                    decoder_model=self._variation_model.get_decoder(),
-        #                                                    loss_function=self._latent_diffusion_VAE_loss_function,
-        #                                                    latent_dimension=self._latent_diffusion_VAE_latent_dimension,
-        #                                                    decoder_latent_dimension = self._latent_diffusion_VAE_latent_dimension,
-        #                                                    latent_mean_distribution=self._latent_diffusion_VAE_mean_distribution,
-        #                                                    latent_stander_deviation=self._latent_diffusion_VAE_stander_deviation,
-        #                                                    file_name_encoder=self._latent_diffusion_VAE_file_name_encoder,
-        #                                                    file_name_decoder=self._latent_diffusion_VAE_file_name_decoder,
-        #                                                    models_saved_path=self._latent_diffusion_VAE_path_output_models)
-
-
+        self._variational_algorithm = VAELatentDiffusionAlgorithmTensorflow(encoder_model=self._variation_model.get_encoder(),
+                                                           decoder_model=self._variation_model.get_decoder(),
+                                                           loss_function=self._latent_diffusion_VAE_loss_function,
+                                                           latent_dimension=self._latent_diffusion_VAE_latent_dimension,
+                                                           decoder_latent_dimension = self._latent_diffusion_VAE_latent_dimension,
+                                                           latent_mean_distribution=self._latent_diffusion_VAE_mean_distribution,
+                                                           latent_stander_deviation=self._latent_diffusion_VAE_stander_deviation,
+                                                           file_name_encoder=self._latent_diffusion_VAE_file_name_encoder,
+                                                           file_name_decoder=self._latent_diffusion_VAE_file_name_decoder,
+                                                           models_saved_path=self._latent_diffusion_VAE_path_output_models)
 
     def _training_latent_diffusion_model(self, input_shape, arguments, x_real_samples, y_real_samples):
         """
@@ -834,4 +1059,3 @@ class LatentDiffusion:
     def latent_diffusion_VAE_dropout_decay_rate_decoder(self, value):
         """Setter for VAE decoder dropout decay rate"""
         self._latent_diffusion_VAE_dropout_decay_rate_decoder = value
-
