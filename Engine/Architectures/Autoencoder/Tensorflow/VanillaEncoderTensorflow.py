@@ -3,9 +3,9 @@
 
 __author__ = 'Synthetic Ocean AI - Team'
 __email__ = 'syntheticoceanai@gmail.com'
-__version__ = '{1}.{0}.{1}'
+__version__ = '{1}.{0}.{2}'
 __initial_data__ = '2022/06/01'
-__last_update__ = '2025/03/29'
+__last_update__ = '2025/12/09'
 __credits__ = ['Synthetic Ocean AI']
 
 # MIT License
@@ -39,102 +39,129 @@ try:
     from typing import Dict
     from typing import Optional
 
-    from tensorflow.keras.layers import Dense
-    from tensorflow.keras.layers import Input
+    from tensorflow.keras.layers import Dense, Input, Dropout, Flatten, Concatenate
     from tensorflow.keras.models import Model
-    from tensorflow.keras.models import Model
-
-    from tensorflow.keras.layers import Dropout
-    from tensorflow.keras.layers import Flatten
-
-    from tensorflow.keras.layers import Concatenate
-
-    from Engine.Activations.Activations import Activations
     from tensorflow.keras.initializers import RandomNormal
+    from Engine.Activations.Activations import Activations
 
 except ImportError as error:
     print(error)
     sys.exit(-1)
 
 
-class VanillaEncoder(Activations):
+class VanillaEncoderTensorflow(Activations):
     """
-    VanillaEncoder
+    VanillaEncoder - Adaptativo Multi-Dimensional
 
-    A class representing a Vanilla Encoder model for deep learning applications. The encoder
-    is designed to process inputs and labels, apply a series of dense layers with activations
-    and dropout, and output a latent representation of the input data. This model is typically
-    used in applications such as autoencoders, variational autoencoders, or other generative models.
+    Um encoder condicional que se adapta automaticamente à dimensionalidade dos dados de entrada.
+    Suporta dados 1D (vetor), 2D (imagem/matriz), 3D (volume) e N-D (tensor).
+    Usa apenas camadas Dense com Flatten para processar dados de qualquer dimensionalidade.
 
     Attributes:
         @encoder_latent_dimension (int):
-            The dimensionality of the latent space that the model will output.
-        @encoder_output_shape (tuple):
-            The desired output shape of the encoder, defining the shape of the encoded representation.
+            Dimensionalidade do espaço latente que o modelo irá gerar.
+        @encoder_output_shape (int or tuple):
+            Forma de saída desejada do encoder (dimensionalidade do espaço latente).
         @encoder_activation_function (str):
-            The activation function applied to each layer of the encoder (e.g., 'ReLU', 'LeakyReLU').
+            Função de ativação aplicada em cada camada (e.g., 'ReLU', 'LeakyReLU').
         @encoder_last_layer_activation (str):
-            The activation function applied to the final output layer.
+            Função de ativação aplicada na camada de saída final.
         @encoder_dropout_decay_rate_encoder (float):
-            The rate of dropout applied during encoding to improve generalization (must be between 0 and 1).
+            Taxa de dropout aplicada durante codificação para melhorar generalização (entre 0 e 1).
         @encoder_number_neurons_encoder (list):
-            A list specifying the number of neurons (or units) in each layer of the encoder network.
+            Lista especificando o número de neurônios em cada camada da rede encoder.
         @encoder_dataset_type (dtype):
-            The data type of the input dataset, default is numpy.float32.
+            Tipo de dados do dataset de entrada, padrão numpy.float32.
         @encoder_initializer_mean (float):
-            The mean for the normal distribution used to initialize the weights.
+            Média para distribuição normal usada para inicializar os pesos.
         @encoder_initializer_deviation (float):
-            The standard deviation for the normal distribution used to initialize the weights.
+            Desvio padrão para distribuição normal usada para inicializar os pesos.
         @encoder_number_samples_per_class (Optional[dict]):
-            An optional dictionary containing metadata about the number of samples per class.
+            Dicionário opcional contendo metadados sobre o número de amostras por classe.
 
     Raises:
         ValueError:
-            Raised when the following invalid arguments are passed during initialization:
-            - `latent_dimension` is not a positive integer.
-            - `initializer_mean` or `initializer_deviation` is not a number.
-            - `dropout_decay_encoder` is outside the valid range [0, 1].
-            - `number_neurons_encoder` is not a non-empty list or contains non-positive integers.
-            - `number_samples_per_class` is provided but is not a dictionary.
+            Levantado quando argumentos inválidos são passados durante inicialização:
+            - `latent_dimension` não é um inteiro positivo.
+            - `output_shape` não é int positivo ou tuple de inteiros positivos.
+            - `initializer_mean` ou `initializer_deviation` não são números.
+            - `dropout_decay_encoder` está fora do intervalo válido [0, 1].
+            - `number_neurons_encoder` não é uma lista não-vazia ou contém inteiros não-positivos.
+            - `number_samples_per_class` é fornecido mas não é um dicionário.
 
     Example:
-        >>> encoder = VanillaEncoder(
+        >>> # Encoder 1D (vetor de entrada)
+        >>> encoder_1d = VanillaEncoderTensorflow(
         ...     latent_dimension=128,
-        ...     output_shape=(64, 64, 1),
+        ...     output_shape=128,
         ...     activation_function='ReLU',
         ...     initializer_mean=0.0,
         ...     initializer_deviation=0.02,
-        ...     dropout_decay_encoder=0.5,
-        ...     last_layer_activation='sigmoid',
-        ...     number_neurons_encoder=[512, 256, 128],
-        ...     dataset_type=numpy.float32,
+        ...     dropout_decay_encoder=0.3,
+        ...     last_layer_activation='linear',
+        ...     number_neurons_encoder=[256, 512],
         ...     number_samples_per_class={"number_classes": 10}
+        ... )
+        >>> 
+        >>> # Encoder 2D (imagem de entrada)
+        >>> encoder_2d = VanillaEncoderTensorflow(
+        ...     latent_dimension=128,
+        ...     output_shape=128,
+        ...     activation_function='ReLU',
+        ...     initializer_mean=0.0,
+        ...     initializer_deviation=0.02,
+        ...     dropout_decay_encoder=0.3,
+        ...     last_layer_activation='linear',
+        ...     number_neurons_encoder=[512, 256],
+        ...     number_samples_per_class={"number_classes": 10}
+        ... )
+        >>>
+        >>> # Encoder 3D (volume de entrada)
+        >>> encoder_3d = VanillaEncoderTensorflow(
+        ...     latent_dimension=256,
+        ...     output_shape=256,
+        ...     activation_function='ReLU',
+        ...     initializer_mean=0.0,
+        ...     initializer_deviation=0.02,
+        ...     dropout_decay_encoder=0.4,
+        ...     last_layer_activation='linear',
+        ...     number_neurons_encoder=[1024, 512],
+        ...     number_samples_per_class={"number_classes": 5}
         ... )
     """
 
-    def __init__(self, latent_dimension: int, output_shape: tuple, activation_function: str, initializer_mean: float,
+    def __init__(self, latent_dimension: int, output_shape, activation_function: str, initializer_mean: float,
                  initializer_deviation: float, dropout_decay_encoder: float, last_layer_activation: str,
                  number_neurons_encoder: list, dataset_type: Any = numpy.float32,
                  number_samples_per_class: Optional[Dict[str, Any]] = None):
         """
-        Initializes the VanillaEncoder with the provided parameters.
+        Inicializa o VanillaEncoder com os parâmetros fornecidos.
 
         Args:
-            latent_dimension (int): The dimension of the latent space.
-            output_shape (tuple): The desired output shape of the encoder.
-            activation_function (str): The activation function to use for the layers.
-            initializer_mean (float): The mean for weight initialization.
-            initializer_deviation (float): The standard deviation for weight initialization.
-            dropout_decay_encoder (float): The rate of dropout applied during encoding.
-            last_layer_activation (str): The activation function for the last layer.
-            number_neurons_encoder (list): List specifying the number of neurons in each encoder layer.
-            dataset_type (dtype, optional): The data type of the input dataset. Defaults to numpy.float32.
-            number_samples_per_class (dict, optional): Specifies the number of samples per class.
+            latent_dimension (int): Dimensão do espaço latente.
+            output_shape (int or tuple): Forma de saída desejada do encoder.
+            activation_function (str): Função de ativação a usar nas camadas.
+            initializer_mean (float): Média para inicialização de pesos.
+            initializer_deviation (float): Desvio padrão para inicialização de pesos.
+            dropout_decay_encoder (float): Taxa de dropout aplicada durante codificação.
+            last_layer_activation (str): Função de ativação para última camada.
+            number_neurons_encoder (list): Lista especificando número de neurônios em cada camada.
+            dataset_type (dtype, optional): Tipo de dados do dataset de entrada. Padrão numpy.float32.
+            number_samples_per_class (dict, optional): Especifica número de amostras por classe.
         """
-
 
         if not isinstance(latent_dimension, int) or latent_dimension <= 0:
             raise ValueError("latent_dimension must be a positive integer.")
+
+        # Validar output_shape (pode ser int ou tuple)
+        if isinstance(output_shape, int):
+            if output_shape <= 0:
+                raise ValueError(f"Invalid value for output_shape: {output_shape}. It must be a positive integer.")
+        elif isinstance(output_shape, tuple):
+            if not all(isinstance(x, int) and x > 0 for x in output_shape):
+                raise ValueError(f"Invalid value for output_shape: {output_shape}. All dimensions must be positive integers.")
+        else:
+            raise ValueError(f"Invalid value for output_shape: {output_shape}. It must be an int or tuple of ints.")
 
         if not isinstance(initializer_mean, (int, float)):
             raise ValueError("initializer_mean must be a number.")
@@ -153,7 +180,6 @@ class VanillaEncoder(Activations):
                 raise ValueError("Each element in number_neurons_encoder must be a positive integer.")
 
         if number_samples_per_class is not None:
-
             if not isinstance(number_samples_per_class, dict):
                 raise ValueError("number_samples_per_class must be a dictionary.")
 
@@ -168,81 +194,150 @@ class VanillaEncoder(Activations):
         self._encoder_number_neurons_encoder = number_neurons_encoder
         self._encoder_number_samples_per_class = number_samples_per_class
 
-    def get_encoder(self, input_shape: tuple) -> Model:
+    def _calculate_total_input_size(self, input_shape) -> int:
         """
-        Creates and returns the encoder model.
-
-        This method constructs the neural network by stacking dense layers with the provided
-        configurations (neurons, dropout, and activation). It also concatenates the input data
-        and labels before passing through the layers.
+        Calcula o tamanho total da entrada (número total de elementos).
 
         Args:
-            input_shape (tuple): The shape of the input data.
+            input_shape (int or tuple): Forma da entrada.
 
         Returns:
-            keras.Model: The encoder model which takes input data and labels and outputs the
-                          encoded latent representation and labels.
+            int: Número total de elementos na entrada.
+        """
+        if isinstance(input_shape, int):
+            return input_shape
+        else:
+            return int(numpy.prod(input_shape))
+
+    def _get_dimensionality(self, shape) -> int:
+        """
+        Determina a dimensionalidade dos dados baseado na forma.
+
+        Args:
+            shape (int or tuple): Forma dos dados.
+
+        Returns:
+            int: Número de dimensões (1 para 1D, 2 para 2D, 3 para 3D, etc.).
+        """
+        if isinstance(shape, int):
+            return 1
+        else:
+            return len(shape)
+
+    def get_encoder(self, input_shape) -> Model:
+        """
+        Cria e retorna o modelo encoder adaptado automaticamente à dimensionalidade.
+
+        Este método constrói a rede neural empilhando camadas Dense com as configurações
+        fornecidas (neurônios, dropout e ativação). Ele também concatena os dados de entrada
+        e labels antes de passar pelas camadas. Se a entrada for N-D, usa Flatten automaticamente.
+
+        Args:
+            input_shape (int or tuple): Forma dos dados de entrada.
+                - int: para dados 1D (ex: 784)
+                - tuple: para dados N-D (ex: (28, 28, 1) para 2D, (16, 16, 16) para 3D)
+
+        Returns:
+            keras.Model: O modelo encoder que recebe dados de entrada e labels e gera
+                         a representação latente codificada e labels.
         """
 
-        # Initialize the weights using a normal distribution with specified mean and deviation
+        # Validar input_shape
+        if isinstance(input_shape, int):
+            if input_shape <= 0:
+                raise ValueError(f"Invalid value for input_shape: {input_shape}. It must be a positive integer.")
+        elif isinstance(input_shape, tuple):
+            if not all(isinstance(x, int) and x > 0 for x in input_shape):
+                raise ValueError(f"Invalid value for input_shape: {input_shape}. All dimensions must be positive integers.")
+        else:
+            raise ValueError(f"Invalid value for input_shape: {input_shape}. It must be an int or tuple of ints.")
+
+        # Determinar dimensionalidade
+        dimensionality = self._get_dimensionality(input_shape)
+
+        # Inicializar pesos usando distribuição normal com média e desvio especificados
         initialization = RandomNormal(mean=self._encoder_initializer_mean, stddev=self._encoder_initializer_deviation)
 
-        # Define input layers for data and labels
-        neural_model_inputs = Input(shape=(input_shape,), dtype=self._encoder_dataset_type, name="first_input")
+        # Definir camadas de entrada para dados e labels
+        if dimensionality == 1:
+            # Entrada 1D - usar shape diretamente
+            neural_model_inputs = Input(shape=(input_shape,), dtype=self._encoder_dataset_type, name="first_input")
+            flattened_input = neural_model_inputs
+        else:
+            # Entrada N-D - usar tuple e aplicar Flatten
+            neural_model_inputs = Input(shape=input_shape, dtype=self._encoder_dataset_type, name="first_input")
+            flattened_input = Flatten(name="Input_Flatten")(neural_model_inputs)
+
         label_input = Input(shape=(self._encoder_number_samples_per_class["number_classes"],),
                             dtype=self._encoder_dataset_type, name="second_input")
 
-        # Concatenate data and labels and apply the first dense layer with dropout and activation
-        concatenate_input = Concatenate()([neural_model_inputs, label_input])
+        # Concatenar dados e labels e aplicar primeira camada Dense com dropout e ativação
+        concatenate_input = Concatenate()([flattened_input, label_input])
         conditional_encoder = Dense(self._encoder_number_neurons_encoder[0],
                                     kernel_initializer=initialization)(concatenate_input)
         conditional_encoder = Dropout(self._encoder_dropout_decay_rate_encoder)(conditional_encoder)
         conditional_encoder = self._add_activation_layer(conditional_encoder, self._encoder_activation_function)
 
-        # Iterate over specified dense layers
+        # Iterar sobre camadas Dense especificadas
         for number_neurons in self._encoder_number_neurons_encoder[1:]:
             conditional_encoder = Dense(number_neurons, kernel_initializer=initialization)(conditional_encoder)
             conditional_encoder = Dropout(self._encoder_dropout_decay_rate_encoder)(conditional_encoder)
             conditional_encoder = self._add_activation_layer(conditional_encoder, self._encoder_activation_function)
 
-        # Map to the latent space
-        conditional_encoder = Dense(self._encoder_latent_dimension, kernel_initializer=initialization)(
-            conditional_encoder)
+        # Mapear para o espaço latente
+        conditional_encoder = Dense(self._encoder_latent_dimension, kernel_initializer=initialization,
+                                    name="Latent_Space")(conditional_encoder)
         conditional_encoder = self._add_activation_layer(conditional_encoder, self._encoder_last_layer_activation)
 
-        # Return the encoder model
-        return Model([neural_model_inputs, label_input], [conditional_encoder, label_input], name="Encoder")
+        # Retornar o modelo encoder
+        return Model([neural_model_inputs, label_input], [conditional_encoder, label_input],
+                     name=f"Encoder_{dimensionality}D")
 
     @property
     def dropout_decay_rate_encoder(self) -> float:
         """
-        Gets the rate of dropout decay for the encoder layers.
+        Obtém a taxa de dropout para as camadas do encoder.
 
         Returns:
-            float: The rate of dropout decay applied to the encoder layers.
+            float: Taxa de dropout aplicada às camadas do encoder.
         """
         return self._encoder_dropout_decay_rate_encoder
 
     @property
     def number_filters_encoder(self) -> list:
         """
-        Gets the number of neurons for each encoder layer.
+        Obtém o número de neurônios para cada camada do encoder.
 
         Returns:
-            list: A list specifying the number of neurons in each encoder layer.
+            list: Lista especificando o número de neurônios em cada camada do encoder.
         """
         return self._encoder_number_neurons_encoder
+
+    @property
+    def output_shape(self):
+        """int or tuple: Obtém a forma de saída do encoder."""
+        return self._encoder_output_shape
+
+    @property
+    def latent_dimension(self) -> int:
+        """int: Obtém a dimensionalidade do espaço latente."""
+        return self._encoder_latent_dimension
+
+    @property
+    def dimensionality(self) -> int:
+        """int: Obtém a dimensionalidade dos dados configurados."""
+        return self._get_dimensionality(self._encoder_output_shape)
 
     @dropout_decay_rate_encoder.setter
     def dropout_decay_rate_encoder(self, dropout_decay_rate_generator: float) -> None:
         """
-        Sets the rate of dropout decay for the encoder layers.
+        Define a taxa de dropout para as camadas do encoder.
 
         Args:
-            dropout_decay_rate_generator (float): The new dropout decay rate.
+            dropout_decay_rate_generator (float): Nova taxa de dropout.
 
         Raises:
-            ValueError: If the value is not a float between 0 and 1.
+            ValueError: Se o valor não for um float entre 0 e 1.
         """
         if not (0 <= dropout_decay_rate_generator <= 1):
             raise ValueError("dropout_decay_rate_encoder must be a float between 0 and 1.")

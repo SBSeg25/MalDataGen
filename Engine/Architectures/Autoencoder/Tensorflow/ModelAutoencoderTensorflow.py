@@ -40,8 +40,8 @@ try:
     from typing import Optional
     from typing import Any
 
-    from Engine.Architectures.Autoencoder.Tensorflow.VanillaDecoderTensorflow import VanillaDecoder
-    from Engine.Architectures.Autoencoder.Tensorflow.VanillaEncoderTensorflow import VanillaEncoder
+    from Engine.Architectures.Autoencoder.Tensorflow.VanillaDecoderTensorflow import VanillaDecoderTensorflow
+    from Engine.Architectures.Autoencoder.Tensorflow.VanillaEncoderTensorflow import VanillaEncoderTensorflow
 
     # Detecta o framework a partir da variável de ambiente
     ML_FRAMEWORK = os.getenv('ML_FRAMEWORK', 'tensorflow').lower()
@@ -61,7 +61,7 @@ DEFAULT_AUTOENCODER_INITIALIZER_MEAN = 0.0
 DEFAULT_AUTOENCODER_INITIALIZER_DEVIATION = 0.125
 
 
-class AutoencoderModelTensorflow(VanillaEncoder, VanillaDecoder):
+class AutoencoderModelTensorflow(VanillaEncoderTensorflow, VanillaDecoderTensorflow):
     """
     AutoencoderModel
 
@@ -194,30 +194,30 @@ class AutoencoderModelTensorflow(VanillaEncoder, VanillaDecoder):
             raise ValueError("number_neurons_decoder must be a list of integers.")
 
         # Inicializa o Decoder primeiro
-        VanillaDecoder.__init__(self,
-                                latent_dimension,
-                                output_shape,
-                                activation_function,
-                                initializer_mean,
-                                initializer_deviation,
-                                dropout_decay_decoder,
-                                last_layer_activation,
-                                number_neurons_decoder,
-                                dataset_type,
-                                number_samples_per_class)
+        VanillaDecoderTensorflow.__init__(self,
+                                          latent_dimension,
+                                          output_shape,
+                                          activation_function,
+                                          initializer_mean,
+                                          initializer_deviation,
+                                          dropout_decay_decoder,
+                                          last_layer_activation,
+                                          number_neurons_decoder,
+                                          dataset_type,
+                                          number_samples_per_class)
 
         # Inicializa o Encoder depois
-        VanillaEncoder.__init__(self,
-                                latent_dimension,
-                                output_shape,
-                                activation_function,
-                                initializer_mean,
-                                initializer_deviation,
-                                dropout_decay_encoder,
-                                last_layer_activation,
-                                number_neurons_encoder,
-                                dataset_type,
-                                number_samples_per_class)
+        VanillaEncoderTensorflow.__init__(self,
+                                          latent_dimension,
+                                          output_shape,
+                                          activation_function,
+                                          initializer_mean,
+                                          initializer_deviation,
+                                          dropout_decay_encoder,
+                                          last_layer_activation,
+                                          number_neurons_encoder,
+                                          dataset_type,
+                                          number_samples_per_class)
 
         # Armazena referências para os modelos (serão None até serem construídos)
         self._encoder_model = None
@@ -246,7 +246,7 @@ class AutoencoderModelTensorflow(VanillaEncoder, VanillaDecoder):
         Returns:
             Union[keras.Model, nn.Module]: O modelo encoder construído.
         """
-        self._encoder_model = VanillaEncoder.get_encoder(self, input_shape)
+        self._encoder_model = VanillaEncoderTensorflow.get_encoder(self, input_shape)
         return self._encoder_model
 
     def get_decoder(self, output_shape: int) -> Any:
@@ -259,7 +259,7 @@ class AutoencoderModelTensorflow(VanillaEncoder, VanillaDecoder):
         Returns:
             Union[keras.Model, nn.Module]: O modelo decoder construído.
         """
-        self._decoder_model = VanillaDecoder.get_decoder(self, output_shape)
+        self._decoder_model = VanillaDecoderTensorflow.get_decoder(self, output_shape)
         return self._decoder_model
 
     def get_dense_encoder_model(self) -> Any:
