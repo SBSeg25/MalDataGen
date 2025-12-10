@@ -99,86 +99,84 @@ class QuantizedVAE:
         _quantized_vae_path_output_models (str): Path for saving models
     """
 
-    def __init__(
-            self,
-            quantized_vae_number_epochs: int = DEFAULT_QUANTIZED_VAE_NUMBER_EPOCHS,
-            quantized_vae_batch_size: int = DEFAULT_QUANTIZED_VAE_BATCH_SIZE,
-            quantized_vae_latent_dimension: int = DEFAULT_QUANTIZED_VAE_LATENT_DIMENSION,
-            quantized_vae_number_embeddings: int = DEFAULT_QUANTIZED_VAE_NUMBER_EMBEDDING,
-            quantized_vae_activation_function: str = DEFAULT_QUANTIZED_VAE_ACTIVATION_INTERMEDIARY,
-            quantized_vae_initializer_mean: float = DEFAULT_QUANTIZED_VAE_INITIALIZER_MEAN,
-            quantized_vae_initializer_deviation: float = DEFAULT_QUANTIZED_VAE_MEAN_DISTRIBUTION,
-            quantized_vae_dropout_decay_encoder: float = DEFAULT_QUANTIZED_VAE_DROPOUT_DECAY_RATE_ENCODER,
-            quantized_vae_dropout_decay_decoder: float = DEFAULT_QUANTIZED_VAE_DROPOUT_DECAY_RATE_DECODER,
-            quantized_vae_last_layer_activation: str = DEFAULT_QUANTIZED_VAE_LAST_ACTIVATION_LAYER,
-            quantized_vae_number_neurons_encoder: list[int] = None,
-            quantized_vae_number_neurons_decoder: list[int] = None,
-            quantized_vae_train_variance: float = DEFAULT_QUANTIZED_VAE_TRAIN_VARIANCE,
-            quantized_vae_file_name_encoder: str = DEFAULT_QUANTIZED_VAE_FILE_NAME_ENCODER,
-            quantized_vae_file_name_decoder: str = DEFAULT_QUANTIZED_VAE_FILE_NAME_DECODER,
-            quantized_vae_path_output_models: str = DEFAULT_QUANTIZED_VAE_PATH_OUTPUT_MODELS,
-            quantized_vae_algorithm: QuantizedVAEAlgorithm | None = None,
-            quantized_vae_model: QuantizedVAEModel | None = None
-    ) -> None:
+    def __init__(self,
+                 number_epochs: int = DEFAULT_QUANTIZED_VAE_NUMBER_EPOCHS,
+                 batch_size: int = DEFAULT_QUANTIZED_VAE_BATCH_SIZE,
+                 latent_dimension: int = DEFAULT_QUANTIZED_VAE_LATENT_DIMENSION,
+                 number_embeddings: int = DEFAULT_QUANTIZED_VAE_NUMBER_EMBEDDING,
+                 activation_function: str = DEFAULT_QUANTIZED_VAE_ACTIVATION_INTERMEDIARY,
+                 initializer_mean: float = DEFAULT_QUANTIZED_VAE_INITIALIZER_MEAN,
+                 initializer_deviation: float = DEFAULT_QUANTIZED_VAE_MEAN_DISTRIBUTION,
+                 dropout_decay_encoder: float = DEFAULT_QUANTIZED_VAE_DROPOUT_DECAY_RATE_ENCODER,
+                 dropout_decay_decoder: float = DEFAULT_QUANTIZED_VAE_DROPOUT_DECAY_RATE_DECODER,
+                 last_layer_activation: str = DEFAULT_QUANTIZED_VAE_LAST_ACTIVATION_LAYER,
+                 number_neurons_encoder: list[int] = None,
+                 number_neurons_decoder: list[int] = None,
+                 train_variance: float = DEFAULT_QUANTIZED_VAE_TRAIN_VARIANCE,
+                 file_name_encoder: str = DEFAULT_QUANTIZED_VAE_FILE_NAME_ENCODER,
+                 file_name_decoder: str = DEFAULT_QUANTIZED_VAE_FILE_NAME_DECODER,
+                 path_output_models: str = DEFAULT_QUANTIZED_VAE_PATH_OUTPUT_MODELS,
+                 algorithm: QuantizedVAEAlgorithm | None = None,
+                 model: QuantizedVAEModel | None = None) -> None:
         """
         Initializes the quantized VAE instance with configuration parameters.
 
         Args:
-            quantized_vae_number_epochs: Training epochs (default: 30)
-            quantized_vae_batch_size: Batch size (default: 64)
-            quantized_vae_latent_dimension: Latent space size (default: 16)
-            quantized_vae_number_embeddings: Codebook size (default: 16)
-            quantized_vae_activation_function: Activation function (default: "swish")
-            quantized_vae_initializer_mean: Weight init mean (default: 0)
-            quantized_vae_initializer_deviation: Weight init std dev (default: 0.125)
-            quantized_vae_dropout_decay_encoder: Encoder dropout rate (default: 0.25)
-            quantized_vae_dropout_decay_decoder: Decoder dropout rate (default: 0.25)
-            quantized_vae_last_layer_activation: Last layer activation (default: "sigmoid")
-            quantized_vae_number_neurons_encoder: Encoder layer sizes (default: [320, 160])
-            quantized_vae_number_neurons_decoder: Decoder layer sizes (default: [160, 320])
-            quantized_vae_train_variance: Training variance parameter (default: 0.5)
-            quantized_vae_file_name_encoder: Encoder model filename (default: "encoder_model")
-            quantized_vae_file_name_decoder: Decoder model filename (default: "decoder_model")
-            quantized_vae_path_output_models: Path for saving models (default: "models_saved/")
-            quantized_vae_algorithm: Optional pre-initialized QuantizedVAEAlgorithm (default: None)
-            quantized_vae_model: Optional pre-initialized QuantizedVAEModel (default: None)
+            number_epochs: Training epochs (default: 30)
+            batch_size: Batch size (default: 64)
+            latent_dimension: Latent space size (default: 16)
+            number_embeddings: Codebook size (default: 16)
+            activation_function: Activation function (default: "swish")
+            initializer_mean: Weight init mean (default: 0)
+            initializer_deviation: Weight init std dev (default: 0.125)
+            dropout_decay_encoder: Encoder dropout rate (default: 0.25)
+            dropout_decay_decoder: Decoder dropout rate (default: 0.25)
+            last_layer_activation: Last layer activation (default: "sigmoid")
+            number_neurons_encoder: Encoder layer sizes (default: [320, 160])
+            number_neurons_decoder: Decoder layer sizes (default: [160, 320])
+            train_variance: Training variance parameter (default: 0.5)
+            file_name_encoder: Encoder model filename (default: "encoder_model")
+            file_name_decoder: Decoder model filename (default: "decoder_model")
+            path_output_models: Path for saving models (default: "models_saved/")
+            algorithm: Optional pre-initialized QuantizedVAEAlgorithm (default: None)
+            model: Optional pre-initialized QuantizedVAEModel (default: None)
         """
         # Store pre-initialized instances if provided
-        self._quantized_vae_algorithm: QuantizedVAEAlgorithm | None = quantized_vae_algorithm
-        self._quantized_vae_model: QuantizedVAEModel | None = quantized_vae_model
+        self._quantized_vae_algorithm: QuantizedVAEAlgorithm | None = algorithm
+        self._quantized_vae_model: QuantizedVAEModel | None = model
 
         # ** Vector Quantized Variational Autoencoder (VQ-VAE) Configuration Parameters **
-        self._quantized_vae_number_epochs: int = quantized_vae_number_epochs
-        self._quantized_vae_batch_size: int = quantized_vae_batch_size
-        self._quantized_vae_latent_dimension: int = quantized_vae_latent_dimension
-        self._quantized_vae_number_embeddings: int = quantized_vae_number_embeddings
-        self._quantized_vae_activation_function: str = quantized_vae_activation_function
-        self._quantized_vae_initializer_mean: float = quantized_vae_initializer_mean
-        self._quantized_vae_initializer_deviation: float = quantized_vae_initializer_deviation
-        self._quantized_vae_dropout_decay_encoder: float = quantized_vae_dropout_decay_encoder
-        self._quantized_vae_dropout_decay_decoder: float = quantized_vae_dropout_decay_decoder
-        self._quantized_vae_last_layer_activation: str = quantized_vae_last_layer_activation
+        self._quantized_vae_number_epochs: int = number_epochs
+        self._quantized_vae_batch_size: int = batch_size
+        self._quantized_vae_latent_dimension: int = latent_dimension
+        self._quantized_vae_number_embeddings: int = number_embeddings
+        self._quantized_vae_activation_function: str = activation_function
+        self._quantized_vae_initializer_mean: float = initializer_mean
+        self._quantized_vae_initializer_deviation: float = initializer_deviation
+        self._quantized_vae_dropout_decay_encoder: float = dropout_decay_encoder
+        self._quantized_vae_dropout_decay_decoder: float = dropout_decay_decoder
+        self._quantized_vae_last_layer_activation: str = last_layer_activation
 
         # Handle mutable default values safely
         self._quantized_vae_number_neurons_encoder: list[int] = (
-            quantized_vae_number_neurons_encoder
-            if quantized_vae_number_neurons_encoder is not None
+            number_neurons_encoder
+            if number_neurons_encoder is not None
             else DEFAULT_QUANTIZED_VAE_DENSE_LAYERS_SETTINGS_ENCODER.copy()
         )
         self._quantized_vae_number_neurons_decoder: list[int] = (
-            quantized_vae_number_neurons_decoder
-            if quantized_vae_number_neurons_decoder is not None
+            number_neurons_decoder
+            if number_neurons_decoder is not None
             else DEFAULT_QUANTIZED_VAE_DENSE_LAYERS_SETTINGS_DECODER.copy()
         )
 
-        self._quantized_vae_train_variance: float = quantized_vae_train_variance
-        self._quantized_vae_file_name_encoder: str = quantized_vae_file_name_encoder
-        self._quantized_vae_file_name_decoder: str = quantized_vae_file_name_decoder
-        self._quantized_vae_path_output_models: str = quantized_vae_path_output_models
+        self._quantized_vae_train_variance: float = train_variance
+        self._quantized_vae_file_name_encoder: str = file_name_encoder
+        self._quantized_vae_file_name_decoder: str = file_name_decoder
+        self._quantized_vae_path_output_models: str = path_output_models
 
         # Flags to indicate if instances were provided
-        self._has_external_algorithm: bool = quantized_vae_algorithm is not None
-        self._has_external_model: bool = quantized_vae_model is not None
+        self._has_external_algorithm: bool = algorithm is not None
+        self._has_external_model: bool = model is not None
 
     def _get_quantized_vae(self, input_shape: tuple[int, ...]) -> None:
         """

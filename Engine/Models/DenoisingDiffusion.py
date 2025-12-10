@@ -54,101 +54,101 @@ class DenoisingDiffusionInstanceTorch:
 
     def __init__(
             self,
-            denoising_diffusion_unet_last_layer_activation: str = DEFAULT_DIFFUSION_UNET_LAST_LAYER_ACTIVATION,
-            denoising_diffusion_latent_dimension: int = DEFAULT_DIFFUSION_LATENT_DIMENSION,
-            denoising_diffusion_unet_num_embedding_channels: int = DEFAULT_DIFFUSION_UNET_NUMBER_EMBEDDING_CHANNELS,
-            denoising_diffusion_unet_channels_per_level: list[int] = None,
-            denoising_diffusion_unet_batch_size: int = DEFAULT_DIFFUSION_UNET_BATCH_SIZE,
-            denoising_diffusion_unet_attention_mode: list[bool] = None,
-            denoising_diffusion_unet_num_residual_blocks: int = DEFAULT_DIFFUSION_UNET_NUMBER_RESIDUAL_BLOCKS,
-            denoising_diffusion_unet_group_normalization: int = DEFAULT_DIFFUSION_UNET_GROUP_NORMALIZATION,
-            denoising_diffusion_unet_intermediary_activation: str = DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION,
-            denoising_diffusion_unet_intermediary_activation_alpha: float = DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION_ALPHA,
-            denoising_diffusion_unet_epochs: int = DEFAULT_DIFFUSION_UNET_NUMBER_EPOCHS,
-            denoising_diffusion_gaussian_beta_start: float = DEFAULT_DIFFUSION_GAUSSIAN_BETA_START,
-            denoising_diffusion_gaussian_beta_end: float = DEFAULT_DIFFUSION_GAUSSIAN_BETA_END,
-            denoising_diffusion_gaussian_time_steps: int = DEFAULT_DIFFUSION_GAUSSIAN_TIME_STEPS,
-            denoising_diffusion_gaussian_clip_min: float = DEFAULT_DIFFUSION_GAUSSIAN_CLIP_MIN,
-            denoising_diffusion_gaussian_clip_max: float = DEFAULT_DIFFUSION_GAUSSIAN_CLIP_MAX,
-            denoising_diffusion_margin: float = DEFAULT_DIFFUSION_MARGIN,
-            denoising_diffusion_ema: float = DEFAULT_DIFFUSION_EMA,
-            denoising_diffusion_time_steps: int = DEFAULT_DIFFUSION_TIME_STEPS,
-            denoising_first_unet_model: UNetDenoisingModelTorch | None = None,
-            denoising_second_unet_model: UNetDenoisingModelTorch | None = None,
-            denoising_gaussian_diffusion_util: GaussianDiffusionTorch | None = None,
-            denoising_diffusion_algorithm: AlgorithmDenoisingDiffusionTorch | None = None
+            unet_last_layer_activation: str = DEFAULT_DIFFUSION_UNET_LAST_LAYER_ACTIVATION,
+            latent_dimension: int = DEFAULT_DIFFUSION_LATENT_DIMENSION,
+            unet_num_embedding_channels: int = DEFAULT_DIFFUSION_UNET_NUMBER_EMBEDDING_CHANNELS,
+            unet_channels_per_level: list[int] = None,
+            unet_batch_size: int = DEFAULT_DIFFUSION_UNET_BATCH_SIZE,
+            unet_attention_mode: list[bool] = None,
+            unet_num_residual_blocks: int = DEFAULT_DIFFUSION_UNET_NUMBER_RESIDUAL_BLOCKS,
+            unet_group_normalization: int = DEFAULT_DIFFUSION_UNET_GROUP_NORMALIZATION,
+            unet_intermediary_activation: str = DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION,
+            unet_intermediary_activation_alpha: float = DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION_ALPHA,
+            unet_epochs: int = DEFAULT_DIFFUSION_UNET_NUMBER_EPOCHS,
+            gaussian_beta_start: float = DEFAULT_DIFFUSION_GAUSSIAN_BETA_START,
+            gaussian_beta_end: float = DEFAULT_DIFFUSION_GAUSSIAN_BETA_END,
+            gaussian_time_steps: int = DEFAULT_DIFFUSION_GAUSSIAN_TIME_STEPS,
+            gaussian_clip_min: float = DEFAULT_DIFFUSION_GAUSSIAN_CLIP_MIN,
+            gaussian_clip_max: float = DEFAULT_DIFFUSION_GAUSSIAN_CLIP_MAX,
+            margin: float = DEFAULT_DIFFUSION_MARGIN,
+            ema: float = DEFAULT_DIFFUSION_EMA,
+            time_steps: int = DEFAULT_DIFFUSION_TIME_STEPS,
+            first_unet_model: UNetDenoisingModelTorch | None = None,
+            second_unet_model: UNetDenoisingModelTorch | None = None,
+            gaussian_diffusion_util: GaussianDiffusionTorch | None = None,
+            algorithm: AlgorithmDenoisingDiffusionTorch | None = None
     ) -> None:
         """
         Initializes the denoising diffusion instance with configuration parameters.
 
         Args:
-            denoising_diffusion_unet_last_layer_activation: Activation for last layer (default: 'linear')
-            denoising_diffusion_latent_dimension: Dimension of latent space (default: 64)
-            denoising_diffusion_unet_num_embedding_channels: Embedding channels (default: 1)
-            denoising_diffusion_unet_channels_per_level: Channels per U-Net level (default: [1, 2, 4])
-            denoising_diffusion_unet_batch_size: Batch size (default: 128)
-            denoising_diffusion_unet_attention_mode: Attention modes per level (default: [False, True, True])
-            denoising_diffusion_unet_num_residual_blocks: Residual blocks (default: 2)
-            denoising_diffusion_unet_group_normalization: Group norm groups (default: 1)
-            denoising_diffusion_unet_intermediary_activation: Intermediary activation (default: 'swish')
-            denoising_diffusion_unet_intermediary_activation_alpha: Activation alpha (default: 0.05)
-            denoising_diffusion_unet_epochs: Training epochs (default: 1000)
-            denoising_diffusion_gaussian_beta_start: Beta start value (default: 1e-4)
-            denoising_diffusion_gaussian_beta_end: Beta end value (default: 0.02)
-            denoising_diffusion_gaussian_time_steps: Diffusion time steps (default: 1000)
-            denoising_diffusion_gaussian_clip_min: Noise clip minimum (default: -1.0)
-            denoising_diffusion_gaussian_clip_max: Noise clip maximum (default: 1.0)
-            denoising_diffusion_margin: Margin for diffusion (default: 0.5)
-            denoising_diffusion_ema: Exponential moving average (default: 0.999)
-            denoising_diffusion_time_steps: Time steps (default: 1000)
-            denoising_first_unet_model: Optional pre-initialized first UNet (default: None)
-            denoising_second_unet_model: Optional pre-initialized second UNet (default: None)
-            denoising_gaussian_diffusion_util: Optional pre-initialized diffusion util (default: None)
-            denoising_diffusion_algorithm: Optional pre-initialized algorithm (default: None)
+            unet_last_layer_activation: Activation for last layer (default: 'linear')
+            latent_dimension: Dimension of latent space (default: 64)
+            unet_num_embedding_channels: Embedding channels (default: 1)
+            unet_channels_per_level: Channels per U-Net level (default: [1, 2, 4])
+            unet_batch_size: Batch size (default: 128)
+            unet_attention_mode: Attention modes per level (default: [False, True, True])
+            unet_num_residual_blocks: Residual blocks (default: 2)
+            unet_group_normalization: Group norm groups (default: 1)
+            unet_intermediary_activation: Intermediary activation (default: 'swish')
+            unet_intermediary_activation_alpha: Activation alpha (default: 0.05)
+            unet_epochs: Training epochs (default: 1000)
+            gaussian_beta_start: Beta start value (default: 1e-4)
+            gaussian_beta_end: Beta end value (default: 0.02)
+            gaussian_time_steps: Diffusion time steps (default: 1000)
+            gaussian_clip_min: Noise clip minimum (default: -1.0)
+            gaussian_clip_max: Noise clip maximum (default: 1.0)
+            margin: Margin for diffusion (default: 0.5)
+            ema: Exponential moving average (default: 0.999)
+            time_steps: Time steps (default: 1000)
+            first_unet_model: Optional pre-initialized first UNet (default: None)
+            second_unet_model: Optional pre-initialized second UNet (default: None)
+            gaussian_diffusion_util: Optional pre-initialized diffusion util (default: None)
+            algorithm: Optional pre-initialized algorithm (default: None)
         """
         # Store pre-initialized instances if provided
-        self._denoising_first_unet_model: UNetDenoisingModelTorch | None = denoising_first_unet_model
-        self._denoising_second_unet_model: UNetDenoisingModelTorch | None = denoising_second_unet_model
-        self._denoising_gaussian_diffusion_util: GaussianDiffusionTorch | None = denoising_gaussian_diffusion_util
-        self._denoising_diffusion_algorithm: AlgorithmDenoisingDiffusionTorch | None = denoising_diffusion_algorithm
+        self._denoising_first_unet_model: UNetDenoisingModelTorch | None = first_unet_model
+        self._denoising_second_unet_model: UNetDenoisingModelTorch | None = second_unet_model
+        self._denoising_gaussian_diffusion_util: GaussianDiffusionTorch | None = gaussian_diffusion_util
+        self._denoising_diffusion_algorithm: AlgorithmDenoisingDiffusionTorch | None = algorithm
 
         # Internal instances
         self._denoising_first_instance_unet: UNetDenoisingModelTorch | None = None
         self._denoising_second_instance_unet: UNetDenoisingModelTorch | None = None
 
         # Configuration parameters
-        self._denoising_diffusion_unet_last_layer_activation: str = denoising_diffusion_unet_last_layer_activation
-        self._denoising_diffusion_latent_dimension: int = denoising_diffusion_latent_dimension
-        self._denoising_diffusion_unet_num_embedding_channels: int = denoising_diffusion_unet_num_embedding_channels
+        self._denoising_diffusion_unet_last_layer_activation: str = unet_last_layer_activation
+        self._denoising_diffusion_latent_dimension: int = latent_dimension
+        self._denoising_diffusion_unet_num_embedding_channels: int = unet_num_embedding_channels
 
         # Handle mutable default values safely
         self._denoising_diffusion_unet_channels_per_level: list[int] = (
-            denoising_diffusion_unet_channels_per_level
-            if denoising_diffusion_unet_channels_per_level is not None
+            unet_channels_per_level
+            if unet_channels_per_level is not None
             else DEFAULT_DIFFUSION_UNET_CHANNELS_PER_LEVEL.copy()
         )
         self._denoising_diffusion_unet_attention_mode: list[bool] = (
-            denoising_diffusion_unet_attention_mode
-            if denoising_diffusion_unet_attention_mode is not None
+            unet_attention_mode
+            if unet_attention_mode is not None
             else DEFAULT_DIFFUSION_UNET_ATTENTION_MODE.copy()
         )
 
-        self._denoising_diffusion_unet_batch_size: int = denoising_diffusion_unet_batch_size
-        self._denoising_diffusion_unet_num_residual_blocks: int = denoising_diffusion_unet_num_residual_blocks
-        self._denoising_diffusion_unet_group_normalization: int = denoising_diffusion_unet_group_normalization
-        self._denoising_diffusion_unet_intermediary_activation: str = denoising_diffusion_unet_intermediary_activation
-        self._denoising_diffusion_unet_intermediary_activation_alpha: float = denoising_diffusion_unet_intermediary_activation_alpha
-        self._denoising_diffusion_unet_epochs: int = denoising_diffusion_unet_epochs
+        self._denoising_diffusion_unet_batch_size: int = unet_batch_size
+        self._denoising_diffusion_unet_num_residual_blocks: int = unet_num_residual_blocks
+        self._denoising_diffusion_unet_group_normalization: int = unet_group_normalization
+        self._denoising_diffusion_unet_intermediary_activation: str = unet_intermediary_activation
+        self._denoising_diffusion_unet_intermediary_activation_alpha: float = unet_intermediary_activation_alpha
+        self._denoising_diffusion_unet_epochs: int = unet_epochs
 
         # Diffusion Process Parameters
-        self._denoising_diffusion_gaussian_beta_start: float = denoising_diffusion_gaussian_beta_start
-        self._denoising_diffusion_gaussian_beta_end: float = denoising_diffusion_gaussian_beta_end
-        self._denoising_diffusion_gaussian_time_steps: int = denoising_diffusion_gaussian_time_steps
-        self._denoising_diffusion_gaussian_clip_min: float = denoising_diffusion_gaussian_clip_min
-        self._denoising_diffusion_gaussian_clip_max: float = denoising_diffusion_gaussian_clip_max
-        self._denoising_diffusion_margin: float = denoising_diffusion_margin
-        self._denoising_diffusion_ema: float = denoising_diffusion_ema
-        self._denoising_diffusion_time_steps: int = denoising_diffusion_time_steps
+        self._denoising_diffusion_gaussian_beta_start: float = gaussian_beta_start
+        self._denoising_diffusion_gaussian_beta_end: float = gaussian_beta_end
+        self._denoising_diffusion_gaussian_time_steps: int = gaussian_time_steps
+        self._denoising_diffusion_gaussian_clip_min: float = gaussian_clip_min
+        self._denoising_diffusion_gaussian_clip_max: float = gaussian_clip_max
+        self._denoising_diffusion_margin: float = margin
+        self._denoising_diffusion_ema: float = ema
+        self._denoising_diffusion_time_steps: int = time_steps
 
         # Device configuration
         self._device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -161,10 +161,10 @@ class DenoisingDiffusionInstanceTorch:
         }
 
         # Flags to indicate if instances were provided
-        self._has_external_first_unet: bool = denoising_first_unet_model is not None
-        self._has_external_second_unet: bool = denoising_second_unet_model is not None
-        self._has_external_diffusion_util: bool = denoising_gaussian_diffusion_util is not None
-        self._has_external_algorithm: bool = denoising_diffusion_algorithm is not None
+        self._has_external_first_unet: bool = first_unet_model is not None
+        self._has_external_second_unet: bool = second_unet_model is not None
+        self._has_external_diffusion_util: bool = gaussian_diffusion_util is not None
+        self._has_external_algorithm: bool = algorithm is not None
 
     def _get_denoising_diffusion(self, input_shape: tuple[int, ...]) -> None:
         """
