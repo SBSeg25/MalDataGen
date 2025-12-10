@@ -55,7 +55,7 @@ try:
     from Engine.Models.DenoisingDiffusion import DenoisingDiffusionInstanceTorch
     from Engine.Models.Adversarial import Adversarial
     from Engine.Models.Autoencoder import Autoencoder
-    from Engine.Algorithms.LatentDiffusion.LatentDiffusionInstance import LatentDiffusionInstance
+    from Engine.Models.LatentDiffusionInstanceTensorflow import LatentDiffusion
     from Engine.Models.QuantizedVAE import QuantizedVAE
     from Engine.Algorithms.RandomNoise.AlgorithmRandomNoise import RandomNoiseAlgorithm
     from Engine.Callbacks.CallbackModel import ModelMonitorCallback
@@ -74,7 +74,7 @@ except ImportError as error:
 class GenerativeModels(Adversarial,
                        Autoencoder,
                        QuantizedVAE,
-                       LatentDiffusionInstance,
+                       LatentDiffusion,
                        Wasserstein,
                        WassersteinGP,
                        VariationalAutoencoder,
@@ -328,7 +328,7 @@ class GenerativeModels(Adversarial,
                               arguments.quantized_vae_file_name_decoder,
                               arguments.quantized_vae_path_output_models)
 
-        LatentDiffusionInstance.__init__(self, arguments)
+        LatentDiffusion.__init__(self, arguments)
 
         Wasserstein.__init__(self,
                              arguments.wasserstein_latent_dimension,

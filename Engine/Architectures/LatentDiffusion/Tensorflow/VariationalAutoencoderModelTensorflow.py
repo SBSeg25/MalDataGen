@@ -36,8 +36,8 @@ try:
     import sys
     import numpy
 
-    from Engine.Architectures.LatentDiffusion.VanillaDecoderDiffusion import VanillaDecoderDiffusion
-    from Engine.Architectures.LatentDiffusion.VanillaEncoderDiffusion import VanillaEncoderDiffusion
+    from Engine.Architectures.LatentDiffusion.Tensorflow.VanillaDecoderDiffusionTensorflow import VanillaDecoderDiffusion
+    from Engine.Architectures.LatentDiffusion.Tensorflow.VanillaEncoderDiffusionTensorflow import VanillaEncoderDiffusion
 
 except ImportError as error:
     print(error)

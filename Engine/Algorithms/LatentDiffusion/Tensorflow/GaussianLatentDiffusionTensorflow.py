@@ -47,7 +47,7 @@ DEFAULT_DIFFUSION_GAUSSIAN_TIME_STEPS = 1000
 DEFAULT_DIFFUSION_GAUSSIAN_CLIP_MIN = -1.0
 DEFAULT_DIFFUSION_GAUSSIAN_CLIP_MAX = 1.0
 
-class GaussianDiffusion:
+class GaussianDiffusionTensorflow:
     """
     A class representing the Gaussian diffusion process used in diffusion models for denoising
     and generative tasks.
@@ -136,7 +136,7 @@ class GaussianDiffusion:
             Samples from the model’s posterior distribution at time step t.
 
     Example:
-        >>> diffusion = GaussianDiffusion(beta_start=0.0001, beta_end=0.02, time_steps=1000, clip_min=-1.0, clip_max=1.0)
+        >>> diffusion = GaussianDiffusionTensorflow(beta_start=0.0001, beta_end=0.02, time_steps=1000, clip_min=-1.0, clip_max=1.0)
         ...     noise = tf.random.normal(shape=(1, 32, 32, 3))
         ...     t = tf.constant([10], dtype=tf.int32)
         ...     x_t = diffusion.q_sample(x_start=noise, t=t, noise=noise)

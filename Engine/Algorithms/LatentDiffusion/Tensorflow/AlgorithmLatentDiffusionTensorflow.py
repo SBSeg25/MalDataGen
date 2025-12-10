@@ -48,7 +48,7 @@ except ImportError as error:
     sys.exit(-1)
 
 
-class LatentDiffusionAlgorithm(tensorflow.keras.Model):
+class LatentDiffusionAlgorithmTensorflow(tensorflow.keras.Model):
     """
     Implements a diffusion process using UNet architectures for generating synthetic data.
     This model integrates an autoencoder and a diffusion network, enabling both data
@@ -98,7 +98,7 @@ class LatentDiffusionAlgorithm(tensorflow.keras.Model):
         Available at: https://arxiv.org/abs/2006.11239
 
     Example:
-        >>> diffusion_model = LatentDiffusionAlgorithm(
+        >>> diffusion_model = LatentDiffusionAlgorithmTensorflow(
         ...     first_unet_model=primary_unet,
         ...     second_unet_model=ema_unet,
         ...     encoder_model_image=encoder,

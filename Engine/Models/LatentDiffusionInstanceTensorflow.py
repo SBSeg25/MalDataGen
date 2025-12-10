@@ -8,7 +8,7 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
-from Engine.Algorithms.LatentDiffusion.AlgorithmLatentDiffusion import LatentDiffusionAlgorithm
+from Engine.Algorithms.LatentDiffusion.Tensorflow.AlgorithmLatentDiffusionTensorflow import LatentDiffusionAlgorithmTensorflow
 
 # MIT License
 #
@@ -50,10 +50,10 @@ try:
 
     from tensorflow.python.keras.losses import BinaryCrossentropy
 
-    from Engine.Algorithms.LatentDiffusion.AlgorithmVAELatentDiffusion import VAELatentDiffusionAlgorithm
-    from Engine.Algorithms.LatentDiffusion.GaussianLatentDiffusion import GaussianDiffusion
-    from Engine.Architectures.LatentDiffusion.DiffusionModelUnet import UNetModel
-    from Engine.Architectures.LatentDiffusion.VariationalAutoencoderModel import VariationalModelDiffusion
+    from Engine.Algorithms.LatentDiffusion.Tensorflow.AlgorithmVAELatentDiffusionTensorflow import VAELatentDiffusionAlgorithmTensorflow
+    from Engine.Algorithms.LatentDiffusion.Tensorflow.GaussianLatentDiffusionTensorflow import GaussianDiffusionTensorflow
+    from Engine.Architectures.LatentDiffusion.Tensorflow.DiffusionModelUnetTensorflow import UNetModel
+    from Engine.Architectures.LatentDiffusion.Tensorflow.VariationalAutoencoderModelTensorflow import VariationalModelDiffusion
 
 except ImportError as error:
     logging.error(error)
@@ -62,7 +62,7 @@ except ImportError as error:
 
 
 
-class LatentDiffusionInstance:
+class LatentDiffusion:
     """
     A class that implements a Latent Denoising Probabilistic Diffusion (LDPD) model for generative tasks.
     This implementation combines variational autoencoders with diffusion models in latent space for
@@ -267,11 +267,11 @@ class LatentDiffusionInstance:
         self._latent_second_unet_model.set_weights(self._latent_first_unet_model.get_weights())
 
         # Initialize the GaussianDiffusion utility for the diffusion process
-        self._latent_gaussian_diffusion_util = GaussianDiffusion(beta_start=self._latent_diffusion_gaussian_beta_start,
-                                                                 beta_end=self._latent_diffusion_gaussian_beta_end,
-                                                                 time_steps=self._latent_diffusion_gaussian_time_steps,
-                                                                 clip_min=self._latent_diffusion_gaussian_clip_min,
-                                                                 clip_max=self._latent_diffusion_gaussian_clip_max)
+        self._latent_gaussian_diffusion_util = GaussianDiffusionTensorflow(beta_start=self._latent_diffusion_gaussian_beta_start,
+                                                                           beta_end=self._latent_diffusion_gaussian_beta_end,
+                                                                           time_steps=self._latent_diffusion_gaussian_time_steps,
+                                                                           clip_min=self._latent_diffusion_gaussian_clip_min,
+                                                                           clip_max=self._latent_diffusion_gaussian_clip_max)
 
         # Initialize the VariationalModelDiffusion for embedding learning and reconstructor
         self._latent_variation_model_diffusion = VariationalModelDiffusion(latent_dimension=self._latent_diffusion_latent_dimension, output_shape=input_shape,
@@ -287,16 +287,16 @@ class LatentDiffusionInstance:
                                                                            number_samples_per_class = self._number_samples_per_class)
 
         # Initialize the VariationalAlgorithmDiffusion for the training and diffusion process
-        self._latent_variational_algorithm = VAELatentDiffusionAlgorithm(encoder_model=self._latent_variation_model_diffusion.get_encoder(),
-                                                                         decoder_model=self._latent_variation_model_diffusion.get_decoder(),
-                                                                         loss_function=self._latent_diffusion_VAE_loss_function,
-                                                                         latent_dimension=self._latent_diffusion_latent_dimension,
-                                                                         decoder_latent_dimension = self._latent_diffusion_latent_dimension,
-                                                                         latent_mean_distribution=self._latent_diffusion_VAE_mean_distribution,
-                                                                         latent_stander_deviation=self._latent_diffusion_VAE_stander_deviation,
-                                                                         file_name_encoder=self._latent_diffusion_VAE_file_name_encoder,
-                                                                         file_name_decoder=self._latent_diffusion_VAE_file_name_decoder,
-                                                                         models_saved_path=self._latent_diffusion_VAE_path_output_models)
+        self._latent_variational_algorithm = VAELatentDiffusionAlgorithmTensorflow(encoder_model=self._latent_variation_model_diffusion.get_encoder(),
+                                                                                   decoder_model=self._latent_variation_model_diffusion.get_decoder(),
+                                                                                   loss_function=self._latent_diffusion_VAE_loss_function,
+                                                                                   latent_dimension=self._latent_diffusion_latent_dimension,
+                                                                                   decoder_latent_dimension = self._latent_diffusion_latent_dimension,
+                                                                                   latent_mean_distribution=self._latent_diffusion_VAE_mean_distribution,
+                                                                                   latent_stander_deviation=self._latent_diffusion_VAE_stander_deviation,
+                                                                                   file_name_encoder=self._latent_diffusion_VAE_file_name_encoder,
+                                                                                   file_name_decoder=self._latent_diffusion_VAE_file_name_decoder,
+                                                                                   models_saved_path=self._latent_diffusion_VAE_path_output_models)
 
     def _get_variational_autoencoder(self, input_shape):
         """
@@ -405,17 +405,17 @@ class LatentDiffusionInstance:
         self._decoder_latent_diffusion.summary()
 
         # Initialize the final diffusion algorithm
-        self._latent_diffusion_algorithm = LatentDiffusionAlgorithm(first_unet_model=self._latent_first_unet_model,
-                                                                    second_unet_model=self._latent_second_unet_model,
-                                                                    encoder_model_image=self._encoder_latent_diffusion,
-                                                                    decoder_model_image=self._decoder_latent_diffusion,
-                                                                    gdf_util=self._latent_gaussian_diffusion_util,
-                                                                    optimizer_autoencoder=Adam(learning_rate=0.0001),
-                                                                    optimizer_diffusion=Adam(learning_rate=0.0001),
-                                                                    time_steps=self._latent_diffusion_gaussian_time_steps,
-                                                                    ema=self._latent_diffusion_ema,
-                                                                    margin=self._latent_diffusion_margin,
-                                                                    embedding_dimension=self._latent_diffusion_latent_dimension)
+        self._latent_diffusion_algorithm = LatentDiffusionAlgorithmTensorflow(first_unet_model=self._latent_first_unet_model,
+                                                                              second_unet_model=self._latent_second_unet_model,
+                                                                              encoder_model_image=self._encoder_latent_diffusion,
+                                                                              decoder_model_image=self._decoder_latent_diffusion,
+                                                                              gdf_util=self._latent_gaussian_diffusion_util,
+                                                                              optimizer_autoencoder=Adam(learning_rate=0.0001),
+                                                                              optimizer_diffusion=Adam(learning_rate=0.0001),
+                                                                              time_steps=self._latent_diffusion_gaussian_time_steps,
+                                                                              ema=self._latent_diffusion_ema,
+                                                                              margin=self._latent_diffusion_margin,
+                                                                              embedding_dimension=self._latent_diffusion_latent_dimension)
 
         # Compile the diffusion model
         self._latent_diffusion_algorithm.compile(loss=MeanSquaredError(), optimizer=Adam(learning_rate=0.0001))

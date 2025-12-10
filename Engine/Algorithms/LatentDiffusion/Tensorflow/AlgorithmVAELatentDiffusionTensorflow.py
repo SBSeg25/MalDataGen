@@ -54,7 +54,7 @@ except ImportError as error:
     sys.exit(-1)
 
 
-class VAELatentDiffusionAlgorithm(Model):
+class VAELatentDiffusionAlgorithmTensorflow(Model):
     """
     Implements a Variational AutoEncoder (VAE) model for generating synthetic data.
 
@@ -101,7 +101,7 @@ class VAELatentDiffusionAlgorithm(Model):
             - The file paths are invalid.
 
     Example:
-        >>> vae_model = VAELatentDiffusionAlgorithm(
+        >>> vae_model = VAELatentDiffusionAlgorithmTensorflow(
         ...     encoder_model=encoder,
         ...     decoder_model=decoder,
         ...     loss_function=custom_loss_function,
