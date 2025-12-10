@@ -122,122 +122,122 @@ class WassersteinGP:
 
     def __init__(
             self,
-            wasserstein_gp_latent_dimension: int = DEFAULT_WASSERSTEIN_GAN_GP_LATENT_DIMENSION,
-            wasserstein_gp_training_algorithm: str = DEFAULT_WASSERSTEIN_GAN_GP_TRAINING_ALGORITHM,
-            wasserstein_gp_activation_function: str = DEFAULT_WASSERSTEIN_GAN_GP_ACTIVATION,
-            wasserstein_gp_dropout_decay_rate_g: float = DEFAULT_WASSERSTEIN_GAN_GP_DROPOUT_DECAY_RATE_G,
-            wasserstein_gp_dropout_decay_rate_d: float = DEFAULT_WASSERSTEIN_GAN_GP_DROPOUT_DECAY_RATE_D,
-            wasserstein_gp_dense_layer_sizes_generator: list[int] = None,
-            wasserstein_gp_dense_layer_sizes_discriminator: list[int] = None,
-            wasserstein_gp_batch_size: int = DEFAULT_WASSERSTEIN_GAN_GP_BATCH_SIZE,
-            wasserstein_gp_number_epochs: int = DEFAULT_WASSERSTEIN_GAN_GP_NUMBER_EPOCHS,
-            wasserstein_gp_number_classes: int = DEFAULT_WASSERSTEIN_GAN_GP_NUMBER_CLASSES,
-            wasserstein_gp_loss_function: str = DEFAULT_WASSERSTEIN_GAN_GP_LOSS,
-            wasserstein_gp_momentum: float = DEFAULT_WASSERSTEIN_GAN_GP_MOMENTUM,
-            wasserstein_gp_last_activation_layer: str = DEFAULT_WASSERSTEIN_GAN_GP_LAST_ACTIVATION_LAYER,
-            wasserstein_gp_initializer_mean: float = DEFAULT_WASSERSTEIN_GAN_GP_INITIALIZER_MEAN,
-            wasserstein_gp_initializer_deviation: float = DEFAULT_WASSERSTEIN_GAN_GP_INITIALIZER_DEVIATION,
-            wasserstein_gp_optimizer_generator_learning_rate: float = DEFAULT_WASSERSTEIN_GAN_GP_OPTIMIZER_GENERATOR_LEARNING,
-            wasserstein_gp_optimizer_discriminator_learning_rate: float = DEFAULT_WASSERSTEIN_GAN_GP_OPTIMIZER_DISCRIMINATOR_LEARNING,
-            wasserstein_gp_optimizer_generator_beta: float = DEFAULT_WASSERSTEIN_GAN_GP_OPTIMIZER_GENERATOR_BETA,
-            wasserstein_gp_optimizer_discriminator_beta: float = DEFAULT_WASSERSTEIN_GAN_GP_OPTIMIZER_DISCRIMINATOR_BETA,
-            wasserstein_gp_discriminator_steps: int = DEFAULT_WASSERSTEIN_GAN_GP_DISCRIMINATOR_STEPS,
-            wasserstein_gp_smoothing_rate: float = DEFAULT_WASSERSTEIN_GAN_GP_SMOOTHING_RATE,
-            wasserstein_gp_latent_mean_distribution: float = DEFAULT_WASSERSTEIN_GAN_GP_LATENT_MEAN_DISTRIBUTION,
-            wasserstein_gp_latent_stander_deviation: float = DEFAULT_WASSERSTEIN_GAN_GP_LATENT_STANDER_DEVIATION,
-            wasserstein_gp_gradient_penalty: float = DEFAULT_WASSERSTEIN_GAN_GP_GRADIENT_PENALTY,
-            wasserstein_gp_file_name_discriminator: str = DEFAULT_WASSERSTEIN_GAN_GP_FILE_NAME_DISCRIMINATOR,
-            wasserstein_gp_file_name_generator: str = DEFAULT_WASSERSTEIN_GAN_GP_FILE_NAME_GENERATOR,
-            wasserstein_gp_path_output_models: str = DEFAULT_WASSERSTEIN_GAN_GP_PATH_OUTPUT_MODELS,
-            wasserstein_gp_algorithm: WassersteinGPAlgorithm | None = None,
-            wasserstein_gp_model: WassersteinGPModel | None = None,
+            latent_dimension: int = DEFAULT_WASSERSTEIN_GAN_GP_LATENT_DIMENSION,
+            training_algorithm: str = DEFAULT_WASSERSTEIN_GAN_GP_TRAINING_ALGORITHM,
+            activation_function: str = DEFAULT_WASSERSTEIN_GAN_GP_ACTIVATION,
+            dropout_decay_rate_g: float = DEFAULT_WASSERSTEIN_GAN_GP_DROPOUT_DECAY_RATE_G,
+            dropout_decay_rate_d: float = DEFAULT_WASSERSTEIN_GAN_GP_DROPOUT_DECAY_RATE_D,
+            dense_layer_sizes_generator: list[int] = None,
+            dense_layer_sizes_discriminator: list[int] = None,
+            batch_size: int = DEFAULT_WASSERSTEIN_GAN_GP_BATCH_SIZE,
+            number_epochs: int = DEFAULT_WASSERSTEIN_GAN_GP_NUMBER_EPOCHS,
+            number_classes: int = DEFAULT_WASSERSTEIN_GAN_GP_NUMBER_CLASSES,
+            loss_function: str = DEFAULT_WASSERSTEIN_GAN_GP_LOSS,
+            momentum: float = DEFAULT_WASSERSTEIN_GAN_GP_MOMENTUM,
+            last_activation_layer: str = DEFAULT_WASSERSTEIN_GAN_GP_LAST_ACTIVATION_LAYER,
+            initializer_mean: float = DEFAULT_WASSERSTEIN_GAN_GP_INITIALIZER_MEAN,
+            initializer_deviation: float = DEFAULT_WASSERSTEIN_GAN_GP_INITIALIZER_DEVIATION,
+            optimizer_generator_learning_rate: float = DEFAULT_WASSERSTEIN_GAN_GP_OPTIMIZER_GENERATOR_LEARNING,
+            optimizer_discriminator_learning_rate: float = DEFAULT_WASSERSTEIN_GAN_GP_OPTIMIZER_DISCRIMINATOR_LEARNING,
+            optimizer_generator_beta: float = DEFAULT_WASSERSTEIN_GAN_GP_OPTIMIZER_GENERATOR_BETA,
+            optimizer_discriminator_beta: float = DEFAULT_WASSERSTEIN_GAN_GP_OPTIMIZER_DISCRIMINATOR_BETA,
+            discriminator_steps: int = DEFAULT_WASSERSTEIN_GAN_GP_DISCRIMINATOR_STEPS,
+            smoothing_rate: float = DEFAULT_WASSERSTEIN_GAN_GP_SMOOTHING_RATE,
+            latent_mean_distribution: float = DEFAULT_WASSERSTEIN_GAN_GP_LATENT_MEAN_DISTRIBUTION,
+            latent_stander_deviation: float = DEFAULT_WASSERSTEIN_GAN_GP_LATENT_STANDER_DEVIATION,
+            gradient_penalty: float = DEFAULT_WASSERSTEIN_GAN_GP_GRADIENT_PENALTY,
+            file_name_discriminator: str = DEFAULT_WASSERSTEIN_GAN_GP_FILE_NAME_DISCRIMINATOR,
+            file_name_generator: str = DEFAULT_WASSERSTEIN_GAN_GP_FILE_NAME_GENERATOR,
+            path_output_models: str = DEFAULT_WASSERSTEIN_GAN_GP_PATH_OUTPUT_MODELS,
+            algorithm: WassersteinGPAlgorithm | None = None,
+            model: WassersteinGPModel | None = None,
             number_samples_per_class: dict | None = None
     ) -> None:
         """
         Initializes the WGAN-GP instance with configuration parameters.
 
         Args:
-            wasserstein_gp_latent_dimension: Latent space dimension (default: 128)
-            wasserstein_gp_training_algorithm: Training algorithm (default: "Adam")
-            wasserstein_gp_activation_function: Activation function (default: "LeakyReLU")
-            wasserstein_gp_dropout_decay_rate_g: Generator dropout rate (default: 0.2)
-            wasserstein_gp_dropout_decay_rate_d: Critic dropout rate (default: 0.4)
-            wasserstein_gp_dense_layer_sizes_generator: Generator layer sizes (default: [128])
-            wasserstein_gp_dense_layer_sizes_discriminator: Critic layer sizes (default: [128])
-            wasserstein_gp_batch_size: Batch size (default: 32)
-            wasserstein_gp_number_epochs: Training epochs (default: 20)
-            wasserstein_gp_number_classes: Number of classes (default: 2)
-            wasserstein_gp_loss_function: Loss function (default: "binary_crossentropy")
-            wasserstein_gp_momentum: Momentum parameter (default: 0.8)
-            wasserstein_gp_last_activation_layer: Last layer activation (default: "sigmoid")
-            wasserstein_gp_initializer_mean: Weight init mean (default: 0.0)
-            wasserstein_gp_initializer_deviation: Weight init std dev (default: 0.125)
-            wasserstein_gp_optimizer_generator_learning_rate: Generator learning rate (default: 0.0001)
-            wasserstein_gp_optimizer_discriminator_learning_rate: Critic learning rate (default: 0.0001)
-            wasserstein_gp_optimizer_generator_beta: Generator optimizer beta (default: 0.5)
-            wasserstein_gp_optimizer_discriminator_beta: Critic optimizer beta (default: 0.5)
-            wasserstein_gp_discriminator_steps: Critic steps per generator step (default: 3)
-            wasserstein_gp_smoothing_rate: Label smoothing rate (default: 0.15)
-            wasserstein_gp_latent_mean_distribution: Latent distribution mean (default: 0.0)
-            wasserstein_gp_latent_stander_deviation: Latent distribution std dev (default: 0.125)
-            wasserstein_gp_gradient_penalty: Gradient penalty weight (default: 10.0)
-            wasserstein_gp_file_name_discriminator: Critic filename (default: "discriminator_model")
-            wasserstein_gp_file_name_generator: Generator filename (default: "generator_model")
-            wasserstein_gp_path_output_models: Output models path (default: "models_saved/")
-            wasserstein_gp_algorithm: Optional pre-initialized WassersteinGPAlgorithm (default: None)
-            wasserstein_gp_model: Optional pre-initialized WassersteinGPModel (default: None)
+            latent_dimension: Latent space dimension (default: 128)
+            training_algorithm: Training algorithm (default: "Adam")
+            activation_function: Activation function (default: "LeakyReLU")
+            dropout_decay_rate_g: Generator dropout rate (default: 0.2)
+            dropout_decay_rate_d: Critic dropout rate (default: 0.4)
+            dense_layer_sizes_generator: Generator layer sizes (default: [128])
+            dense_layer_sizes_discriminator: Critic layer sizes (default: [128])
+            batch_size: Batch size (default: 32)
+            number_epochs: Training epochs (default: 20)
+            number_classes: Number of classes (default: 2)
+            loss_function: Loss function (default: "binary_crossentropy")
+            momentum: Momentum parameter (default: 0.8)
+            last_activation_layer: Last layer activation (default: "sigmoid")
+            initializer_mean: Weight init mean (default: 0.0)
+            initializer_deviation: Weight init std dev (default: 0.125)
+            optimizer_generator_learning_rate: Generator learning rate (default: 0.0001)
+            optimizer_discriminator_learning_rate: Critic learning rate (default: 0.0001)
+            optimizer_generator_beta: Generator optimizer beta (default: 0.5)
+            optimizer_discriminator_beta: Critic optimizer beta (default: 0.5)
+            discriminator_steps: Critic steps per generator step (default: 3)
+            smoothing_rate: Label smoothing rate (default: 0.15)
+            latent_mean_distribution: Latent distribution mean (default: 0.0)
+            latent_stander_deviation: Latent distribution std dev (default: 0.125)
+            gradient_penalty: Gradient penalty weight (default: 10.0)
+            file_name_discriminator: Critic filename (default: "discriminator_model")
+            file_name_generator: Generator filename (default: "generator_model")
+            path_output_models: Output models path (default: "models_saved/")
+            algorithm: Optional pre-initialized WassersteinGPAlgorithm (default: None)
+            model: Optional pre-initialized WassersteinGPModel (default: None)
             number_samples_per_class: Optional class distribution information (default: None)
         """
         # Store pre-initialized instances if provided
-        self._wasserstein_gp_algorithm: WassersteinGPAlgorithm | None = wasserstein_gp_algorithm
-        self._wasserstein_gp_model: WassersteinGPModel | None = wasserstein_gp_model
+        self._wasserstein_gp_algorithm: WassersteinGPAlgorithm | None = algorithm
+        self._wasserstein_gp_model: WassersteinGPModel | None = model
 
         # Store class distribution information
         self._number_samples_per_class: dict | None = number_samples_per_class
 
         # ** WassersteinGP GAN with Gradient Penalty (WGAN-GP) Configuration Parameters **
-        self._wasserstein_gp_latent_dimension: int = wasserstein_gp_latent_dimension
-        self._wasserstein_gp_training_algorithm: str = wasserstein_gp_training_algorithm
-        self._wasserstein_gp_activation_function: str = wasserstein_gp_activation_function
-        self._wasserstein_gp_dropout_decay_rate_g: float = wasserstein_gp_dropout_decay_rate_g
-        self._wasserstein_gp_dropout_decay_rate_d: float = wasserstein_gp_dropout_decay_rate_d
+        self._wasserstein_gp_latent_dimension: int = latent_dimension
+        self._wasserstein_gp_training_algorithm: str = training_algorithm
+        self._wasserstein_gp_activation_function: str = activation_function
+        self._wasserstein_gp_dropout_decay_rate_g: float = dropout_decay_rate_g
+        self._wasserstein_gp_dropout_decay_rate_d: float = dropout_decay_rate_d
 
         # Handle mutable default values safely
         self._wasserstein_gp_dense_layer_sizes_generator: list[int] = (
-            wasserstein_gp_dense_layer_sizes_generator
-            if wasserstein_gp_dense_layer_sizes_generator is not None
+            dense_layer_sizes_generator
+            if dense_layer_sizes_generator is not None
             else DEFAULT_WASSERSTEIN_GAN_GP_DENSE_LAYERS_SETTINGS_GENERATOR.copy()
         )
         self._wasserstein_gp_dense_layer_sizes_discriminator: list[int] = (
-            wasserstein_gp_dense_layer_sizes_discriminator
-            if wasserstein_gp_dense_layer_sizes_discriminator is not None
+            dense_layer_sizes_discriminator
+            if dense_layer_sizes_discriminator is not None
             else DEFAULT_WASSERSTEIN_GAN_GP_DENSE_LAYERS_SETTINGS_DISCRIMINATOR.copy()
         )
 
-        self._wasserstein_gp_batch_size: int = wasserstein_gp_batch_size
-        self._wasserstein_gp_number_epochs: int = wasserstein_gp_number_epochs
-        self._wasserstein_gp_number_classes: int = wasserstein_gp_number_classes
-        self._wasserstein_gp_loss_function: str = wasserstein_gp_loss_function
-        self._wasserstein_gp_momentum: float = wasserstein_gp_momentum
-        self._wasserstein_gp_last_activation_layer: str = wasserstein_gp_last_activation_layer
-        self._wasserstein_gp_initializer_mean: float = wasserstein_gp_initializer_mean
-        self._wasserstein_gp_initializer_deviation: float = wasserstein_gp_initializer_deviation
-        self._wasserstein_gp_optimizer_generator_learning_rate: float = wasserstein_gp_optimizer_generator_learning_rate
-        self._wasserstein_gp_optimizer_discriminator_learning_rate: float = wasserstein_gp_optimizer_discriminator_learning_rate
-        self._wasserstein_gp_optimizer_generator_beta: float = wasserstein_gp_optimizer_generator_beta
-        self._wasserstein_gp_optimizer_discriminator_beta: float = wasserstein_gp_optimizer_discriminator_beta
-        self._wasserstein_gp_discriminator_steps: int = wasserstein_gp_discriminator_steps
-        self._wasserstein_gp_smoothing_rate: float = wasserstein_gp_smoothing_rate
-        self._wasserstein_gp_latent_mean_distribution: float = wasserstein_gp_latent_mean_distribution
-        self._wasserstein_gp_latent_stander_deviation: float = wasserstein_gp_latent_stander_deviation
-        self._wasserstein_gp_gradient_penalty: float = wasserstein_gp_gradient_penalty
-        self._wasserstein_gp_file_name_discriminator: str = wasserstein_gp_file_name_discriminator
-        self._wasserstein_gp_file_name_generator: str = wasserstein_gp_file_name_generator
-        self._wasserstein_gp_path_output_models: str = wasserstein_gp_path_output_models
+        self._wasserstein_gp_batch_size: int = batch_size
+        self._wasserstein_gp_number_epochs: int = number_epochs
+        self._wasserstein_gp_number_classes: int = number_classes
+        self._wasserstein_gp_loss_function: str = loss_function
+        self._wasserstein_gp_momentum: float = momentum
+        self._wasserstein_gp_last_activation_layer: str = last_activation_layer
+        self._wasserstein_gp_initializer_mean: float = initializer_mean
+        self._wasserstein_gp_initializer_deviation: float = initializer_deviation
+        self._wasserstein_gp_optimizer_generator_learning_rate: float = optimizer_generator_learning_rate
+        self._wasserstein_gp_optimizer_discriminator_learning_rate: float = optimizer_discriminator_learning_rate
+        self._wasserstein_gp_optimizer_generator_beta: float = optimizer_generator_beta
+        self._wasserstein_gp_optimizer_discriminator_beta: float = optimizer_discriminator_beta
+        self._wasserstein_gp_discriminator_steps: int = discriminator_steps
+        self._wasserstein_gp_smoothing_rate: float = smoothing_rate
+        self._wasserstein_gp_latent_mean_distribution: float = latent_mean_distribution
+        self._wasserstein_gp_latent_stander_deviation: float = latent_stander_deviation
+        self._wasserstein_gp_gradient_penalty: float = gradient_penalty
+        self._wasserstein_gp_file_name_discriminator: str = file_name_discriminator
+        self._wasserstein_gp_file_name_generator: str = file_name_generator
+        self._wasserstein_gp_path_output_models: str = path_output_models
 
         # Flags to indicate if instances were provided
-        self._has_external_algorithm: bool = wasserstein_gp_algorithm is not None
-        self._has_external_model: bool = wasserstein_gp_model is not None
+        self._has_external_algorithm: bool = algorithm is not None
+        self._has_external_model: bool = model is not None
 
     def _get_wasserstein_gp(self, input_shape: tuple[int, ...]) -> None:
         """
