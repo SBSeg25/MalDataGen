@@ -105,109 +105,109 @@ class VariationalAutoencoder:
 
     def __init__(
             self,
-            variational_latent_dimension: int = DEFAULT_VARIATIONAL_AUTOENCODER_LATENT_DIMENSION,
-            variational_training_algorithm: str = DEFAULT_VARIATIONAL_AUTOENCODER_TRAINING_ALGORITHM,
-            variational_activation_function: str = DEFAULT_VARIATIONAL_AUTOENCODER_ACTIVATION_INTERMEDIARY,
-            variational_dropout_decay_rate_encoder: float = DEFAULT_VARIATIONAL_AUTOENCODER_DROPOUT_DECAY_RATE_ENCODER,
-            variational_dropout_decay_rate_decoder: float = DEFAULT_VARIATIONAL_AUTOENCODER_DROPOUT_DECAY_RATE_DECODER,
-            variational_dense_layer_sizes_encoder: list[int] = None,
-            variational_dense_layer_sizes_decoder: list[int] = None,
-            variational_batch_size: int = DEFAULT_VARIATIONAL_AUTOENCODER_BATCH_SIZE,
-            variational_number_epochs: int = DEFAULT_VARIATIONAL_AUTOENCODER_NUMBER_EPOCHS,
-            variational_number_classes: int = DEFAULT_VARIATIONAL_AUTOENCODER_NUMBER_CLASSES,
-            variational_loss_function: str = DEFAULT_VARIATIONAL_AUTOENCODER_LOSS,
-            variational_momentum: float = DEFAULT_VARIATIONAL_AUTOENCODER_MOMENTUM,
-            variational_last_activation_layer: str = DEFAULT_VARIATIONAL_AUTOENCODER_LAST_ACTIVATION_LAYER,
-            variational_initializer_mean: float = DEFAULT_VARIATIONAL_AUTOENCODER_INITIALIZER_MEAN,
-            variational_initializer_deviation: float = DEFAULT_VARIATIONAL_AUTOENCODER_INITIALIZER_DEVIATION,
-            variational_latent_mean_distribution: float = DEFAULT_VARIATIONAL_AUTOENCODER_MEAN_DISTRIBUTION,
-            variational_latent_stander_deviation: float = DEFAULT_VARIATIONAL_AUTOENCODER_STANDER_DEVIATION,
-            variational_file_name_encoder: str = DEFAULT_VARIATIONAL_AUTOENCODER_FILE_NAME_ENCODER,
-            variational_file_name_decoder: str = DEFAULT_VARIATIONAL_AUTOENCODER_FILE_NAME_DECODER,
-            variational_path_output_models: str = DEFAULT_VARIATIONAL_AUTOENCODER_PATH_OUTPUT_MODELS,
-            variational_learning_rate: float = 0.001,
-            variational_beta_1: float = 0.9,
-            variational_beta_2: float = 0.999,
-            variational_algorithm: VariationalAutoencoderAlgorithm | None = None,
-            variational_model: VariationalAutoencoderModel | None = None,
+            latent_dimension: int = DEFAULT_VARIATIONAL_AUTOENCODER_LATENT_DIMENSION,
+            training_algorithm: str = DEFAULT_VARIATIONAL_AUTOENCODER_TRAINING_ALGORITHM,
+            activation_function: str = DEFAULT_VARIATIONAL_AUTOENCODER_ACTIVATION_INTERMEDIARY,
+            dropout_decay_rate_encoder: float = DEFAULT_VARIATIONAL_AUTOENCODER_DROPOUT_DECAY_RATE_ENCODER,
+            dropout_decay_rate_decoder: float = DEFAULT_VARIATIONAL_AUTOENCODER_DROPOUT_DECAY_RATE_DECODER,
+            dense_layer_sizes_encoder: list[int] = None,
+            dense_layer_sizes_decoder: list[int] = None,
+            batch_size: int = DEFAULT_VARIATIONAL_AUTOENCODER_BATCH_SIZE,
+            number_epochs: int = DEFAULT_VARIATIONAL_AUTOENCODER_NUMBER_EPOCHS,
+            number_classes: int = DEFAULT_VARIATIONAL_AUTOENCODER_NUMBER_CLASSES,
+            loss_function: str = DEFAULT_VARIATIONAL_AUTOENCODER_LOSS,
+            momentum: float = DEFAULT_VARIATIONAL_AUTOENCODER_MOMENTUM,
+            last_activation_layer: str = DEFAULT_VARIATIONAL_AUTOENCODER_LAST_ACTIVATION_LAYER,
+            initializer_mean: float = DEFAULT_VARIATIONAL_AUTOENCODER_INITIALIZER_MEAN,
+            initializer_deviation: float = DEFAULT_VARIATIONAL_AUTOENCODER_INITIALIZER_DEVIATION,
+            latent_mean_distribution: float = DEFAULT_VARIATIONAL_AUTOENCODER_MEAN_DISTRIBUTION,
+            latent_stander_deviation: float = DEFAULT_VARIATIONAL_AUTOENCODER_STANDER_DEVIATION,
+            file_name_encoder: str = DEFAULT_VARIATIONAL_AUTOENCODER_FILE_NAME_ENCODER,
+            file_name_decoder: str = DEFAULT_VARIATIONAL_AUTOENCODER_FILE_NAME_DECODER,
+            path_output_models: str = DEFAULT_VARIATIONAL_AUTOENCODER_PATH_OUTPUT_MODELS,
+            learning_rate: float = 0.001,
+            beta_1: float = 0.9,
+            beta_2: float = 0.999,
+            algorithm: VariationalAutoencoderAlgorithm | None = None,
+            model: VariationalAutoencoderModel | None = None,
     ) -> None:
         """
         Initializes the variational autoencoder instance with configuration parameters.
 
         Args:
-            variational_latent_dimension: Latent space dimension (default: 32)
-            variational_training_algorithm: Training algorithm (default: "Adam")
-            variational_activation_function: Activation function (default: "swish")
-            variational_dropout_decay_rate_encoder: Encoder dropout rate (default: 0.25)
-            variational_dropout_decay_rate_decoder: Decoder dropout rate (default: 0.25)
-            variational_dense_layer_sizes_encoder: Encoder layer sizes (default: [320, 160])
-            variational_dense_layer_sizes_decoder: Decoder layer sizes (default: [160, 320])
-            variational_batch_size: Batch size (default: 64)
-            variational_number_epochs: Training epochs (default: 300)
-            variational_number_classes: Number of classes (default: 2)
-            variational_loss_function: Loss function (default: "binary_crossentropy")
-            variational_momentum: Momentum parameter (default: 0.8)
-            variational_last_activation_layer: Last layer activation (default: "sigmoid")
-            variational_initializer_mean: Weight init mean (default: 0)
-            variational_initializer_deviation: Weight init std dev (default: 0.125)
-            variational_latent_mean_distribution: Latent distribution mean (default: 0.5)
-            variational_latent_stander_deviation: Latent distribution std dev (default: 0.125)
-            variational_file_name_encoder: Encoder filename (default: "encoder_model")
-            variational_file_name_decoder: Decoder filename (default: "decoder_model")
-            variational_path_output_models: Output models path (default: "models_saved/")
-            variational_learning_rate: Learning rate (default: 0.001)
-            variational_beta_1: Beta1 optimizer parameter (default: 0.9)
-            variational_beta_2: Beta2 optimizer parameter (default: 0.999)
-            variational_algorithm: Optional pre-initialized VariationalAutoencoderAlgorithm (default: None)
-            variational_model: Optional pre-initialized VariationalAutoencoderModel (default: None)
+            latent_dimension: Latent space dimension (default: 32)
+            training_algorithm: Training algorithm (default: "Adam")
+            activation_function: Activation function (default: "swish")
+            dropout_decay_rate_encoder: Encoder dropout rate (default: 0.25)
+            dropout_decay_rate_decoder: Decoder dropout rate (default: 0.25)
+            dense_layer_sizes_encoder: Encoder layer sizes (default: [320, 160])
+            dense_layer_sizes_decoder: Decoder layer sizes (default: [160, 320])
+            batch_size: Batch size (default: 64)
+            number_epochs: Training epochs (default: 300)
+            number_classes: Number of classes (default: 2)
+            loss_function: Loss function (default: "binary_crossentropy")
+            momentum: Momentum parameter (default: 0.8)
+            last_activation_layer: Last layer activation (default: "sigmoid")
+            initializer_mean: Weight init mean (default: 0)
+            initializer_deviation: Weight init std dev (default: 0.125)
+            latent_mean_distribution: Latent distribution mean (default: 0.5)
+            latent_stander_deviation: Latent distribution std dev (default: 0.125)
+            file_name_encoder: Encoder filename (default: "encoder_model")
+            file_name_decoder: Decoder filename (default: "decoder_model")
+            path_output_models: Output models path (default: "models_saved/")
+            learning_rate: Learning rate (default: 0.001)
+            beta_1: Beta1 optimizer parameter (default: 0.9)
+            beta_2: Beta2 optimizer parameter (default: 0.999)
+            algorithm: Optional pre-initialized VariationalAutoencoderAlgorithm (default: None)
+            model: Optional pre-initialized VariationalAutoencoderModel (default: None)
             number_samples_per_class: Optional class distribution information (default: None)
         """
         # Store pre-initialized instances if provided
-        self._variational_algorithm: VariationalAutoencoderAlgorithm | None = variational_algorithm
-        self._variational_model: VariationalAutoencoderModel | None = variational_model
+        self._variational_algorithm: VariationalAutoencoderAlgorithm | None = algorithm
+        self._variational_model: VariationalAutoencoderModel | None = model
 
         # Store class distribution information
-        self._number_samples_per_class: dict | None = variational_number_classes
+        self._number_samples_per_class: dict | None = number_classes
 
         # ** Variational Autoencoder Model Configuration Parameters **
-        self._variational_latent_dimension: int = variational_latent_dimension
-        self._variational_training_algorithm: str = variational_training_algorithm
-        self._variational_activation_function: str = variational_activation_function
-        self._variational_dropout_decay_rate_encoder: float = variational_dropout_decay_rate_encoder
-        self._variational_dropout_decay_rate_decoder: float = variational_dropout_decay_rate_decoder
+        self._variational_latent_dimension: int = latent_dimension
+        self._variational_training_algorithm: str = training_algorithm
+        self._variational_activation_function: str = activation_function
+        self._variational_dropout_decay_rate_encoder: float = dropout_decay_rate_encoder
+        self._variational_dropout_decay_rate_decoder: float = dropout_decay_rate_decoder
 
         # Handle mutable default values safely
         self._variational_dense_layer_sizes_encoder: list[int] = (
-            variational_dense_layer_sizes_encoder
-            if variational_dense_layer_sizes_encoder is not None
+            dense_layer_sizes_encoder
+            if dense_layer_sizes_encoder is not None
             else DEFAULT_VARIATIONAL_AUTOENCODER_DENSE_LAYERS_SETTINGS_ENCODER.copy()
         )
         self._variational_dense_layer_sizes_decoder: list[int] = (
-            variational_dense_layer_sizes_decoder
-            if variational_dense_layer_sizes_decoder is not None
+            dense_layer_sizes_decoder
+            if dense_layer_sizes_decoder is not None
             else DEFAULT_VARIATIONAL_AUTOENCODER_DENSE_LAYERS_SETTINGS_DECODER.copy()
         )
 
-        self._variational_batch_size: int = variational_batch_size
-        self._variational_number_epochs: int = variational_number_epochs
-        self._variational_number_classes: int = variational_number_classes
-        self._variational_loss_function: str = variational_loss_function
-        self._variational_momentum: float = variational_momentum
-        self._variational_last_activation_layer: str = variational_last_activation_layer
-        self._variational_initializer_mean: float = variational_initializer_mean
-        self._variational_initializer_deviation: float = variational_initializer_deviation
-        self._variational_latent_mean_distribution: float = variational_latent_mean_distribution
-        self._variational_latent_stander_deviation: float = variational_latent_stander_deviation
-        self._variational_file_name_encoder: str = variational_file_name_encoder
-        self._variational_file_name_decoder: str = variational_file_name_decoder
-        self._variational_path_output_models: str = variational_path_output_models
-        self._variational_learning_rate: float = variational_learning_rate
-        self._variational_beta_1: float = variational_beta_1
-        self._variational_beta_2: float = variational_beta_2
+        self._variational_batch_size: int = batch_size
+        self._variational_number_epochs: int = number_epochs
+        self._variational_number_classes: int = number_classes
+        self._variational_loss_function: str = loss_function
+        self._variational_momentum: float = momentum
+        self._variational_last_activation_layer: str = last_activation_layer
+        self._variational_initializer_mean: float = initializer_mean
+        self._variational_initializer_deviation: float = initializer_deviation
+        self._variational_latent_mean_distribution: float = latent_mean_distribution
+        self._variational_latent_stander_deviation: float = latent_stander_deviation
+        self._variational_file_name_encoder: str = file_name_encoder
+        self._variational_file_name_decoder: str = file_name_decoder
+        self._variational_path_output_models: str = path_output_models
+        self._variational_learning_rate: float = learning_rate
+        self._variational_beta_1: float = beta_1
+        self._variational_beta_2: float = beta_2
 
         # Flags to indicate if instances were provided
-        self._has_external_algorithm: bool = variational_algorithm is not None
-        self._has_external_model: bool = variational_model is not None
+        self._has_external_algorithm: bool = algorithm is not None
+        self._has_external_model: bool = model is not None
 
     def _get_variational(self, input_shape: tuple[int, ...]) -> None:
         """
