@@ -47,7 +47,7 @@ except ImportError as error:
     sys.exit(-1)
 
 
-class LatentDiffusionAlgorithmTorch(nn.Module):
+class AlgorithmLatentDiffusionTorch(nn.Module):
     """
     Implements a diffusion process using UNet architectures for generating synthetic data.
     This model integrates an autoencoder and a diffusion network, enabling both data
@@ -165,7 +165,7 @@ class LatentDiffusionAlgorithmTorch(nn.Module):
                 If ema is not within the (0,1) range.
                 If embedding_dimension is <= 0.
         """
-        super(LatentDiffusionAlgorithmTorch, self).__init__()
+        super(AlgorithmLatentDiffusionTorch, self).__init__()
 
         self._ema = ema
         self._margin = margin
