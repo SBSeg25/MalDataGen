@@ -149,7 +149,8 @@ class VanillaDecoderDiffusionTorch(nn.Module, Activations):
             If any provided parameter has an invalid value (e.g., non-positive layer sizes,
             invalid dropout rates).
         """
-        super(VanillaDecoderDiffusionTorch, self).__init__()
+        if type(self) == VanillaDecoderDiffusionTorch:
+            nn.Module.__init__(self)
 
         if not isinstance(latent_dimension, int) or latent_dimension <= 0:
             raise ValueError("latent_dimension must be a positive integer.")

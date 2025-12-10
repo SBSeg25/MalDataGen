@@ -38,7 +38,6 @@ try:
 
     from Engine.Layers.Torch.Activations import Activations
     from Engine.Layers.Torch.TimeEmbedding import TimeEmbedding
-    from Engine.Layers.Torch.AttentionBlock import AttentionBlock
     from Engine.Layers.Torch.CrossAttentionBlock import CrossAttentionBlock
 
 except ImportError as error:

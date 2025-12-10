@@ -188,23 +188,33 @@ class VAELatentDiffusionAlgorithmPyTorch(nn.Module):
         # Path for saving models
         self._models_saved_path = models_saved_path
 
-    def train_step(self, batch, optimizer):
+    def train_step(self, batch, labels, optimizer):
         """
         Perform a training step for the Variational AutoEncoder (VAE).
 
         Args:
-            batch: Tuple of (batch_x, batch_y) input data batch.
+            batch: Tuple of (batch_x, batch_target) - input data and reconstruction target.
+            labels: One-hot encoded class labels for conditioning.
             optimizer: PyTorch optimizer for updating model parameters.
 
         Returns:
             dict: Dictionary containing the loss values (total loss, reconstruction loss, KL divergence loss).
         """
-        batch_x, batch_y = batch
+        batch_x, batch_target = batch
 
         # Ensure tensors are on the same device as the model
         device = next(self.parameters()).device
         batch_x = batch_x.to(device)
-        batch_y = batch_y.to(device)
+        batch_target = batch_target.to(device)
+        labels = labels.to(device)
+
+        # Flatten inputs to 2D if necessary (batch_size, features)
+        if len(batch_x.shape) > 2:
+            batch_x = batch_x.view(batch_x.shape[0], -1)
+        if len(batch_target.shape) > 2:
+            batch_target = batch_target.view(batch_target.shape[0], -1)
+        if len(labels.shape) > 2:
+            labels = labels.view(labels.shape[0], -1)
 
         # Set model to training mode
         self.train()
@@ -213,13 +223,13 @@ class VAELatentDiffusionAlgorithmPyTorch(nn.Module):
         optimizer.zero_grad()
 
         # Forward pass: Encode input data and sample from the latent space
-        latent_mean, latent_log_variation, latent, label = self._encoder(batch_x)
+        latent_mean, latent_log_variation, latent, _ = self._encoder(batch_x, labels)
 
         # Decode the sampled latent space and generate reconstructed data
-        reconstruction_data = self._decoder(latent, label)
+        reconstruction_data = self._decoder(latent, labels)
 
         # Calculate binary cross-entropy loss for reconstruction
-        binary_cross_entropy_loss = F.binary_cross_entropy(reconstruction_data, batch_y, reduction='none')
+        binary_cross_entropy_loss = F.binary_cross_entropy(reconstruction_data, batch_target, reduction='none')
         reconstruction_loss = binary_cross_entropy_loss.mean()
 
         # Calculate KL divergence loss
@@ -248,7 +258,6 @@ class VAELatentDiffusionAlgorithmPyTorch(nn.Module):
             "reconstruction_loss": reconstruction_loss.item(),
             "kl_loss": kl_divergence_loss.item()
         }
-
     def get_decoder_trained(self):
         """Returns the trained decoder model."""
         return self._decoder
@@ -281,7 +290,10 @@ class VAELatentDiffusionAlgorithmPyTorch(nn.Module):
         with torch.no_grad():
             for i in range(0, len(data), batch_size):
                 batch = data[i:i + batch_size]
-                latent_mean, _, _, _ = self._encoder(batch)
+                num_samples = batch.shape[0]
+                dummy_labels = torch.zeros(num_samples,
+                                           self._encoder._encoder_number_samples_per_class["number_classes"]).to(device)
+                latent_mean, _, _, _ = self._encoder(batch, dummy_labels)
                 embeddings.append(latent_mean.cpu().numpy())
 
         return numpy.concatenate(embeddings, axis=0)

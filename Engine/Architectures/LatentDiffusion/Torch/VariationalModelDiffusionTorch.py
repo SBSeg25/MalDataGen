@@ -8,6 +8,9 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
+from Engine.Architectures.LatentDiffusion.Torch.VanillaDecoderDiffusionTorch import VanillaDecoderDiffusionTorch
+from Engine.Architectures.LatentDiffusion.Torch.VanillaEncoderDiffusionTorch import VanillaEncoderDiffusionTorch
+
 # MIT License
 #
 # Copyright (c) 2025 Synthetic Ocean AI
@@ -35,9 +38,6 @@ try:
     import numpy
     import torch.nn as nn
 
-    from Engine.Architectures.LatentDiffusion.VanillaDecoderDiffusionTorch import VanillaDecoderDiffusionTorch
-    from Engine.Architectures.LatentDiffusion.VanillaEncoderDiffusionTorch import VanillaEncoderDiffusionTorch
-
 except ImportError as error:
     print(error)
     sys.exit(-1)
@@ -48,20 +48,6 @@ class VariationalModelDiffusionTorch(VanillaDecoderDiffusionTorch, VanillaEncode
     A Variational Model that integrates both VanillaEncoder and VanillaDecoder
     functionalities. This class enables flexible configuration of encoder and
     decoder parameters, facilitating variational-based learning tasks.
-
-    Attributes:
-        @latent_dimension (int): Dimensionality of the latent space.
-        @output_shape (tuple): Shape of the output produced by the decoder.
-        @activation_function (str or callable): Activation function for intermediary layers.
-        @initializer_mean (float): Mean value for weight initialization.
-        @initializer_deviation (float): Standard deviation for weight initialization.
-        @dropout_decay_encoder (float): Dropout rate for encoder layers.
-        @dropout_decay_decoder (float): Dropout rate for decoder layers.
-        @last_layer_activation (str or callable): Activation function for the last layer.
-        @number_neurons_encoder (list): Number of neurons in each layer of the encoder.
-        @number_neurons_decoder (list): Number of neurons in each layer of the decoder.
-        @dataset_type (dtype, optional): Data type of the dataset, defaults to numpy.float32.
-        @number_samples_per_class (int, optional): Number of samples per class, defaults to None.
     """
 
     def __init__(self,
@@ -79,84 +65,119 @@ class VariationalModelDiffusionTorch(VanillaDecoderDiffusionTorch, VanillaEncode
                  number_samples_per_class=None):
         """
         Initializes the VariationalModel with user-defined encoder and decoder configurations.
-
-        Args:
-            @latent_dimension (int): The dimensionality of the latent space.
-            @output_shape (tuple): The shape of the output produced by the decoder.
-            @activation_function (str or callable): Activation function for intermediary layers.
-            @initializer_mean (float): Mean value for weight initialization.
-            @initializer_deviation (float): Standard deviation for weight initialization.
-            @dropout_decay_encoder (float): Dropout rate for encoder layers.
-            @dropout_decay_decoder (float): Dropout rate for decoder layers.
-            @last_layer_activation (str or callable): Activation function for the last layer.
-            @number_neurons_encoder (list): Number of neurons in each layer of the encoder.
-            @number_neurons_decoder (list): Number of neurons in each layer of the decoder.
-            @dataset_type (dtype, optional): Data type of the dataset, defaults to numpy.float32.
-            @number_samples_per_class (int, optional): Number of samples per class, defaults to None.
         """
+        # Initialize nn.Module ONCE
+        nn.Module.__init__(self)
 
-        # Initialize the decoder using the VanillaDecoder class
-        VanillaDecoderDiffusionTorch.__init__(self,
-                                latent_dimension,
-                                output_shape,
-                                activation_function,
-                                initializer_mean,
-                                initializer_deviation,
-                                dropout_decay_decoder,
-                                last_layer_activation,
-                                number_neurons_decoder,
-                                dataset_type,
-                                number_samples_per_class)
+        # Manually initialize encoder attributes (without calling __init__)
+        self._encoder_latent_dimension = latent_dimension
+        self._encoder_output_shape = output_shape
+        self._encoder_activation_function = activation_function
+        self._encoder_last_layer_activation = last_layer_activation
+        self._encoder_dropout_decay_rate_encoder = dropout_decay_encoder
+        self._encoder_dataset_type = dataset_type
+        self._encoder_initializer_mean = initializer_mean
+        self._encoder_initializer_deviation = initializer_deviation
+        self._encoder_number_neurons_encoder = number_neurons_encoder
+        self._encoder_number_samples_per_class = number_samples_per_class
+        self._encoder_model = None
 
-        # Initialize the encoder using the VanillaEncoder class
-        VanillaEncoderDiffusionTorch.__init__(self,
-                                latent_dimension,
-                                output_shape,
-                                activation_function,
-                                initializer_mean,
-                                initializer_deviation,
-                                dropout_decay_encoder,
-                                last_layer_activation,
-                                number_neurons_encoder,
-                                dataset_type,
-                                number_samples_per_class)
+        # Manually initialize decoder attributes (without calling __init__)
+        self._decoder_latent_dimension = latent_dimension
+        self._decoder_output_shape = output_shape
+        self._decoder_intermediary_activation_function = activation_function
+        self._decoder_last_layer_activation = last_layer_activation
+        self._decoder_dropout_decay_rate_decoder = dropout_decay_decoder
+        self._decoder_dataset_type = dataset_type
+        self._decoder_initializer_mean = initializer_mean
+        self._decoder_initializer_deviation = initializer_deviation
+        self._decoder_number_neurons_decoder = number_neurons_decoder
+        self._decoder_number_samples_per_class = number_samples_per_class
+        self._decoder_model = None
 
+        # Build both encoder and decoder
+        VanillaEncoderDiffusionTorch._build_encoder(self)
+        VanillaDecoderDiffusionTorch._build_decoder(self)
+
+    def get_encoder(self):
+        """Returns a wrapper that specifically calls the encoder forward method."""
+
+        class EncoderWrapper(nn.Module):
+            def __init__(self, parent):
+                super().__init__()
+                self.parent = parent
+
+            def forward(self, neural_model_inputs, label_input):
+                """Forward pass through encoder only."""
+                return VanillaEncoderDiffusionTorch.forward(self.parent, neural_model_inputs, label_input)
+
+            def parameters(self, recurse=True):
+                """Return encoder parameters only."""
+                params = []
+                for name, param in self.parent.named_parameters(recurse=recurse):
+                    if 'encoder' in name or 'latent_mean' in name or 'latent_log_var' in name or 'final_layer' in name:
+                        params.append(param)
+                return iter(params)
+
+            def __getattr__(self, name):
+                if name in ['parent', '_modules', '_parameters', '_buffers']:
+                    return super().__getattr__(name)
+                return getattr(self.parent, name)
+
+        return EncoderWrapper(self)
+
+    def get_decoder(self):
+        """Returns a wrapper that specifically calls the decoder forward method."""
+
+        class DecoderWrapper(nn.Module):
+            def __init__(self, parent):
+                super().__init__()
+                self.parent = parent
+
+            def forward(self, neural_model_inputs, label_input):
+                """Forward pass through decoder only."""
+                return VanillaDecoderDiffusionTorch.forward(self.parent, neural_model_inputs, label_input)
+
+            def parameters(self, recurse=True):
+                """Return decoder parameters only."""
+                params = []
+                for name, param in self.parent.named_parameters(recurse=recurse):
+                    if 'decoder' in name or 'output_layer' in name:
+                        params.append(param)
+                return iter(params)
+
+            def __getattr__(self, name):
+                if name in ['parent', '_modules', '_parameters', '_buffers']:
+                    return super().__getattr__(name)
+                return getattr(self.parent, name)
+
+        return DecoderWrapper(self)
+
+    def get_encoder_trained(self):
+        """Returns the trained encoder model (wrapper)."""
+        return self.get_encoder()
+
+    def get_decoder_trained(self):
+        """Returns the trained decoder model (wrapper)."""
+        return self.get_decoder()
+
+    # Keep the existing setter methods unchanged
     def latent_dimension(self, latent_dimension):
-        """
-        Sets the latent dimension for both encoder and decoder.
-
-        Args:
-            latent_dimension (int): The dimensionality of the latent space.
-        """
+        """Sets the latent dimension for both encoder and decoder."""
         self._encoder_latent_dimension = latent_dimension
         self._decoder_latent_dimension = latent_dimension
 
     def output_shape(self, output_shape):
-        """
-        Configures the output shape for both encoder and decoder.
-
-        Args:
-            output_shape (tuple): The desired output shape.
-        """
+        """Configures the output shape for both encoder and decoder."""
         self._encoder_output_shape = output_shape
         self._decoder_output_shape = output_shape
 
     def intermediary_activation_function(self, activation_function):
-        """
-        Configures the activation function for intermediary layers in both encoder and decoder.
-
-        Args:
-            activation_function (str or callable): The activation function to be used.
-        """
+        """Configures the activation function for intermediary layers."""
         self._encoder_activation_function = activation_function
         self._decoder_activation_function = activation_function
 
     def last_layer_activation(self, last_layer_activation):
-        """
-        Configures the activation function for the last layer in both encoder and decoder.
-
-        Args:
-            last_layer_activation (str or callable): The activation function for the last layer.
-        """
+        """Configures the activation function for the last layer."""
         self._encoder_last_layer_activation = last_layer_activation
         self._decoder_last_layer_activation = last_layer_activation

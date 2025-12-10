@@ -43,14 +43,13 @@ try:
     from typing import Optional
 
     from Engine.Layers.Torch.Activations import Activations
-    from Engine.Layers.Torch.SamplingLayer import LayerSampling
 
 except ImportError as error:
     print(error)
     sys.exit(-1)
 
 
-class VanillaEncoderDiffusionTorch(nn.Module, Activations, LayerSampling):
+class VanillaEncoderDiffusionTorch(nn.Module, Activations):
     """
     VanillaEncoder - PyTorch Implementation
 
@@ -141,7 +140,8 @@ class VanillaEncoderDiffusionTorch(nn.Module, Activations, LayerSampling):
         Raises:
             ValueError: If latent_dimension, output_shape, or dropout_decay_encoder have invalid values.
         """
-        super(VanillaEncoderDiffusionTorch, self).__init__()
+        if type(self) == VanillaEncoderDiffusionTorch:
+            nn.Module.__init__(self)
 
         # Validate inputs to ensure valid model configuration
         if latent_dimension <= 0:
