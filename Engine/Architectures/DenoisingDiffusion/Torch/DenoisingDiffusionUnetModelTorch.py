@@ -36,7 +36,7 @@ DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION = 'swish'
 DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION_ALPHA = 0.05
 
 
-class UNetDenoisingModelTorch(nn.Module, Activations):
+class DenoisingDiffusionUNetModelTorch(nn.Module, Activations):
     """
     UNetModel - Fixed version with dynamic skip projections
     """
@@ -52,7 +52,7 @@ class UNetDenoisingModelTorch(nn.Module, Activations):
                  intermediary_activation_alpha: str = DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION_ALPHA,
                  last_layer_activation: str = DEFAULT_DIFFUSION_UNET_LAST_LAYER_ACTIVATION,
                  number_samples_per_class=None):
-        super(UNetDenoisingModelTorch, self).__init__()
+        super(DenoisingDiffusionUNetModelTorch, self).__init__()
 
         if list_neurons_per_level is None:
             list_neurons_per_level = DEFAULT_DIFFUSION_UNET_CHANNELS_PER_LEVEL

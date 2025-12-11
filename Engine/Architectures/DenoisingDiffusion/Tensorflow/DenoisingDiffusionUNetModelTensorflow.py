@@ -8,6 +8,9 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
+import math
+import warnings
+
 # MIT License
 #
 # Copyright (c) 2025 Synthetic Ocean AI
@@ -31,8 +34,6 @@ __credits__ = ['Synthetic Ocean AI']
 # SOFTWARE.
 
 
-
-
 try:
     import sys
     import tensorflow
@@ -41,7 +42,6 @@ try:
     from tensorflow.keras.layers import Dense
     from tensorflow.keras.layers import Input
     from tensorflow.keras.models import Model
-    from tensorflow.keras.layers import Layer
 
     from tensorflow.keras.layers import Flatten
     from tensorflow.keras.layers import Reshape
@@ -49,33 +49,37 @@ try:
     from tensorflow.keras.layers import Concatenate
 
     from Engine.Activations.Activations import Activations
-    from Engine.Layers.Tensorflow.ClusteringLayer import ClusteringLayer
+    from tensorflow.keras.layers import LayerNormalization
 
     from Engine.Layers.Tensorflow.TimeEmbeddingLayer import TimeEmbedding
     from Engine.Layers.Tensorflow.AttentionBlockLayer import AttentionBlock
+
+    from Engine.Layers.Tensorflow.CrossAttentionLayer import CrossAttentionBlock
 
 except ImportError as error:
     print(error)
     sys.exit(-1)
 
-class SqueezeLayer(Layer):
-    def __init__(self, axis=1, **kwargs):
-        super(SqueezeLayer, self).__init__(**kwargs)
-        self.axis = axis
+DEFAULT_DIFFUSION_UNET_LAST_LAYER_ACTIVATION = 'linear'
+DEFAULT_DIFFUSION_LATENT_DIMENSION = 64
+DEFAULT_DIFFUSION_UNET_NUMBER_EMBEDDING_CHANNELS = 1
+DEFAULT_DIFFUSION_UNET_CHANNELS_PER_LEVEL = [1, 2, 4]
+DEFAULT_DIFFUSION_UNET_ATTENTION_MODE = [False, True, True]
+DEFAULT_DIFFUSION_UNET_NUMBER_RESIDUAL_BLOCKS = 2
+DEFAULT_DIFFUSION_UNET_GROUP_NORMALIZATION = 1
+DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION = 'swish'
+DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION_ALPHA = 0.05
 
-    def call(self, inputs):
-        return tensorflow.squeeze(inputs, axis=self.axis)
 
-
-
-class UNetModelKernel(Activations):
+class DenoisingDiffusionUNetModelTensorflow(Activations):
     """
     UNetModel
 
-    Implements a deep learning architecture designed for image processing tasks such as image segmentation or generation.
-    The model follows the U-Net style with modifications, including attention blocks, time embedding, and description embeddings.
-    The architecture is flexible and configurable, supporting various numbers of layers, attention mechanisms, residual
-    blocks, and normalization strategies.
+    Implements a deep learning architecture designed for image processing tasks such
+    as image segmentation or generation. The model follows the U-Net style with
+    modifications, including attention blocks, time embedding, and description embeddings.
+    The architecture is flexible and configurable, supporting various numbers of layers,
+    attention mechanisms, residual blocks, and normalization strategies.
 
     Attributes:
         @embedding_dimension (int):
@@ -109,30 +113,31 @@ class UNetModelKernel(Activations):
             - Missing or incorrect `number_classes` in `number_samples_per_class`
 
     Example:
-        >>> unet_model = UNetModel(
-        ...     embedding_dimension=256,
-        ...     embedding_channels=3,
-        ...     list_neurons_per_level=[64, 128, 256],
-        ...     list_attentions=[True, False, True],
-        ...     number_residual_blocks=2,
-        ...     normalization_groups=4,
-        ...     intermediary_activation_function="LeakyReLU",
-        ...     intermediary_activation_alpha=0.2,
-        ...     last_layer_activation="sigmoid",
-        ...     number_samples_per_class={"number_classes": 10}
+        >>> unet_model = DenoisingDiffusionUNetModelTensorflow(
+        ...    output_shape=256,
+        ...    embedding_channels=3,
+        ...    list_neurons_per_level=[64, 128, 256],
+        ...    list_attentions=[True, False, True],
+        ...    number_residual_blocks=2,
+        ...    normalization_groups=4,
+        ...    intermediary_activation_function="LeakyReLU",
+        ...    intermediary_activation_alpha=0.2,
+        ...    last_layer_activation="sigmoid",
+        ...    number_samples_per_class={"number_classes": 10}
         ... )
     """
 
     def __init__(self,
-                 embedding_dimension,
-                 embedding_channels,
-                 list_neurons_per_level,
-                 list_attentions,
-                 number_residual_blocks,
-                 normalization_groups,
-                 intermediary_activation_function,
-                 intermediary_activation_alpha,
-                 last_layer_activation, number_samples_per_class):
+                 output_shape: int = 128,
+                 embedding_channels: int = DEFAULT_DIFFUSION_UNET_NUMBER_EMBEDDING_CHANNELS,
+                 list_neurons_per_level=None,
+                 list_attentions=None,
+                 number_residual_blocks: int = DEFAULT_DIFFUSION_UNET_NUMBER_RESIDUAL_BLOCKS,
+                 normalization_groups: int = DEFAULT_DIFFUSION_UNET_GROUP_NORMALIZATION,
+                 intermediary_activation_function: int = DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION,
+                 intermediary_activation_alpha: str = DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION_ALPHA,
+                 last_layer_activation: str = DEFAULT_DIFFUSION_UNET_LAST_LAYER_ACTIVATION,
+                 number_samples_per_class = None):
         """
         Initializes the UNetModel class with the provided parameters.
 
@@ -170,7 +175,43 @@ class UNetModelKernel(Activations):
                 If `number_samples_per_class` is missing the key "number_classes".
         """
 
-        self._embedding_dimension = embedding_dimension
+        if list_neurons_per_level is None:
+            list_neurons_per_level = DEFAULT_DIFFUSION_UNET_CHANNELS_PER_LEVEL
+
+        if list_attentions is None:
+            list_attentions = DEFAULT_DIFFUSION_UNET_ATTENTION_MODE
+
+        if not isinstance(output_shape, int) or output_shape <= 0:
+            raise ValueError("output_shape must be a positive integer.")
+
+        if not isinstance(embedding_channels, int) or embedding_channels <= 0:
+            raise ValueError("embedding_channels must be a positive integer.")
+
+        if not isinstance(list_neurons_per_level, list) or not all(isinstance(n, int) and n > 0 for n in list_neurons_per_level):
+            raise ValueError("list_neurons_per_level must be a list of positive integers.")
+
+        if not isinstance(list_attentions, list) or not all(isinstance(a, bool) for a in list_attentions):
+            raise ValueError("list_attentions must be a list of boolean values.")
+
+        if not isinstance(number_residual_blocks, int) or number_residual_blocks <= 0:
+            raise ValueError("number_residual_blocks must be a positive integer.")
+
+        if not isinstance(normalization_groups, int) or normalization_groups <= 0:
+            raise ValueError("normalization_groups must be a positive integer.")
+
+        if not isinstance(intermediary_activation_function, str):
+            raise ValueError("intermediary_activation_function must be a string.")
+
+        if not isinstance(intermediary_activation_alpha, (float, int)) or intermediary_activation_alpha < 0:
+            raise ValueError("intermediary_activation_alpha must be a non-negative float or integer.")
+
+        if not isinstance(last_layer_activation, str):
+            raise ValueError("last_layer_activation must be a string.")
+
+        if not isinstance(number_samples_per_class, dict) or "number_classes" not in number_samples_per_class:
+            raise ValueError("number_samples_per_class must be a dictionary containing the key 'number_classes'.")
+
+
         self._embedding_channels = embedding_channels
         self._list_neurons_per_level = list_neurons_per_level
         self._list_attention = list_attentions
@@ -180,6 +221,55 @@ class UNetModelKernel(Activations):
         self._intermediary_activation_function = intermediary_activation_function
         self._intermediary_activation_alpha = intermediary_activation_alpha
         self._number_samples_per_class = number_samples_per_class
+        self._output_shape = self._adjust_output_shape_for_downsampling(output_shape, len(self._list_neurons_per_level))
+
+    @staticmethod
+    def _adjust_output_shape_for_downsampling(shape: int, number_downsamples: int) -> int:
+        """
+        Ensures the output shape is divisible by 2 exactly `number_downsamples` times without remainder.
+
+        This is necessary to support successive downsampling operations in the U-Net architecture.
+        If the condition is not met, the shape is automatically adjusted (padded) to the smallest
+        value that satisfies this constraint. A warning is issued to inform the user.
+
+        Args:
+            shape (int): The initial spatial dimension (height or width) of the input.
+            number_downsamples (int): The number of required downsampling steps (i.e., divisions by 2).
+
+        Returns:
+            int: A valid shape that can be divided by 2 `num_downsamples` times without producing a fraction.
+
+        Raises:
+            ValueError: If the input `shape` is not a positive integer.
+        """
+        if not isinstance(shape, int) or shape <= 0:
+            raise ValueError("Input `shape` must be a positive integer.")
+
+        original_shape = shape
+        success = True
+
+        for _ in range(number_downsamples):
+            if shape % 2 != 0:
+                success = False
+                break
+            shape = shape // 2
+
+        if success:
+            return original_shape  # No padding required
+
+        # Compute the next closest number divisible by 2 `num_downsamples` times
+        required_multiple = 2 ** number_downsamples
+        padded_shape = math.ceil(original_shape / required_multiple) * required_multiple
+
+        warnings.warn(
+            f"The provided `output_shape` ({original_shape}) cannot be evenly divided by 2 "
+            f"{number_downsamples} times. It has been automatically adjusted to {padded_shape} "
+            f"to ensure compatibility with the network's downsampling path.",
+            UserWarning
+        )
+
+        return padded_shape
+
 
     def _down_sample(self, width):
         """
@@ -217,8 +307,7 @@ class UNetModelKernel(Activations):
             original_shape = up_sample_flow.shape
             up_sample_flow = Flatten()(up_sample_flow)
             up_sample_flow = Dense(original_shape[1] * 2 * width)(up_sample_flow)
-            up_sample_flow = self._add_activation_layer(up_sample_flow,
-                                                                    self._intermediary_activation_function)
+            up_sample_flow = self._add_activation_layer(up_sample_flow, self._intermediary_activation_function)
             up_sample_flow = Reshape((original_shape[1] * 2, width))(up_sample_flow)
 
             return up_sample_flow
@@ -236,12 +325,35 @@ class UNetModelKernel(Activations):
             Function: A function that applies the MLP transformation to a given input.
         """
         def apply(inputs):
-            time_embedding = Dense(units)(Dense(units)(inputs))
+            time_embedding = Dense(units)(Dense(units, activation='swish')(inputs))
 
             time_embedding = self._add_activation_layer(time_embedding,
                                                                     self._intermediary_activation_function)
-
+            # time_embedding = LayerNormalization()(time_embedding)
             return time_embedding
+
+
+        return apply
+
+
+    def _label_embedding_MLP(self, units):
+        """
+        Creates a Multi-Layer Perceptron (MLP) to process label embeddings.
+
+        Args:
+            units (int): The number of units for the dense layers in the MLP.
+
+        Returns:
+            Function: A function that applies the MLP transformation to a given input.
+        """
+        def apply(inputs):
+            label_embedding = Dense(self._output_shape)(Dense(units, activation='swish')(inputs))
+
+            label_embedding = self._add_activation_layer(label_embedding,
+                                                                    self._intermediary_activation_function)
+            # label_embedding = LayerNormalization()(label_embedding)
+
+            return label_embedding
 
 
         return apply
@@ -273,7 +385,7 @@ class UNetModelKernel(Activations):
 
         def apply(inputs):
             # Extract the inputs
-            residual_block_flow, time_embedding, description_embedding, clustering_kernels = inputs
+            residual_block_flow, time_embedding = inputs
             input_width = residual_block_flow.shape[-1]
 
             # If input width matches the number of filters, use the original input as the residual
@@ -290,21 +402,6 @@ class UNetModelKernel(Activations):
             time_embedding = Dense(number_filters)(time_embedding)[:, None, :]
             time_embedding = self._add_activation_layer(time_embedding, self._intermediary_activation_function)
 
-            # Apply the description embedding transformation
-            description_embedding = Dense(number_filters)(description_embedding)[:, None, :]
-            description_embedding = self._add_activation_layer(description_embedding,
-                                                               self._intermediary_activation_function)
-            # Apply the description embedding transformation
-            clustering_kernels_embedding = Dense(number_filters)(clustering_kernels)[:, None, :]
-            clustering_kernels_embedding = SqueezeLayer(axis=1)(clustering_kernels_embedding)
-            clustering_kernels_embedding = Flatten()(clustering_kernels_embedding)
-            number_neurons = residual_block_flow.shape[1]
-            clustering_kernels_embedding = Dense(number_neurons * number_filters)(clustering_kernels_embedding)
-
-            clustering_kernels_embedding = Reshape((number_neurons, number_filters))(clustering_kernels_embedding)
-
-            clustering_kernels_embedding = self._add_activation_layer(clustering_kernels_embedding,
-                                                               self._intermediary_activation_function)
 
             # Flatten and apply a dense transformation to the residual block flow
             number_neurons = residual_block_flow.shape[1]
@@ -315,10 +412,7 @@ class UNetModelKernel(Activations):
 
             # Reshape the transformed flow and add the embeddings
             residual_block_flow = Reshape((number_neurons, number_filters))(residual_block_flow)
-            residual_block_flow = Add()([residual_block_flow,
-                                         time_embedding,
-                                         description_embedding,
-                                         clustering_kernels_embedding])
+            residual_block_flow = Add()([residual_block_flow, time_embedding])
 
             # Flatten the residual block flow and apply a final dense layer
             original_shape = residual_block_flow.shape
@@ -358,31 +452,27 @@ class UNetModelKernel(Activations):
             Model: A compiled U-Net model configured with the provided architecture.
         """
         # Define the input layers
-        image_input = Input(shape=(self._embedding_dimension, self._embedding_channels), name="image_input")
+        image_input = Input(shape=(self._output_shape, self._embedding_channels), name="image_input")
         time_input = Input(shape=(), dtype=tensorflow.int32, name="time_input")
         description_input = Input(shape=(self._number_samples_per_class["number_classes"],), dtype=tensorflow.float32,
                                   name="description_input")
 
         # Initial convolutional processing
         first_conv_channels = self._list_neurons_per_level[0]
-        clustering_kernels = ClusteringLayer(5,
-                                             self._embedding_dimension,
-                                             1000,
-                                             alpha=0.5)([image_input, time_input])
-
         network_flow = Flatten()(image_input)
-        network_flow = Dense(self._embedding_dimension)(network_flow)
+        network_flow = Dense(self._output_shape)(network_flow)
 
         # Apply intermediary activation function
         network_flow = self._add_activation_layer(network_flow, self._intermediary_activation_function)
 
         # Reshape the network flow to match the embedding dimensions
-        network_flow = Reshape((self._embedding_dimension, self._embedding_channels))(network_flow)
+        network_flow = Reshape((self._output_shape, self._embedding_channels))(network_flow)
 
         # Time and description embeddings
         time_embedding = TimeEmbedding(first_conv_channels * 4)(time_input)
         time_embedding = self._time_MLP(first_conv_channels * 4)(time_embedding)
-        description_embedding = self._time_MLP(first_conv_channels * 4)(description_input)
+        description_embedding = self._label_embedding_MLP(self._number_samples_per_class["number_classes"]
+                                                          )(description_input)
 
         # Initialize skip connections
         skip_connection_flow = [network_flow]
@@ -392,13 +482,13 @@ class UNetModelKernel(Activations):
 
             # Add residual blocks
             for _ in range(self._number_residual_blocks):
-                network_flow = self._residual_block(self._list_neurons_per_level[number_neurons])(
-                    [network_flow, time_embedding, description_embedding, clustering_kernels])
+                network_flow = self._residual_block(self._list_neurons_per_level[number_neurons])([network_flow,
+                                                                                                   time_embedding])
 
                 # Optionally apply attention mechanism
                 if self._list_attention[number_neurons]:
-                    network_flow = AttentionBlock(self._list_neurons_per_level[number_neurons])(network_flow)
-
+                    network_flow = CrossAttentionBlock(self._list_neurons_per_level[number_neurons]
+                                                       )([network_flow, description_embedding])
                 # Append to skip connections
                 skip_connection_flow.append(network_flow)
 
@@ -409,10 +499,10 @@ class UNetModelKernel(Activations):
 
         # Final residual block and attention mechanism at the last level
         network_flow = self._residual_block(self._list_neurons_per_level[-1])(
-            [network_flow, time_embedding, description_embedding, clustering_kernels])
-        network_flow = AttentionBlock(self._list_neurons_per_level[-1])(network_flow)
-        network_flow = self._residual_block(self._list_neurons_per_level[-1])(
-            [network_flow, time_embedding, description_embedding, clustering_kernels])
+            [network_flow, time_embedding])
+        network_flow = CrossAttentionBlock(self._list_neurons_per_level[number_neurons]
+                                           )([network_flow, description_embedding])
+        network_flow = self._residual_block(self._list_neurons_per_level[-1])([network_flow, time_embedding])
 
         # U-Net architecture loop: upsampling and residual blocks with attention
         for number_neurons in reversed(range(len(self._list_neurons_per_level))):
@@ -421,13 +511,13 @@ class UNetModelKernel(Activations):
                 # Concatenate with skip connections
                 network_flow = Concatenate(axis=-1)([network_flow, skip_connection_flow.pop()])
                 network_flow = self._residual_block(self._list_neurons_per_level[number_neurons],
-                                                    self._normalization_groups)(
-                    [network_flow, time_embedding, description_embedding, clustering_kernels])
+                                                    self._normalization_groups)([network_flow, time_embedding])
 
                 # Apply attention mechanism if specified
                 if self._list_attention[number_neurons]:
-                    network_flow = AttentionBlock(self._list_neurons_per_level[number_neurons],
-                                                  self._normalization_groups)(network_flow)
+
+                    network_flow = CrossAttentionBlock(self._list_neurons_per_level[number_neurons]
+                                                       )([network_flow, description_embedding])
 
             # Upsample if not at the first level
             if number_neurons != 0:
@@ -435,11 +525,111 @@ class UNetModelKernel(Activations):
 
         # Final output processing: flatten, dense, and reshape
         network_flow = Flatten()(network_flow)
-        network_flow = Dense(self._embedding_dimension)(network_flow)
-        # network_flow = self._add_activation_layer(network_flow, self._last_layer_activation)
-        network_flow = Reshape((self._embedding_dimension, self._embedding_channels))(network_flow)
+        network_flow = Dense(self._output_shape)(network_flow)
+
+        network_flow = Reshape((self._output_shape, self._embedding_channels))(network_flow)
 
         # Create the model instance
         unet_model_instance = Model([image_input, time_input, description_input], network_flow, name="UnetModel")
 
         return unet_model_instance
+
+    @property
+    def embedding_dimension(self):
+        return self._output_shape
+
+    @embedding_dimension.setter
+    def embedding_dimension(self, value):
+        if not isinstance(value, int) or value <= 0:
+            raise ValueError("embedding_dimension must be a positive integer.")
+        self._output_shape = value
+
+    @property
+    def embedding_channels(self):
+        return self._embedding_channels
+
+    @embedding_channels.setter
+    def embedding_channels(self, value):
+        if not isinstance(value, int) or value <= 0:
+            raise ValueError("embedding_channels must be a positive integer.")
+        self._embedding_channels = value
+
+    @property
+    def list_neurons_per_level(self):
+        return self._list_neurons_per_level
+
+    @list_neurons_per_level.setter
+    def list_neurons_per_level(self, value):
+        if not isinstance(value, list) or not all(isinstance(n, int) and n > 0 for n in value):
+            raise ValueError("list_neurons_per_level must be a list of positive integers.")
+        self._list_neurons_per_level = value
+
+    @property
+    def list_attention(self):
+        return self._list_attention
+
+    @list_attention.setter
+    def list_attention(self, value):
+        if not isinstance(value, list) or not all(isinstance(a, bool) for a in value):
+            raise ValueError("list_attentions must be a list of boolean values.")
+        self._list_attention = value
+
+    @property
+    def last_layer_activation(self):
+        return self._last_layer_activation
+
+    @last_layer_activation.setter
+    def last_layer_activation(self, value):
+        if not isinstance(value, str):
+            raise ValueError("last_layer_activation must be a string.")
+        self._last_layer_activation = value
+
+    @property
+    def number_residual_blocks(self):
+        return self._number_residual_blocks
+
+    @number_residual_blocks.setter
+    def number_residual_blocks(self, value):
+        if not isinstance(value, int) or value <= 0:
+            raise ValueError("number_residual_blocks must be a positive integer.")
+        self._number_residual_blocks = value
+
+    @property
+    def normalization_groups(self):
+        return self._normalization_groups
+
+    @normalization_groups.setter
+    def normalization_groups(self, value):
+        if not isinstance(value, int) or value <= 0:
+            raise ValueError("normalization_groups must be a positive integer.")
+        self._normalization_groups = value
+
+    @property
+    def intermediary_activation_function(self):
+        return self._intermediary_activation_function
+
+    @intermediary_activation_function.setter
+    def intermediary_activation_function(self, value):
+        if not isinstance(value, str):
+            raise ValueError("intermediary_activation_function must be a string.")
+        self._intermediary_activation_function = value
+
+    @property
+    def intermediary_activation_alpha(self):
+        return self._intermediary_activation_alpha
+
+    @intermediary_activation_alpha.setter
+    def intermediary_activation_alpha(self, value):
+        if not isinstance(value, (float, int)) or value < 0:
+            raise ValueError("intermediary_activation_alpha must be a non-negative float or integer.")
+        self._intermediary_activation_alpha = value
+
+    @property
+    def number_samples_per_class(self):
+        return self._number_samples_per_class
+
+    @number_samples_per_class.setter
+    def number_samples_per_class(self, value):
+        if not isinstance(value, dict) or "number_classes" not in value:
+            raise ValueError("number_samples_per_class must be a dictionary containing the key 'number_classes'.")
+        self._number_samples_per_class = value

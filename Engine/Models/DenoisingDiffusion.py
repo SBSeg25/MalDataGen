@@ -11,7 +11,7 @@ __credits__ = ['Synthetic Ocean AI']
 from Engine.Algorithms.DenoisingDiffusion.Torch.AlgorithmDenoisingDiffusionTorch import \
     AlgorithmDenoisingDiffusionTorch
 from Engine.Algorithms.DenoisingDiffusion.Torch.GaussianDenoisingDiffusionTorch import GaussianDiffusionTorch
-from Engine.Architectures.DenoisingDiffusion.Torch.DiffusionModelUnetTorch import UNetDenoisingModelTorch
+from Engine.Architectures.DenoisingDiffusion.Torch.DenoisingDiffusionUnetModelTorch import DenoisingDiffusionUNetModelTorch
 
 try:
     import sys
@@ -73,8 +73,8 @@ class DenoisingDiffusionInstanceTorch:
             margin: float = DEFAULT_DIFFUSION_MARGIN,
             ema: float = DEFAULT_DIFFUSION_EMA,
             time_steps: int = DEFAULT_DIFFUSION_TIME_STEPS,
-            first_unet_model: UNetDenoisingModelTorch | None = None,
-            second_unet_model: UNetDenoisingModelTorch | None = None,
+            first_unet_model: DenoisingDiffusionUNetModelTorch | None = None,
+            second_unet_model: DenoisingDiffusionUNetModelTorch | None = None,
             gaussian_diffusion_util: GaussianDiffusionTorch | None = None,
             algorithm: AlgorithmDenoisingDiffusionTorch | None = None
     ) -> None:
@@ -107,14 +107,14 @@ class DenoisingDiffusionInstanceTorch:
             algorithm: Optional pre-initialized algorithm (default: None)
         """
         # Store pre-initialized instances if provided
-        self._denoising_first_unet_model: UNetDenoisingModelTorch | None = first_unet_model
-        self._denoising_second_unet_model: UNetDenoisingModelTorch | None = second_unet_model
+        self._denoising_first_unet_model: DenoisingDiffusionUNetModelTorch | None = first_unet_model
+        self._denoising_second_unet_model: DenoisingDiffusionUNetModelTorch | None = second_unet_model
         self._denoising_gaussian_diffusion_util: GaussianDiffusionTorch | None = gaussian_diffusion_util
         self._denoising_diffusion_algorithm: AlgorithmDenoisingDiffusionTorch | None = algorithm
 
         # Internal instances
-        self._denoising_first_instance_unet: UNetDenoisingModelTorch | None = None
-        self._denoising_second_instance_unet: UNetDenoisingModelTorch | None = None
+        self._denoising_first_instance_unet: DenoisingDiffusionUNetModelTorch | None = None
+        self._denoising_second_instance_unet: DenoisingDiffusionUNetModelTorch | None = None
 
         # Configuration parameters
         self._denoising_diffusion_unet_last_layer_activation: str = unet_last_layer_activation
@@ -175,7 +175,7 @@ class DenoisingDiffusionInstanceTorch:
         # Only create new UNet models if none were provided
         if not self._has_external_first_unet:
             # Initialize the first instance of UNet
-            self._denoising_first_instance_unet = UNetDenoisingModelTorch(
+            self._denoising_first_instance_unet = DenoisingDiffusionUNetModelTorch(
                 output_shape=input_shape,
                 embedding_channels=self._denoising_diffusion_unet_num_embedding_channels,
                 list_neurons_per_level=self._denoising_diffusion_unet_channels_per_level,
@@ -194,7 +194,7 @@ class DenoisingDiffusionInstanceTorch:
 
         if not self._has_external_second_unet:
             # Initialize the second instance of UNet
-            self._denoising_second_instance_unet = UNetDenoisingModelTorch(
+            self._denoising_second_instance_unet = DenoisingDiffusionUNetModelTorch(
                 output_shape=input_shape,
                 embedding_channels=self._denoising_diffusion_unet_num_embedding_channels,
                 list_neurons_per_level=self._denoising_diffusion_unet_channels_per_level,
@@ -421,12 +421,12 @@ class DenoisingDiffusionInstanceTorch:
 
     # Additional getters for the components
     @property
-    def denoising_first_unet_model(self) -> UNetDenoisingModelTorch | None:
+    def denoising_first_unet_model(self) -> DenoisingDiffusionUNetModelTorch | None:
         """Get the first UNet model instance."""
         return self._denoising_first_unet_model
 
     @property
-    def denoising_second_unet_model(self) -> UNetDenoisingModelTorch | None:
+    def denoising_second_unet_model(self) -> DenoisingDiffusionUNetModelTorch | None:
         """Get the second UNet model instance."""
         return self._denoising_second_unet_model
 

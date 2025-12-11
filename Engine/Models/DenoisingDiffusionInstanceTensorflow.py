@@ -8,6 +8,7 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
+from Engine.Algorithms.DenoisingDiffusion.GaussianDenoisingDiffusion import GaussianDenoisingDiffusion
 
 # MIT License
 #
@@ -51,7 +52,7 @@ try:
 
     from Engine.Algorithms.DenoisingDiffusion.Tensorflow.AlgorithmDenoisingDiffusionTensorflow import AlgorithmDenoisingDiffusion
     from Engine.Algorithms.DenoisingDiffusion.Tensorflow.GaussianDenoisingDiffusionTensorflow import GaussianDiffusionTensorflow
-    from Engine.Architectures.DenoisingDiffusion.Tensorflow.DiffusionModelUnet import UNetDenoisingModelTensorflow
+    from Engine.Architectures.DenoisingDiffusion.Tensorflow.DenoisingDiffusionUNetModelTensorflow import DenoisingDiffusionUNetModelTensorflow
 
 except ImportError as error:
     logging.error(error)
@@ -175,28 +176,28 @@ class DenoisingDiffusionInstance:
 
 
         # Initialize the first instance of UNet for the diffusion model
-        self._denoising_first_instance_unet = UNetDenoisingModelTensorflow(output_shape=input_shape,
-                                                                           embedding_channels= self._denoising_diffusion_unet_num_embedding_channels,
-                                                                           list_neurons_per_level=self._denoising_diffusion_unet_channels_per_level,
-                                                                           list_attentions=self._denoising_diffusion_unet_attention_mode,
-                                                                           number_residual_blocks=self._denoising_diffusion_unet_num_residual_blocks,
-                                                                           normalization_groups=self._denoising_diffusion_unet_group_normalization,
-                                                                           intermediary_activation_function=self._denoising_diffusion_unet_intermediary_activation,
-                                                                           intermediary_activation_alpha= self._denoising_diffusion_unet_intermediary_activation_alpha,
-                                                                           last_layer_activation=self._denoising_diffusion_unet_last_layer_activation,
-                                                                           number_samples_per_class=self._number_samples_per_class)
+        self._denoising_first_instance_unet = DenoisingDiffusionUNetModelTensorflow(output_shape=input_shape,
+                                                                                    embedding_channels= self._denoising_diffusion_unet_num_embedding_channels,
+                                                                                    list_neurons_per_level=self._denoising_diffusion_unet_channels_per_level,
+                                                                                    list_attentions=self._denoising_diffusion_unet_attention_mode,
+                                                                                    number_residual_blocks=self._denoising_diffusion_unet_num_residual_blocks,
+                                                                                    normalization_groups=self._denoising_diffusion_unet_group_normalization,
+                                                                                    intermediary_activation_function=self._denoising_diffusion_unet_intermediary_activation,
+                                                                                    intermediary_activation_alpha= self._denoising_diffusion_unet_intermediary_activation_alpha,
+                                                                                    last_layer_activation=self._denoising_diffusion_unet_last_layer_activation,
+                                                                                    number_samples_per_class=self._number_samples_per_class)
 
         # Initialize the second instance of UNet with the same configuration
-        self._denoising_second_instance_unet = UNetDenoisingModelTensorflow(output_shape=input_shape,
-                                                                            embedding_channels= self._denoising_diffusion_unet_num_embedding_channels,
-                                                                            list_neurons_per_level=self._denoising_diffusion_unet_channels_per_level,
-                                                                            list_attentions=self._denoising_diffusion_unet_attention_mode,
-                                                                            number_residual_blocks=self._denoising_diffusion_unet_num_residual_blocks,
-                                                                            normalization_groups=self._denoising_diffusion_unet_group_normalization,
-                                                                            intermediary_activation_function=self._denoising_diffusion_unet_intermediary_activation,
-                                                                            intermediary_activation_alpha= self._denoising_diffusion_unet_intermediary_activation_alpha,
-                                                                            last_layer_activation=self._denoising_diffusion_unet_last_layer_activation,
-                                                                            number_samples_per_class=self._number_samples_per_class)
+        self._denoising_second_instance_unet = DenoisingDiffusionUNetModelTensorflow(output_shape=input_shape,
+                                                                                     embedding_channels= self._denoising_diffusion_unet_num_embedding_channels,
+                                                                                     list_neurons_per_level=self._denoising_diffusion_unet_channels_per_level,
+                                                                                     list_attentions=self._denoising_diffusion_unet_attention_mode,
+                                                                                     number_residual_blocks=self._denoising_diffusion_unet_num_residual_blocks,
+                                                                                     normalization_groups=self._denoising_diffusion_unet_group_normalization,
+                                                                                     intermediary_activation_function=self._denoising_diffusion_unet_intermediary_activation,
+                                                                                     intermediary_activation_alpha= self._denoising_diffusion_unet_intermediary_activation_alpha,
+                                                                                     last_layer_activation=self._denoising_diffusion_unet_last_layer_activation,
+                                                                                     number_samples_per_class=self._number_samples_per_class)
 
         # Build the models for both UNet instances
         self._denoising_first_unet_model = self._denoising_first_instance_unet.build_model()
@@ -206,7 +207,7 @@ class DenoisingDiffusionInstance:
         self._denoising_second_unet_model.set_weights(self._denoising_first_unet_model.get_weights())
 
         # Initialize the GaussianDiffusion utility for the diffusion process
-        self._denoising_gaussian_diffusion_util = GaussianDiffusionTensorflow(beta_start=self._denoising_diffusion_gaussian_beta_start,
+        self._denoising_gaussian_diffusion_util = GaussianDenoisingDiffusion(beta_start=self._denoising_diffusion_gaussian_beta_start,
                                                                               beta_end=self._denoising_diffusion_gaussian_beta_end,
                                                                               time_steps=self._denoising_diffusion_gaussian_time_steps,
                                                                               clip_min=self._denoising_diffusion_gaussian_clip_min,
