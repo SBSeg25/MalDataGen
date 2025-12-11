@@ -11,7 +11,7 @@ __credits__ = ['Synthetic Ocean AI']
 from Engine.Algorithms.LatentDiffusion.Torch.AlgorithmLatentDiffusionTorch import AlgorithmLatentDiffusionTorch
 from Engine.Algorithms.LatentDiffusion.Torch.AlgorithmVAELatentDiffusionTorch import VAELatentDiffusionAlgorithmPyTorch
 from Engine.Algorithms.LatentDiffusion.Torch.GaussianLatentDiffusionTorch import GaussianLatentDiffusionTorch
-from Engine.Architectures.LatentDiffusion.Torch.UNetModelTorch import UNetModelTorch
+from Engine.Architectures.LatentDiffusion.Torch.DiffusionModelUNetModelTorch import DiffusionModelUNetModelTorch
 from Engine.Architectures.LatentDiffusion.Torch.VariationalModelDiffusionTorch import VariationalModelDiffusionTorch
 
 # MIT License
@@ -351,7 +351,7 @@ class LatentDiffusionTorch:
         embedding_seq_len, embedding_channels = actual_embedding_shape
 
         # Create first UNet
-        self._latent_first_instance_unet = UNetModelTorch(
+        self._latent_first_instance_unet = DiffusionModelUNetModelTorch(
             embedding_dimension=embedding_seq_len,
             embedding_channels=embedding_channels,
             list_neurons_per_level=self._latent_diffusion_unet_channels_per_level,
@@ -365,7 +365,7 @@ class LatentDiffusionTorch:
         ).to(self._device)
 
         # Create second UNet
-        self._latent_second_instance_unet = UNetModelTorch(
+        self._latent_second_instance_unet = DiffusionModelUNetModelTorch(
             embedding_dimension=embedding_seq_len,
             embedding_channels=embedding_channels,
             list_neurons_per_level=self._latent_diffusion_unet_channels_per_level,

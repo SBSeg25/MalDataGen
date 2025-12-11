@@ -68,7 +68,7 @@ DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION = 'swish'
 DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION_ALPHA = 0.05
 
 
-class UNetModel(Activations):
+class DiffusionModelUnetTensorflow(Activations):
     """
     UNetModel
 
@@ -110,7 +110,7 @@ class UNetModel(Activations):
             - Missing or incorrect `number_classes` in `number_samples_per_class`
 
     Example:
-        >>> unet_model = UNetModel(
+        >>> unet_model = DiffusionModelUnetTensorflow(
         ...     embedding_dimension=256,
         ...     embedding_channels=3,
         ...     list_neurons_per_level=[64, 128, 256],

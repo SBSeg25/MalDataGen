@@ -36,7 +36,7 @@ DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION = 'swish'
 DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION_ALPHA = 0.05
 
 
-class UNetModelTorch(nn.Module, Activations):
+class DiffusionModelUNetModelTorch(nn.Module, Activations):
     """
     UNetModel - PyTorch Implementation with Dynamic Projection Layers
 
@@ -61,7 +61,7 @@ class UNetModelTorch(nn.Module, Activations):
         """
         Initializes the UNetModel class with the provided parameters.
         """
-        super(UNetModelTorch, self).__init__()
+        super(DiffusionModelUNetModelTorch, self).__init__()
 
         if list_neurons_per_level is None:
             list_neurons_per_level = DEFAULT_DIFFUSION_UNET_CHANNELS_PER_LEVEL

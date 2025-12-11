@@ -1,64 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-__author__ = 'Synthetic Ocean AI - Team'
-__email__ = 'syntheticoceanai@gmail.com'
-__version__ = '{1}.{0}.{1}'
-__initial_data__ = '2022/06/01'
-__last_update__ = '2025/03/29'
-__credits__ = ['Synthetic Ocean AI']
-
-from Engine.Algorithms.LatentDiffusion.AlgorithmVAELatentDiffusion import AlgorithmVAELatentDiffusion
-from Engine.Algorithms.LatentDiffusion.GaussianLatentDiffusion import GaussianLatentDiffusion
-
-# MIT License
-#
-# Copyright (c) 2025 Synthetic Ocean AI
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
-
-try:
-    import sys
-
-    import keras
-    import numpy
-
-    import logging
-    import tensorflow
-
-    from tensorflow.keras.optimizers import Adam
-
-    from tensorflow.keras.utils import to_categorical
-
-    from tensorflow.python.keras.losses import MeanSquaredError
-
-    from tensorflow.python.keras.losses import BinaryCrossentropy
-
-    from Engine.Architectures.LatentDiffusion.Tensorflow.DiffusionModelUnetTensorflow import UNetModel
-    from Engine.Algorithms.LatentDiffusion.Tensorflow.AlgorithmLatentDiffusionTensorflow import \
-        LatentDiffusionAlgorithmTensorflow
-
-except ImportError as error:
-    logging.error(error)
-    sys.exit(-1)
-
 # !/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
@@ -69,6 +8,7 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
+
 # MIT License
 #
 # Copyright (c) 2025 Synthetic Ocean AI
@@ -94,6 +34,7 @@ __credits__ = ['Synthetic Ocean AI']
 try:
     import sys
     import keras
+    import numpy
     import numpy as np
     import logging
     import tensorflow as tf
@@ -102,12 +43,13 @@ try:
     from tensorflow.keras.utils import to_categorical
     from tensorflow.python.keras.losses import MeanSquaredError, BinaryCrossentropy
 
-    from Engine.Algorithms.LatentDiffusion.Tensorflow.GaussianLatentDiffusionTensorflow import \
-        GaussianLatentDiffusionTensorflow
-    from Engine.Architectures.LatentDiffusion.Tensorflow.DiffusionModelUnetTensorflow import UNetModel
-    from Engine.Architectures.LatentDiffusion.Tensorflow.VariationalAutoencoderModelTensorflow import VariationalModelDiffusionTensorflow
+    from Engine.Algorithms.LatentDiffusion.AlgorithmVAELatentDiffusion import AlgorithmVAELatentDiffusion
+    from Engine.Algorithms.LatentDiffusion.GaussianLatentDiffusion import GaussianLatentDiffusion
     from Engine.Algorithms.LatentDiffusion.Tensorflow.AlgorithmLatentDiffusionTensorflow import \
         LatentDiffusionAlgorithmTensorflow
+    from Engine.Architectures.LatentDiffusion.DiffusionModelUNetModel import DiffusionModelUNetModel
+    from Engine.Architectures.LatentDiffusion.VariationalModelDiffusion import VariationalModelDiffusion
+
 
 except ImportError as error:
     logging.error(error)
@@ -445,7 +387,7 @@ class LatentDiffusionTensorflow:
         """
         # Initialize UNet instances if not provided
         if not self._has_external_first_unet:
-            self._latent_first_instance_unet = UNetModel(
+            self._latent_first_instance_unet = DiffusionModelUNetModel(
                 embedding_dimension=self._latent_diffusion_latent_dimension,
                 embedding_channels=self._latent_diffusion_unet_num_embedding_channels,
                 list_neurons_per_level=self._latent_diffusion_unet_channels_per_level,
@@ -460,7 +402,7 @@ class LatentDiffusionTensorflow:
             self._latent_first_unet_model = self._latent_first_instance_unet.build_model()
 
         if not self._has_external_second_unet:
-            self._latent_second_instance_unet = UNetModel(
+            self._latent_second_instance_unet = DiffusionModelUNetModel(
                 embedding_dimension=self._latent_diffusion_latent_dimension,
                 embedding_channels=self._latent_diffusion_unet_num_embedding_channels,
                 list_neurons_per_level=self._latent_diffusion_unet_channels_per_level,
@@ -490,7 +432,7 @@ class LatentDiffusionTensorflow:
 
         # Initialize VariationalModelDiffusion if not provided
         if not self._has_external_variation_model:
-            self._latent_variation_model_diffusion = VariationalModelDiffusionTensorflow(
+            self._latent_variation_model_diffusion = VariationalModelDiffusion(
                 latent_dimension=self._latent_diffusion_latent_dimension,
                 output_shape=input_shape,
                 activation_function=self._latent_diffusion_VAE_intermediary_activation_function,
@@ -546,7 +488,7 @@ class LatentDiffusionTensorflow:
         """
 
         # # Variational Model setup for the VAE's encoder and decoder
-        self._variation_model = VariationalModelDiffusionTensorflow(latent_dimension=self._latent_diffusion_VAE_latent_dimension,
+        self._variation_model = VariationalModelDiffusion(latent_dimension=self._latent_diffusion_VAE_latent_dimension,
                                                                  output_shape=input_shape,
                                                                  activation_function=self._latent_diffusion_VAE_intermediary_activation_function,
                                                                  initializer_mean=self._latent_diffusion_VAE_initializer_mean,
@@ -588,7 +530,6 @@ class LatentDiffusionTensorflow:
             x_real_samples (ndarray): Training samples
             y_real_samples (ndarray): Corresponding labels
         """
-        print("---------------------------------------------------------")
         # Initialize the diffusion model
         self._get_latent_diffusion(input_shape)
 
