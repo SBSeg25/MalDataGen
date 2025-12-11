@@ -275,7 +275,7 @@ class DiffusionAutoencoderModel(Activations):
             batch_size (int): Batch size for training.
         """
         self._neural_model.compile(loss=self._loss_function)
-        self._neural_model.fit(x_train_data, x_train_data, epochs=epochs, batch_size=batch_size, validation_split=0.2)
+        self._neural_model.fit_model(x_train_data, x_train_data, epochs=epochs, batch_size=batch_size, validation_split=0.2)
 
     def create_embedding(self, data):
         """

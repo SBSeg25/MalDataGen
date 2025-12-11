@@ -111,7 +111,7 @@ class AdversarialAlgorithmTensorflow(Model):
         ...     optimizer_discriminator=tf.keras.optimizers.Adam(learning_rate=0.0002)
         ...     )
         # Train the model
-        >>> adversarial_algorithm.fit(train_dataset)
+        >>> adversarial_algorithm.fit_model(train_dataset)
 
     """
 

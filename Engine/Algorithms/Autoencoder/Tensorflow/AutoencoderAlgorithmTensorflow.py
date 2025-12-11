@@ -108,7 +108,7 @@ class AutoencoderAlgorithmTensorflow(Model):
         ...     latent_dimension=64
         ...     )
         ...     autoencoder.compile(optimizer=tensorflow.keras.optimizers.Adam(learning_rate=0.001))
-        >>> autoencoder.fit(train_dataset, epochs=50)
+        >>> autoencoder.fit_model(train_dataset, epochs=50)
     """
 
     def __init__(self,

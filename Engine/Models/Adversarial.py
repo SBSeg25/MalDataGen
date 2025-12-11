@@ -295,7 +295,7 @@ class Adversarial:
             if hasattr(self._adversarial_algorithm, 'smoothing_rate'):
                 self._adversarial_algorithm.smoothing_rate = self._adversarial_smoothing_rate
 
-    def _training_adversarial_modelo(
+    def fit_model(
             self,
             input_shape: tuple[int, ...],
             arguments: 'argparse.Namespace',

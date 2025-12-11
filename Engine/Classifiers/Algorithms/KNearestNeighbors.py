@@ -111,7 +111,7 @@ class KNearestNeighbors:
             )
 
             logging.info("Fitting the KNN model to the training data.")
-            instance_model_classifier.fit(x_samples_training, y_samples_training)
+            instance_model_classifier.fit_model(x_samples_training, y_samples_training)
             logging.info("Finished training KNN model.")
 
             return instance_model_classifier

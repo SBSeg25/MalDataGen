@@ -87,7 +87,7 @@ class RandomNoiseAlgorithm:
     Example:
         >>> python
         ...     model = RandomAlgorithm(noise_level=0.1, noise_type='salt_and_pepper')
-        ...     model.fit(X_train, Y_train)
+        ...     model.fit_model(X_train, Y_train)
         ...     noisy_samples = model.predict([0, 1, 2])
         >>>     generated_samples = model.get_samples({"classes": {0: 5, 1: 10}})
 
@@ -109,7 +109,7 @@ class RandomNoiseAlgorithm:
     def compile(self):
         pass
 
-    def fit(self, x, y):
+    def fit_model(self, x, y):
         """
         Organizes samples into a dictionary where the keys are class labels
         (determined using argmax on one-hot encoded labels) and the values

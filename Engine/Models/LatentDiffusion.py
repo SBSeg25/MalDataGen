@@ -513,7 +513,7 @@ class LatentDiffusionTensorflow:
                                                            file_name_decoder=self._latent_diffusion_VAE_file_name_decoder,
                                                            models_saved_path=self._latent_diffusion_VAE_path_output_models)
 
-    def _training_latent_diffusion_model(self, input_shape, arguments, x_real_samples, y_real_samples):
+    def fit_model(self, input_shape, arguments, x_real_samples, y_real_samples):
         """
         Executes the complete training pipeline for latent diffusion.
 
@@ -553,7 +553,7 @@ class LatentDiffusionTensorflow:
             callbacks_list.append(self._callback_early_stop)
 
         # Fit the diffusion model with the training data
-        self._latent_variational_algorithm.fit((
+        self._latent_variational_algorithm.fit_model((
             x_real_samples,
             to_categorical(y_real_samples, num_classes=self._number_samples_per_class["number_classes"])),
             x_real_samples, epochs=self._latent_diffusion_VAE_epochs,

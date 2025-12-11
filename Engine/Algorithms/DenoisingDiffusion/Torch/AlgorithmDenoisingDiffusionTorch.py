@@ -237,7 +237,7 @@ class AlgorithmDenoisingDiffusionTorch(nn.Module):
                     clip_denoised=True
                 )
 
-        self._network.train()
+        self._network.fit_model()
 
         # Crop to original size
         generated_data = self._crop_tensor_to_original_size(

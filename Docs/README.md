@@ -84,21 +84,21 @@ from SynDataGen.Engine.Algorithms.Diffusion.GaussianDiffusion import GaussianDif
 
 from SynDataGen.Engine.Models.Diffusion.VariationalAutoencoderModel import VariationalModelDiffusion
 
-from SynDataGen.Engine.Algorithms.Diffusion.AlgorithmVariationalAutoencoderDiffusion import VariationalAlgorithmDiffusion
-
+from SynDataGen.Engine.Algorithms.Diffusion.AlgorithmVariationalAutoencoderDiffusion import
+    VariationalAlgorithmDiffusion
 
 number_samples_per_class = {
     "classes": {1: 100, 2: 200, 3: 150},
     "number_classes": 3
 }
-input_shape = (1200, )
+input_shape = (1200,)
 
 # Initialize the first instance of UNet for the diffusion model
 first_instance_unet = UNetModel(
     embedding_dimension=128,
     embedding_channels=1,
     list_neurons_per_level=[1, 2, 4],
-    list_attentions=[False,True, True],
+    list_attentions=[False, True, True],
     number_residual_blocks=2,
     normalization_groups=1,
     intermediary_activation_function='swish',
@@ -177,11 +177,9 @@ diffusion_algorithm = DiffusionModel(first_unet_model=first_unet_model,
                                      optimizer_autoencoder=Adam(learning_rate=0.0002),
                                      optimizer_diffusion=Adam(learning_rate=0.0002),
                                      time_steps=1000,
-                                     ema = 0.9999,
-                                     margin= 0.001,
-                                     embedding_dimension= 128)
-
-
+                                     ema=0.9999,
+                                     margin=0.001,
+                                     embedding_dimension=128)
 
 diffusion_algorithm.compile(loss=MeanSquaredError(), optimizer=Adam(learning_rate=0.002))
 
@@ -192,7 +190,7 @@ data_embedding = variational_algorithm_diffusion.create_embedding(
 data_embedding = numpy.array(data_embedding)
 data_embedding = tensorflow.expand_dims(data_embedding, axis=-1)
 
-diffusion_algorithm.fit(
+diffusion_algorithm.fit_model(
     data_embedding, to_categorical(y_real_samples, num_classes=number_samples_per_class["number_classes"]),
     epochs=1000, batch_size=32, verbose=2)
 
@@ -242,7 +240,7 @@ number_samples_per_class = {
     "classes": {1: 100, 2: 200, 3: 150},
     "number_classes": 3
 }
-input_shape = (1200, )
+input_shape = (1200,)
 
 # Adversarial Model setup for Generator and Discriminator
 adversarial_model = AdversarialModel(latent_dimension=128,
@@ -284,9 +282,9 @@ adversarial_algorithm.compile(
     generator_optimizer, discriminator_optimizer, BinaryCrossentropy(), BinaryCrossentropy())
 
 # Fit the model with real samples and the corresponding labels
-adversarial_algorithm.fit(
+adversarial_algorithm.fit_model(
     x_real_samples, to_categorical(y_real_samples, num_classes=number_samples_per_class["number_classes"]),
-    epochs=1000, batch_size = 32)
+    epochs=1000, batch_size=32)
 
 Samples = adversarial_algorithm.get_samples(number_samples_per_class)
 
@@ -338,12 +336,11 @@ from tensorflow.keras.utils import to_categorical
 from SynDataGen.Engine.Models.Wasserstein.ModelWassersteinGAN import WassersteinModel
 from SynDataGen.Engine.Algorithms.Wasserstein.AlgorithmWassersteinGan import WassersteinAlgorithm
 
-
 number_samples_per_class = {
     "classes": {1: 100, 2: 200, 3: 150},
     "number_classes": 3
 }
-input_shape = (1200, )
+input_shape = (1200,)
 
 # WassersteinGP Model setup for training and model operations
 wasserstein_model = WassersteinModel(
@@ -386,12 +383,15 @@ wasserstein_model.get_discriminator().summary()
 generator_optimizer = Adam(learning_rate=0.0002, beta_1=0.5, beta_2=0.9)
 discriminator_optimizer = Adam(learning_rate=0.0002, beta_1=0.5, beta_2=0.9)
 
+
 # Define the custom loss functions for the discriminator and generator
 def discriminator_loss(real_img, fake_img):
     return tensorflow.reduce_mean(fake_img) - tensorflow.reduce_mean(real_img)
 
+
 def generator_loss(fake_img):
     return -tensorflow.reduce_mean(fake_img)
+
 
 # Compile the WassersteinGP GAN algorithm
 wasserstein_algorithm.compile(generator_optimizer,
@@ -400,9 +400,9 @@ wasserstein_algorithm.compile(generator_optimizer,
                               discriminator_loss)
 
 # Fit the WassersteinGP GAN model
-wasserstein_algorithm.fit(x_real_samples,
-                          to_categorical(y_real_samples, num_classes=number_samples_per_class["number_classes"]),
-                          epochs=1000, batch_size = 32)
+wasserstein_algorithm.fit_model(x_real_samples,
+                                to_categorical(y_real_samples, num_classes=number_samples_per_class["number_classes"]),
+                                epochs=1000, batch_size=32)
 
 Samples = wasserstein_algorithm.get_samples(number_samples_per_class)
 
@@ -446,12 +446,11 @@ from tensorflow.keras.utils import to_categorical
 from SynDataGen.Engine.Models.Autoencoder.ModelAutoencoder import AutoencoderModel
 from SynDataGen.Engine.Algorithms.Autoencoder.AutoencoderAlgorithm import AutoencoderAlgorithm
 
-
 number_samples_per_class = {
     "classes": {1: 100, 2: 200, 3: 150},
     "number_classes": 3
 }
-input_shape = (1200, )
+input_shape = (1200,)
 
 # Autoencoder Model setup for Encoder and Decoder
 autoencoder_model = AutoencoderModel(latent_dimension=64,
@@ -486,9 +485,10 @@ autoencoder_model.get_decoder(input_shape).summary()
 autoencoder_algorithm.compile(loss='mse')
 
 # Fit the autoencoder model
-autoencoder_algorithm.fit((x_real_samples,
-                           to_categorical(y_real_samples, num_classes=number_samples_per_class["number_classes"])),
-                           x_real_samples, epochs=1000, batch_size=32)
+autoencoder_algorithm.fit_model((x_real_samples,
+                                 to_categorical(y_real_samples,
+                                                num_classes=number_samples_per_class["number_classes"])),
+                                x_real_samples, epochs=1000, batch_size=32)
 
 Samples = autoencoder_algorithm.get_samples(number_samples_per_class)
 
@@ -536,7 +536,7 @@ number_samples_per_class = {
     "classes": {1: 100, 2: 200, 3: 150},
     "number_classes": 3
 }
-input_shape = (1200, )
+input_shape = (1200,)
 
 # Variational Model setup for the VAE's encoder and decoder
 variation_model = VariationalModel(latent_dimension=128,
@@ -572,9 +572,10 @@ variation_model.get_decoder().summary()
 variational_algorithm.compile()
 
 # Fit the variational autoencoder model
-variational_algorithm.fit((x_real_samples,
-                           to_categorical(y_real_samples, num_classes=number_samples_per_class["number_classes"])),
-                          epochs=1000, batch_size=32,)
+variational_algorithm.fit_model((x_real_samples,
+                                 to_categorical(y_real_samples,
+                                                num_classes=number_samples_per_class["number_classes"])),
+                                epochs=1000, batch_size=32, )
 
 Samples = variational_algorithm.get_samples(number_samples_per_class)
 

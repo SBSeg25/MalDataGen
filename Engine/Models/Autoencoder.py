@@ -272,7 +272,7 @@ class Autoencoder:
             if hasattr(self._autoencoder_algorithm, 'latent_dimension'):
                 self._autoencoder_algorithm.latent_dimension = self._autoencoder_latent_dimension
 
-    def _training_autoencoder_model(
+    def fit_model(
             self,
             input_shape: tuple[int, ...],
             arguments: 'argparse.Namespace',

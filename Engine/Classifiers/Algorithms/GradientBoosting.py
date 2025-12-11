@@ -114,7 +114,7 @@ class GradientBoosting:
             )
 
             logging.info("Fitting the Gradient Boosting model to the training data.")
-            instance_model_classifier.fit(x_samples_training, y_samples_training)
+            instance_model_classifier.fit_model(x_samples_training, y_samples_training)
             logging.info("Gradient Boosting model training completed.")
             return instance_model_classifier
 

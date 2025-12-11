@@ -127,7 +127,7 @@ class AlgorithmLatentDiffusionTorch(nn.Module):
         Returns:
             torch.Tensor: The computed loss for this training step.
         """
-        self._network.train()
+        self._network.fit_model()
 
         # Labels (conditioning information) and input data embeddings
         embedding_label = ground_truth

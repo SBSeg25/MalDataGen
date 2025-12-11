@@ -110,7 +110,7 @@ class KMeansClustering:
             )
 
             logging.info("Fitting the KMeans model to the training data.")
-            instance_model_clustering.fit(x_samples_training)
+            instance_model_clustering.fit_model(x_samples_training)
             logging.info("Finished clustering.")
 
             return instance_model_clustering

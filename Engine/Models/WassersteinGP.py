@@ -329,7 +329,7 @@ class WassersteinGP:
             if hasattr(self._wasserstein_gp_algorithm, 'discriminator_steps'):
                 self._wasserstein_gp_algorithm.discriminator_steps = self._wasserstein_gp_discriminator_steps
 
-    def _training_wasserstein_gp_model(
+    def fit_model(
             self,
             input_shape: tuple[int, ...],
             arguments: 'argparse.Namespace',

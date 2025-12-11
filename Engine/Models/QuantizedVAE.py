@@ -261,7 +261,7 @@ class QuantizedVAE:
             if hasattr(self._quantized_vae_algorithm, 'models_saved_path'):
                 self._quantized_vae_algorithm.models_saved_path = self._quantized_vae_path_output_models
 
-    def _training_quantized_VAE_model(
+    def fit_model(
             self,
             input_shape: tuple[int, ...],
             arguments: 'argparse.Namespace',

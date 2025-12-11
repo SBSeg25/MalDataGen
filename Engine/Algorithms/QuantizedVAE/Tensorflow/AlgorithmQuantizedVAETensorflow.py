@@ -107,7 +107,7 @@ class QuantizedVAEAlgorithmTensorflow(Model):
         ...     models_saved_path="./saved_models/"
         ... )
         >>> vae.compile(optimizer=tensorflow.keras.optimizers.Adam())
-        >>> vae.fit(train_dataset, epochs=10)
+        >>> vae.fit_model(train_dataset, epochs=10)
         >>> generated_samples = vae.get_samples({
         ...     "classes": {0: 5, 1: 5},
         ...     "number_classes": 2

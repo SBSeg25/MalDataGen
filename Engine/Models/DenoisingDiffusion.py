@@ -444,7 +444,7 @@ class DenoisingDiffusion:
         print("STARTING TRAINING")
         print("=" * 80 + "\n")
 
-        self._denoising_diffusion_algorithm.train()
+        self._denoising_diffusion_algorithm.fit_model()
         best_loss = float('inf')
 
         for epoch in range(self._denoising_diffusion_unet_epochs):
@@ -615,7 +615,7 @@ class DenoisingDiffusion:
                 self._training_history['loss'].append(history.history['loss'][epoch])
                 self._training_history['avg_loss'].append(history.history['loss'][epoch])
 
-    def _training_denoising_diffusion_model(
+    def fit_model(
             self,
             input_shape: tuple,
             arguments,
@@ -671,7 +671,7 @@ class DenoisingDiffusion:
             x_real_samples: Training samples
             y_real_samples: Training labels
         """
-        self._training_denoising_diffusion_model(
+        self.fit_model(
             input_shape, arguments, x_real_samples, y_real_samples
         )
 

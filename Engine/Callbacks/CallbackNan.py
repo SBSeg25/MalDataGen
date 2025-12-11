@@ -82,7 +82,7 @@ class TerminateOnNaN(Callback):
         ...     terminate_on_nan = TerminateOnNaN()
         ...
         ...     # Fit the model with the callback
-        >>>     model.fit(X, y, epochs=10, callbacks=[terminate_on_nan])
+        >>>     model.fit_model(X, y, epochs=10, callbacks=[terminate_on_nan])
     """
 
     def on_batch_end(self, batch, logs=None):

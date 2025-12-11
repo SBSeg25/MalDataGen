@@ -33,24 +33,18 @@ __credits__ = ['Synthetic Ocean AI']
 
 try:
     import sys
-
     import keras
     import numpy
-
     import logging
     import tensorflow
 
     from tensorflow.keras.optimizers import Adam
-
     from tensorflow.keras.utils import to_categorical
-
     from tensorflow.python.keras.losses import MeanSquaredError
     from Engine.Callbacks.CallbackEarlyStop import EarlyStopping
-
     from tensorflow.python.keras.losses import BinaryCrossentropy
 
     from Engine.Algorithms.Copy.CopyAlgorithm import CopyAlgorithm
-
     from Engine.Models.DenoisingDiffusion import DenoisingDiffusion
     from Engine.Models.Adversarial import Adversarial
     from Engine.Models.Autoencoder import Autoencoder
@@ -64,621 +58,392 @@ try:
     from Engine.Models.Wasserstein import Wasserstein
     from Engine.Models.WassersteinGP import WassersteinGP
 
-
 except ImportError as error:
     logging.error(error)
     sys.exit(-1)
 
 
-class GenerativeModels(Adversarial,
-                       Autoencoder,
-                       QuantizedVAE,
-                       LatentDiffusionTensorflow,
-                       Wasserstein,
-                       WassersteinGP,
-                       VariationalAutoencoder,
-                       Smote,
-                       DenoisingDiffusion):
+class GenerativeModels:
     """
-    A class to manage and facilitate the training and generation of various types of generative models,
-    including Generative Adversarial Networks (GANs), Autoencoders (AEs), Variational Autoencoders (VAEs),
-    LatentDiffusion Architectures, and WassersteinGP GANs (WGANs). This class provides an interface to configure, initialize,
-    and manage the training processes for these models, as well as to generate synthetic data from them.
+    Generative Models Manager - Uses composition instead of multiple inheritance
 
-    It supports flexibility in architecture selection and offers detailed configuration options for each model.
-    Additionally, it handles various model types, training parameters, and their specific settings to ensure
-    a smooth and efficient workflow for deep learning practitioners working with generative models.
-
-    The class enables users to choose and fine-tune the architecture, training procedures, and hyperparameters
-    of these models, facilitating experiments with different generative approaches. Each model type is encapsulated
-    with distinct algorithms and training strategies, enabling easy experimentation and comparison.
-
-    Supported Architectures:
-    ----------------
-    - **Generative Adversarial Networks (GANs)**:
-        A class of generative models that consists of a generator and a discriminator, trained in a competitive process.
-        The generator creates synthetic data, and the discriminator distinguishes real from fake data.
-
-    - **Autoencoders (AEs)**:
-        A type of neural network used to learn efficient codings of input data. Autoencoders are often used
-        for data compression and denoising.
-
-    - **Variational Autoencoders (VAEs)**: A probabilistic variant of autoencoders, designed to model the
-        data distribution more effectively by learning a latent space with continuous values. This is
-        particularly useful for generating new data samples.
-
-    - **LatentDiffusion Architectures**: A family of generative models that gradually transform noise into data through
-        a sequence of steps. They have gained significant attention for image generation tasks.
-
-    - **Wasserstein GAN (WGAN)**: A type of GAN that uses the Wasserstein distance for training,
-        which provides more stable training and better convergence than traditional GANs.
-
-    - **Wasserstein GP GANs (WGAN-GP)**: A type of GAN that uses the Wasserstein distance for training
-        + Gradient Penalty, which provides more stable training and better convergence than traditional GANs.
-
-    - **Vector Quantizer Variational Autoencoder (VQ-VAE)**: A type of variational autoencoder that incorporates
-        vector quantization for discrete latent representations. Unlike traditional VAEs, VQ-VAE maps inputs
-        to a fixed set of learned embeddings, improving the quality and interpretability of the latent space.
-
-    The class allows you to experiment with these models using a unified API, where you can easily configure
-    each model's architecture, initialize weights, and set training hyperparameters.
-
-    Attributes:
-    -----------
-        @arguments (dict):
-            A dictionary containing configuration parameters necessary for model initialization. This includes
-            model-specific hyperparameters like learning rate, batch size, latent dimensions, etc.
-
-        @_callback_model_monitor (object):
-            A callback for monitoring model performance during training. This can be used for logging,
-            visualization, and tracking metrics.
-
-        @_callback_resources_monitor (object):
-            A callback for tracking resource usage (e.g., memory, GPU utilization) during training to ensure
-            efficient resource management.
-
-        @_decoder_diffusion (object):
-            Instance of the decoder for the diffusion model, responsible for generating data samples by
-            reversing the diffusion process.
-
-        @_encoder_diffusion (object):
-            Instance of the encoder for the diffusion model, which converts input data into a latent
-            representation during the forward diffusion process.
-
-        @_diffusion_algorithm (object):
-            The core diffusion model algorithm, which orchestrates the noise process and the reverse diffusion steps.
-
-        @_adversarial_algorithm (object):
-            The generative adversarial algorithm for GANs, which includes both the generator and discriminator,
-            and their adversarial training.
-
-        @_autoencoder_algorithm (object):
-            The autoencoder model algorithm that defines the encoding and decoding processes, used for
-            unsupervised learning and data reconstruction.
-
-        @_variational_algorithm_diffusion (object):
-            The variational autoencoder algorithm specifically designed for diffusion models, enabling
-            the generation of high-quality samples.
-
-        @_wasserstein_algorithm (object):
-            The Wasserstein GAN algorithm, which incorporates the Wasserstein distance metric to improve the
-            stability and convergence of GAN training.
-
-        @_wasserstein_gp_algorithm (object):
-            The WassersteinGP GAN algorithm, which incorporates the WassersteinGP distance metric to improve the
-            stability and convergence of GAN training, also include Gradient Penalty.
-
-        @_vector_quantizer_vae (object):
-            The Vector Quantizer VAE algorithm, which uses discrete latent embeddings through vector quantization
-            to improve reconstruction quality and enable better generative modeling.
-
-        @_copy_algorithm (Copy):
-            A helper class for duplicating model configurations or weights, useful for saving model checkpoints,
-            or transferring learned weights between models.
-
-
-    Methods:
-    --------
-    @__init__(arguments: dict)
-        Initializes the class by setting up all model parameters, callbacks, and algorithms according to
-        the provided configuration dictionary.
-
-    @build_models()
-        Builds the generative models based on the selected architecture. This method initializes each model’s
-        components (e.g., encoder/decoder, generator/discriminator) and sets up the training pipeline.
-
-    @train_models()
-        Trains the selected models based on the provided training configurations. It manages the entire training
-        process, including the optimization and loss calculation.
-
-    @generate_samples(model_type: str, num_samples: int)
-        Generates synthetic data samples using the specified model type. This method can be used for generating
-        data, texts, or other data formats depending on the model.
-
-    @save_models()
-        Saves the trained models to the specified output directory. Architectures are saved with their current weights,
-        training state, and hyperparameters, allowing easy restoration later.
-
-    @load_models(model_directory: str)
-        Loads a trained model from the given directory. This method is used to restore previously trained models
-        for further evaluation or fine-tuning.
-
-    Example:
-    --------
-    >>> Sample configuration dictionary
-    ...     arguments = {
-    ...     "learning_rate": 0.0002,
-    ...     "batch_size": 64,
-    ...     "latent_dim": 128,
-    ...     "epochs": 100,
-    ...     "model_type": "GAN",
-    ...     }
-    ...     # Create and train a GAN model
-    ...     generative_model = GenerativeModels(arguments)
-    ...     generative_model.build_models()
-    ...     generative_model.train_models()
-    ...     # Generate synthetic images
-    ...     synthetic_images = generative_model.generate_samples(model_type="GAN", num_samples=10)
-    ...     # Save the trained model
-    ...     generative_model.save_models()
-    ...     # Evaluate the trained model
-    >>>     evaluation_results = generative_model.evaluate_model(model_type="GAN", evaluation_data=test_data)
+    This class manages various generative model instances and provides a unified
+    interface for training and generating synthetic data.
     """
 
     def __init__(self, arguments):
         """
-        Initializes the GenerativeModels class with model configuration parameters.
-
-        The constructor accepts a dictionary of configuration arguments that contain necessary parameters
-        for initializing different types of generative models such as GANs, AEs, VAEs, and LatentDiffusion Architectures.
-        It sets up placeholders for various components used in each model and algorithm, and it configures
-        model-specific attributes based on the provided arguments.
+        Initialize all generative models as composition instances.
 
         Args:
-            arguments (dict): A dictionary containing configuration settings for model architectures, hyperparameters,
-                              training options, and paths for saving model files. This dictionary is expected to
-                              include keys for model parameters, batch sizes, epochs, learning rates, and other
-                              settings necessary for training.
+            arguments: Configuration object containing all model parameters
         """
+        self.arguments = arguments
 
-        Adversarial.__init__(self,
-                             arguments.adversarial_number_epochs,
-                             arguments.adversarial_batch_size,
-                             arguments.adversarial_initializer_mean,
-                             arguments.adversarial_initializer_deviation,
-                             arguments.adversarial_latent_dimension,
-                             arguments.adversarial_training_algorithm,
-                             arguments.adversarial_activation_function,
-                             arguments.adversarial_dropout_decay_rate_g,
-                             arguments.adversarial_dropout_decay_rate_d,
-                             arguments.adversarial_dense_layer_sizes_g,
-                             arguments.adversarial_dense_layer_sizes_d,
-                             arguments.adversarial_loss_generator,
-                             arguments.adversarial_loss_discriminator,
-                             arguments.adversarial_smoothing_rate,
-                             arguments.adversarial_latent_mean_distribution,
-                             arguments.adversarial_latent_stander_deviation,
-                             arguments.adversarial_file_name_discriminator,
-                             arguments.adversarial_file_name_generator,
-                             arguments.adversarial_path_output_models,
-                             arguments.adversarial_last_layer_activation,
-                             arguments.variational_autoencoder_number_epochs)
-
-        Autoencoder.__init__(self,
-                             arguments.autoencoder_latent_dimension,
-                             arguments.autoencoder_training_algorithm,
-                             arguments.autoencoder_activation_function,
-                             arguments.autoencoder_dropout_decay_rate_encoder,
-                             arguments.autoencoder_dropout_decay_rate_decoder,
-                             arguments.autoencoder_dense_layer_sizes_encoder,
-                             arguments.autoencoder_dense_layer_sizes_decoder,
-                             arguments.autoencoder_batch_size,
-                             arguments.autoencoder_number_epochs,
-                             arguments.autoencoder_number_classes,
-                             arguments.autoencoder_loss_function,
-                             arguments.autoencoder_momentum,
-                             arguments.autoencoder_last_activation_layer,
-                             arguments.autoencoder_initializer_mean,
-                             arguments.autoencoder_initializer_deviation,
-                             arguments.autoencoder_latent_mean_distribution,
-                             arguments.autoencoder_latent_stander_deviation,
-                             arguments.autoencoder_file_name_encoder,
-                             arguments.autoencoder_file_name_decoder,
-                             arguments.autoencoder_path_output_models)
-
-        DenoisingDiffusion.__init__(self,
-                                                 arguments.denoising_diffusion_unet_last_layer_activation,
-                                                 arguments.denoising_diffusion_latent_dimension,
-                                                 arguments.denoising_diffusion_unet_num_embedding_channels,
-                                                 arguments.denoising_diffusion_unet_channels_per_level,
-                                                 arguments.denoising_diffusion_unet_batch_size,
-                                                 arguments.denoising_diffusion_unet_attention_mode,
-                                                 arguments.denoising_diffusion_unet_num_residual_blocks,
-                                                 arguments.denoising_diffusion_unet_group_normalization,
-                                                 arguments.denoising_diffusion_unet_intermediary_activation,
-                                                 arguments.denoising_diffusion_unet_intermediary_activation_alpha,
-                                                 arguments.denoising_diffusion_unet_epochs,
-                                                 arguments.denoising_diffusion_gaussian_beta_start,
-                                                 arguments.denoising_diffusion_gaussian_beta_end,
-                                                 arguments.denoising_diffusion_gaussian_time_steps,
-                                                 arguments.denoising_diffusion_gaussian_clip_min,
-                                                 arguments.denoising_diffusion_gaussian_clip_max,
-                                                 arguments.denoising_diffusion_margin,
-                                                 arguments.denoising_diffusion_ema,
-                                                 arguments.denoising_diffusion_time_steps)
-
-        QuantizedVAE.__init__(self,
-                              arguments.quantized_vae_number_epochs,
-                              arguments.quantized_vae_batch_size,
-                              arguments.quantized_vae_latent_dimension,
-                              arguments.quantized_vae_number_embedding,
-                              arguments.quantized_vae_activation_function,
-                              arguments.quantized_vae_initializer_mean,
-                              arguments.quantized_vae_mean_distribution,
-                              arguments.quantized_vae_dropout_decay_rate_encoder,
-                              arguments.quantized_vae_dropout_decay_rate_decoder,
-                              arguments.quantized_vae_last_activation_layer,
-                              arguments.quantized_vae_dense_layer_sizes_encoder,
-                              arguments.quantized_vae_dense_layer_sizes_decoder,
-                              arguments.quantized_vae_train_variance,
-                              arguments.quantized_vae_file_name_encoder,
-                              arguments.quantized_vae_file_name_decoder,
-                              arguments.quantized_vae_path_output_models)
-
-        LatentDiffusionTensorflow.__init__(
-            self,
-            # UNet Parameters
-            unet_last_layer_activation=arguments.latent_diffusion_unet_last_layer_activation,
-            latent_dimension=arguments.latent_diffusion_latent_dimension,
-            unet_num_embedding_channels=arguments.latent_diffusion_unet_num_embedding_channels,
-            unet_channels_per_level=arguments.latent_diffusion_unet_channels_per_level,
-            unet_batch_size=arguments.latent_diffusion_unet_batch_size,
-            unet_attention_mode=arguments.latent_diffusion_unet_attention_mode,
-            unet_num_residual_blocks=arguments.latent_diffusion_unet_num_residual_blocks,
-            unet_group_normalization=arguments.latent_diffusion_unet_group_normalization,
-            unet_intermediary_activation=arguments.latent_diffusion_unet_intermediary_activation,
-            unet_intermediary_activation_alpha=arguments.latent_diffusion_unet_intermediary_activation_alpha,
-            unet_epochs=arguments.latent_diffusion_unet_epochs,
-
-            # Gaussian Diffusion Parameters
-            gaussian_beta_start=arguments.latent_diffusion_gaussian_beta_start,
-            gaussian_beta_end=arguments.latent_diffusion_gaussian_beta_end,
-            gaussian_time_steps=arguments.latent_diffusion_gaussian_time_steps,
-            gaussian_clip_min=arguments.latent_diffusion_gaussian_clip_min,
-            gaussian_clip_max=arguments.latent_diffusion_gaussian_clip_max,
-
-            # VAE Parameters
-            VAE_loss_function=arguments.latent_diffusion_autoencoder_loss,
-            VAE_encoder_filters=arguments.latent_diffusion_autoencoder_encoder_filters,
-            VAE_decoder_filters=arguments.latent_diffusion_autoencoder_decoder_filters,
-            VAE_last_layer_activation=arguments.latent_diffusion_autoencoder_last_layer_activation,
-            VAE_latent_dimension=arguments.latent_diffusion_autoencoder_latent_dimension,
-            VAE_batch_size_create_embedding=arguments.latent_diffusion_autoencoder_batch_size_create_embedding,
-            VAE_batch_size_training=arguments.latent_diffusion_autoencoder_batch_size_training,
-            VAE_epochs=arguments.latent_diffusion_autoencoder_epochs,
-            VAE_intermediary_activation_function=arguments.latent_diffusion_autoencoder_intermediary_activation_function,
-            VAE_intermediary_activation_alpha=arguments.latent_diffusion_autoencoder_intermediary_activation_alpha,
-            VAE_activation_output_encoder=arguments.latent_diffusion_autoencoder_activation_output_encoder,
-
-            # Additional VAE Parameters
-            VAE_initializer_mean=arguments.latent_diffusion_autoencoder_initializer_mean,
-            VAE_initializer_deviation=arguments.latent_diffusion_autoencoder_initializer_deviation,
-            VAE_dropout_decay_rate_encoder=arguments.latent_diffusion_autoencoder_dropout_decay_rate_encoder,
-            VAE_dropout_decay_rate_decoder=arguments.latent_diffusion_autoencoder_dropout_decay_rate_decoder,
-            VAE_file_name_encoder=arguments.latent_diffusion_autoencoder_file_name_encoder,
-            VAE_file_name_decoder=arguments.latent_diffusion_autoencoder_file_name_decoder,
-            VAE_path_output_models=arguments.latent_diffusion_autoencoder_path_output_models,
-            VAE_mean_distribution=arguments.latent_diffusion_autoencoder_mean_distribution,
-            VAE_stander_deviation=arguments.latent_diffusion_autoencoder_stander_deviation,
-
-            # Diffusion Training Parameters
-            margin=arguments.latent_diffusion_margin,
-            ema=arguments.latent_diffusion_ema,
-            time_steps=arguments.latent_diffusion_time_steps
-        )
-
-        Wasserstein.__init__(self,
-                             arguments.wasserstein_latent_dimension,
-                             arguments.wasserstein_training_algorithm,
-                             arguments.wasserstein_activation_function,
-                             arguments.wasserstein_dropout_decay_rate_g,
-                             arguments.wasserstein_dropout_decay_rate_d,
-                             arguments.wasserstein_dense_layer_sizes_generator,
-                             arguments.wasserstein_dense_layer_sizes_discriminator,
-                             arguments.wasserstein_batch_size,
-                             arguments.wasserstein_number_epochs,
-                             arguments.wasserstein_number_classes,
-                             arguments.wasserstein_loss_function,
-                             arguments.wasserstein_momentum,
-                             arguments.wasserstein_last_activation_layer,
-                             arguments.wasserstein_initializer_mean,
-                             arguments.wasserstein_initializer_deviation,
-                             arguments.wasserstein_optimizer_generator_learning_rate,
-                             arguments.wasserstein_optimizer_discriminator_learning_rate,
-                             arguments.wasserstein_optimizer_generator_beta,
-                             arguments.wasserstein_optimizer_discriminator_beta,
-                             arguments.wasserstein_discriminator_steps,
-                             arguments.wasserstein_smoothing_rate,
-                             arguments.wasserstein_latent_mean_distribution,
-                             arguments.wasserstein_latent_stander_deviation,
-                             arguments.wasserstein_file_name_discriminator,
-                             arguments.wasserstein_file_name_generator,
-                             arguments.wasserstein_path_output_models)
-
-        WassersteinGP.__init__(self, arguments.wasserstein_gp_latent_dimension,
-                               arguments.wasserstein_gp_training_algorithm,
-                               arguments.wasserstein_gp_activation_function,
-                               arguments.wasserstein_gp_dropout_decay_rate_g,
-                               arguments.wasserstein_gp_dropout_decay_rate_d,
-                               arguments.wasserstein_gp_dense_layer_sizes_generator,
-                               arguments.wasserstein_gp_dense_layer_sizes_discriminator,
-                               arguments.wasserstein_gp_batch_size,
-                               arguments.wasserstein_gp_number_epochs,
-                               arguments.wasserstein_gp_number_classes,
-                               arguments.wasserstein_gp_loss_function,
-                               arguments.wasserstein_gp_momentum,
-                               arguments.wasserstein_gp_last_activation_layer,
-                               arguments.wasserstein_gp_initializer_mean,
-                               arguments.wasserstein_gp_initializer_deviation,
-                               arguments.wasserstein_gp_optimizer_generator_learning_rate,
-                               arguments.wasserstein_gp_optimizer_discriminator_learning_rate,
-                               arguments.wasserstein_gp_optimizer_generator_beta,
-                               arguments.wasserstein_gp_optimizer_discriminator_beta,
-                               arguments.wasserstein_gp_discriminator_steps)
-
-        VariationalAutoencoder.__init__(self,
-                                        arguments.variational_autoencoder_latent_dimension,
-                                        arguments.variational_autoencoder_training_algorithm,
-                                        arguments.variational_autoencoder_activation_function,
-                                        arguments.variational_autoencoder_dropout_decay_rate_encoder,
-                                        arguments.variational_autoencoder_dropout_decay_rate_decoder,
-                                        arguments.variational_autoencoder_dense_layer_sizes_encoder,
-                                        arguments.variational_autoencoder_dense_layer_sizes_decoder,
-                                        arguments.variational_autoencoder_batch_size,
-                                        arguments.variational_autoencoder_number_epochs,
-                                        arguments.variational_autoencoder_number_classes,
-                                        arguments.variational_autoencoder_loss_function,
-                                        arguments.variational_autoencoder_momentum,
-                                        arguments.variational_autoencoder_last_activation_layer,
-                                        arguments.variational_autoencoder_initializer_mean,
-                                        arguments.variational_autoencoder_initializer_deviation,
-                                        arguments.variational_autoencoder_mean_distribution,
-                                        arguments.variational_autoencoder_stander_deviation,
-                                        arguments.variational_autoencoder_file_name_encoder,
-                                        arguments.variational_autoencoder_file_name_decoder,
-                                        arguments.variational_autoencoder_path_output_models)
-
-        Smote.__init__(self, arguments)
-
+        # Initialize callback handlers
         self._callback_model_monitor = None
         self._callback_resources_monitor = None
         self._callback_early_stop = None
-
         self._random_noise_algorithm = None
 
+        # Initialize copy algorithm
         self._copy_algorithm = CopyAlgorithm()
-        self.arguments = arguments
 
+        # Store configuration parameters
         self._random_noise_level = arguments.random_noise_level
         self._random_noise_type_noise = arguments.random_noise_type_noise
-
         self._number_samples_per_class = arguments.number_samples_per_class
 
-    def _get_random_noise(self, input_shape):
+        # Initialize all model instances using composition
+        self._initialize_models(arguments)
 
-        self._random_noise_algorithm = RandomNoiseAlgorithm(noise_level=self._random_noise_level,
-                                                            noise_type=self._random_noise_type_noise)
+    def _initialize_models(self, args):
+        """
+        Initialize all generative model instances.
+
+        Args:
+            args: Arguments object containing model configurations
+        """
+        # Initialize Adversarial Model
+        self._adversarial_model = Adversarial(
+            args.adversarial_number_epochs,
+            args.adversarial_batch_size,
+            args.adversarial_initializer_mean,
+            args.adversarial_initializer_deviation,
+            args.adversarial_latent_dimension,
+            args.adversarial_training_algorithm,
+            args.adversarial_activation_function,
+            args.adversarial_dropout_decay_rate_g,
+            args.adversarial_dropout_decay_rate_d,
+            args.adversarial_dense_layer_sizes_g,
+            args.adversarial_dense_layer_sizes_d,
+            args.adversarial_loss_generator,
+            args.adversarial_loss_discriminator,
+            args.adversarial_smoothing_rate,
+            args.adversarial_latent_mean_distribution,
+            args.adversarial_latent_stander_deviation,
+            args.adversarial_file_name_discriminator,
+            args.adversarial_file_name_generator,
+            args.adversarial_path_output_models,
+            args.adversarial_last_layer_activation,
+            args.variational_autoencoder_number_epochs
+        )
+
+        # Initialize Autoencoder Model
+        self._autoencoder_model = Autoencoder(
+            args.autoencoder_latent_dimension,
+            args.autoencoder_training_algorithm,
+            args.autoencoder_activation_function,
+            args.autoencoder_dropout_decay_rate_encoder,
+            args.autoencoder_dropout_decay_rate_decoder,
+            args.autoencoder_dense_layer_sizes_encoder,
+            args.autoencoder_dense_layer_sizes_decoder,
+            args.autoencoder_batch_size,
+            args.autoencoder_number_epochs,
+            args.autoencoder_number_classes,
+            args.autoencoder_loss_function,
+            args.autoencoder_momentum,
+            args.autoencoder_last_activation_layer,
+            args.autoencoder_initializer_mean,
+            args.autoencoder_initializer_deviation,
+            args.autoencoder_latent_mean_distribution,
+            args.autoencoder_latent_stander_deviation,
+            args.autoencoder_file_name_encoder,
+            args.autoencoder_file_name_decoder,
+            args.autoencoder_path_output_models
+        )
+
+        # Initialize Denoising Diffusion Model
+        self._denoising_diffusion_model = DenoisingDiffusion(
+            args.denoising_diffusion_unet_last_layer_activation,
+            args.denoising_diffusion_latent_dimension,
+            args.denoising_diffusion_unet_num_embedding_channels,
+            args.denoising_diffusion_unet_channels_per_level,
+            args.denoising_diffusion_unet_batch_size,
+            args.denoising_diffusion_unet_attention_mode,
+            args.denoising_diffusion_unet_num_residual_blocks,
+            args.denoising_diffusion_unet_group_normalization,
+            args.denoising_diffusion_unet_intermediary_activation,
+            args.denoising_diffusion_unet_intermediary_activation_alpha,
+            args.denoising_diffusion_unet_epochs,
+            args.denoising_diffusion_gaussian_beta_start,
+            args.denoising_diffusion_gaussian_beta_end,
+            args.denoising_diffusion_gaussian_time_steps,
+            args.denoising_diffusion_gaussian_clip_min,
+            args.denoising_diffusion_gaussian_clip_max,
+            args.denoising_diffusion_margin,
+            args.denoising_diffusion_ema,
+            args.denoising_diffusion_time_steps
+        )
+
+        # Initialize Quantized VAE Model
+        self._quantized_vae_model = QuantizedVAE(
+            args.quantized_vae_number_epochs,
+            args.quantized_vae_batch_size,
+            args.quantized_vae_latent_dimension,
+            args.quantized_vae_number_embedding,
+            args.quantized_vae_activation_function,
+            args.quantized_vae_initializer_mean,
+            args.quantized_vae_mean_distribution,
+            args.quantized_vae_dropout_decay_rate_encoder,
+            args.quantized_vae_dropout_decay_rate_decoder,
+            args.quantized_vae_last_activation_layer,
+            args.quantized_vae_dense_layer_sizes_encoder,
+            args.quantized_vae_dense_layer_sizes_decoder,
+            args.quantized_vae_train_variance,
+            args.quantized_vae_file_name_encoder,
+            args.quantized_vae_file_name_decoder,
+            args.quantized_vae_path_output_models
+        )
+
+        # Initialize Latent Diffusion Model
+        self._latent_diffusion_model = LatentDiffusionTensorflow(
+            unet_last_layer_activation=args.latent_diffusion_unet_last_layer_activation,
+            latent_dimension=args.latent_diffusion_latent_dimension,
+            unet_num_embedding_channels=args.latent_diffusion_unet_num_embedding_channels,
+            unet_channels_per_level=args.latent_diffusion_unet_channels_per_level,
+            unet_batch_size=args.latent_diffusion_unet_batch_size,
+            unet_attention_mode=args.latent_diffusion_unet_attention_mode,
+            unet_num_residual_blocks=args.latent_diffusion_unet_num_residual_blocks,
+            unet_group_normalization=args.latent_diffusion_unet_group_normalization,
+            unet_intermediary_activation=args.latent_diffusion_unet_intermediary_activation,
+            unet_intermediary_activation_alpha=args.latent_diffusion_unet_intermediary_activation_alpha,
+            unet_epochs=args.latent_diffusion_unet_epochs,
+            gaussian_beta_start=args.latent_diffusion_gaussian_beta_start,
+            gaussian_beta_end=args.latent_diffusion_gaussian_beta_end,
+            gaussian_time_steps=args.latent_diffusion_gaussian_time_steps,
+            gaussian_clip_min=args.latent_diffusion_gaussian_clip_min,
+            gaussian_clip_max=args.latent_diffusion_gaussian_clip_max,
+            VAE_loss_function=args.latent_diffusion_autoencoder_loss,
+            VAE_encoder_filters=args.latent_diffusion_autoencoder_encoder_filters,
+            VAE_decoder_filters=args.latent_diffusion_autoencoder_decoder_filters,
+            VAE_last_layer_activation=args.latent_diffusion_autoencoder_last_layer_activation,
+            VAE_latent_dimension=args.latent_diffusion_autoencoder_latent_dimension,
+            VAE_batch_size_create_embedding=args.latent_diffusion_autoencoder_batch_size_create_embedding,
+            VAE_batch_size_training=args.latent_diffusion_autoencoder_batch_size_training,
+            VAE_epochs=args.latent_diffusion_autoencoder_epochs,
+            VAE_intermediary_activation_function=args.latent_diffusion_autoencoder_intermediary_activation_function,
+            VAE_intermediary_activation_alpha=args.latent_diffusion_autoencoder_intermediary_activation_alpha,
+            VAE_activation_output_encoder=args.latent_diffusion_autoencoder_activation_output_encoder,
+            VAE_initializer_mean=args.latent_diffusion_autoencoder_initializer_mean,
+            VAE_initializer_deviation=args.latent_diffusion_autoencoder_initializer_deviation,
+            VAE_dropout_decay_rate_encoder=args.latent_diffusion_autoencoder_dropout_decay_rate_encoder,
+            VAE_dropout_decay_rate_decoder=args.latent_diffusion_autoencoder_dropout_decay_rate_decoder,
+            VAE_file_name_encoder=args.latent_diffusion_autoencoder_file_name_encoder,
+            VAE_file_name_decoder=args.latent_diffusion_autoencoder_file_name_decoder,
+            VAE_path_output_models=args.latent_diffusion_autoencoder_path_output_models,
+            VAE_mean_distribution=args.latent_diffusion_autoencoder_mean_distribution,
+            VAE_stander_deviation=args.latent_diffusion_autoencoder_stander_deviation,
+            margin=args.latent_diffusion_margin,
+            ema=args.latent_diffusion_ema,
+            time_steps=args.latent_diffusion_time_steps
+        )
+
+        # Initialize Wasserstein Model
+        self._wasserstein_model = Wasserstein(
+            args.wasserstein_latent_dimension,
+            args.wasserstein_training_algorithm,
+            args.wasserstein_activation_function,
+            args.wasserstein_dropout_decay_rate_g,
+            args.wasserstein_dropout_decay_rate_d,
+            args.wasserstein_dense_layer_sizes_generator,
+            args.wasserstein_dense_layer_sizes_discriminator,
+            args.wasserstein_batch_size,
+            args.wasserstein_number_epochs,
+            args.wasserstein_number_classes,
+            args.wasserstein_loss_function,
+            args.wasserstein_momentum,
+            args.wasserstein_last_activation_layer,
+            args.wasserstein_initializer_mean,
+            args.wasserstein_initializer_deviation,
+            args.wasserstein_optimizer_generator_learning_rate,
+            args.wasserstein_optimizer_discriminator_learning_rate,
+            args.wasserstein_optimizer_generator_beta,
+            args.wasserstein_optimizer_discriminator_beta,
+            args.wasserstein_discriminator_steps,
+            args.wasserstein_smoothing_rate,
+            args.wasserstein_latent_mean_distribution,
+            args.wasserstein_latent_stander_deviation,
+            args.wasserstein_file_name_discriminator,
+            args.wasserstein_file_name_generator,
+            args.wasserstein_path_output_models
+        )
+
+        # Initialize Wasserstein GP Model
+        self._wasserstein_gp_model = WassersteinGP(
+            args.wasserstein_gp_latent_dimension,
+            args.wasserstein_gp_training_algorithm,
+            args.wasserstein_gp_activation_function,
+            args.wasserstein_gp_dropout_decay_rate_g,
+            args.wasserstein_gp_dropout_decay_rate_d,
+            args.wasserstein_gp_dense_layer_sizes_generator,
+            args.wasserstein_gp_dense_layer_sizes_discriminator,
+            args.wasserstein_gp_batch_size,
+            args.wasserstein_gp_number_epochs,
+            args.wasserstein_gp_number_classes,
+            args.wasserstein_gp_loss_function,
+            args.wasserstein_gp_momentum,
+            args.wasserstein_gp_last_activation_layer,
+            args.wasserstein_gp_initializer_mean,
+            args.wasserstein_gp_initializer_deviation,
+            args.wasserstein_gp_optimizer_generator_learning_rate,
+            args.wasserstein_gp_optimizer_discriminator_learning_rate,
+            args.wasserstein_gp_optimizer_generator_beta,
+            args.wasserstein_gp_optimizer_discriminator_beta,
+            args.wasserstein_gp_discriminator_steps
+        )
+
+        # Initialize Variational Autoencoder Model
+        self._variational_autoencoder_model = VariationalAutoencoder(
+            args.variational_autoencoder_latent_dimension,
+            args.variational_autoencoder_training_algorithm,
+            args.variational_autoencoder_activation_function,
+            args.variational_autoencoder_dropout_decay_rate_encoder,
+            args.variational_autoencoder_dropout_decay_rate_decoder,
+            args.variational_autoencoder_dense_layer_sizes_encoder,
+            args.variational_autoencoder_dense_layer_sizes_decoder,
+            args.variational_autoencoder_batch_size,
+            args.variational_autoencoder_number_epochs,
+            args.variational_autoencoder_number_classes,
+            args.variational_autoencoder_loss_function,
+            args.variational_autoencoder_momentum,
+            args.variational_autoencoder_last_activation_layer,
+            args.variational_autoencoder_initializer_mean,
+            args.variational_autoencoder_initializer_deviation,
+            args.variational_autoencoder_mean_distribution,
+            args.variational_autoencoder_stander_deviation,
+            args.variational_autoencoder_file_name_encoder,
+            args.variational_autoencoder_file_name_decoder,
+            args.variational_autoencoder_path_output_models
+        )
+
+        # Initialize SMOTE Model
+        self._smote_model = Smote(args)
+
+    def _get_random_noise(self, input_shape):
+        """Initialize random noise algorithm."""
+        self._random_noise_algorithm = RandomNoiseAlgorithm(
+            noise_level=self._random_noise_level,
+            noise_type=self._random_noise_type_noise
+        )
+
+    def _get_smote(self, input_shape):
+        """Initialize SMOTE algorithm."""
+        # SMOTE is already initialized in _initialize_models
+        pass
 
     def training_model(self, arguments, input_shape, x_real_samples, y_real_samples, monitor_path, k_fold):
         """
-        Trains a model based on the selected type: adversarial, diffusion, WassersteinGP, variational, or autoencoder.
+        Trains a model based on the selected type.
 
-        This method handles the training process by first initializing the model according to the `model_type`
-        specified in `arguments`. Then, it compiles and fits the model using the provided samples. It also
-        supports callback functions for monitoring resources during training.
+        This method delegates training to the appropriate model instance based on model_type.
 
-        Parameters:
-            - arguments (dict): Dictionary containing configuration options, including the
-              model type (e.g., 'adversarial', 'autoencoder', etc.).
-            - input_shape (tuple): Shape of the input data (e.g., (height, width, channels)).
-            - x_real_samples (array): The real input samples used for training.
-            - y_real_samples (array): The target labels corresponding to the real input samples.
-            - monitor_path (str): Path to store the monitoring data for the callbacks.
-            - k_fold (int): The k-fold cross-validation split number for monitoring.
-
-        This function initializes and trains the model based on the specified model type.
-        It supports the following model types:
-
-            1. Adversarial (GAN)
-            2. Autoencoder
-            3. Variational Autoencoder
-            4. Wasserstein + GP GAN
-            5. Wasserstein GAN
-            6. LatentDiffusion-based model
-            7. LatentDiffusion-based model
-            8. Denoising Diffusion Kernel-based model
-            9. Smote model
-            10. Random model
-            11. Vector Quantized Variational Autoencoder
-
-        The method also uses resource and model monitoring callbacks during training to track progress.
-
+        Args:
+            arguments: Configuration arguments
+            input_shape: Shape of input data
+            x_real_samples: Real input samples for training
+            y_real_samples: Target labels for real samples
+            monitor_path: Path to store monitoring data
+            k_fold: K-fold cross-validation split number
         """
-
-        # Initialize resource and model monitoring callbacks
+        # Initialize callbacks
         self._callback_resources_monitor = ResourceMonitorCallback(monitor_path, k_fold)
         self._callback_model_monitor = ModelMonitorCallback(monitor_path, k_fold)
-        self._callback_early_stop = EarlyStopping(arguments.early_stop_monitor,
-                                                  arguments.early_stop_min_delta,
-                                                  arguments.early_stop_patience,
-                                                  arguments.early_stop_mode,
-                                                  arguments.early_stop_baseline,
-                                                  arguments.early_stop_restore_best_weights)
+        self._callback_early_stop = EarlyStopping(
+            arguments.early_stop_monitor,
+            arguments.early_stop_min_delta,
+            arguments.early_stop_patience,
+            arguments.early_stop_mode,
+            arguments.early_stop_baseline,
+            arguments.early_stop_restore_best_weights
+        )
 
-        # Adversarial model training
+        # Delegate to appropriate model
         if arguments.model_type == 'adversarial':
-            self._training_adversarial_modelo(input_shape, arguments, x_real_samples, y_real_samples)
+            self._adversarial_model.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
 
-        # Autoencoder model training
         elif arguments.model_type == 'autoencoder':
-            self._training_autoencoder_model(input_shape, arguments, x_real_samples, y_real_samples)
+            self._autoencoder_model.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
 
-        # Autoencoder model training
         elif arguments.model_type == 'random':
-
-            # Initialize the autoencoder model
             self._get_random_noise(input_shape)
+            self._random_noise_algorithm.fit_model(x_real_samples,
+                                                   to_categorical(y_real_samples,
+                                                                  num_classes=self._number_samples_per_class["number_classes"]))
 
-            # Fit the autoencoder model
-            self._random_noise_algorithm.fit(x_real_samples,
-                                             to_categorical(y_real_samples,
-                                                            num_classes=self._number_samples_per_class[
-                                                                "number_classes"]))
-
-        # Smote model training
         elif arguments.model_type == 'smote':
-
-            # Initialize the autoencoder model
             self._get_smote(input_shape)
+            self._smote_model._smote_algorithm.fit_model(x_real_samples,
+                                                         to_categorical(y_real_samples,
+                                                                        num_classes=self._number_samples_per_class["number_classes"]))
 
-            # Fit the autoencoder model
-            self._smote_algorithm.fit(
-                x_real_samples, to_categorical(y_real_samples,
-                                               num_classes=self._number_samples_per_class["number_classes"]))
-
-        # Variational Autoencoder (VAE) model training
         elif arguments.model_type == 'variational':
-            self._training_variational_autoencoder_model(input_shape, arguments, x_real_samples, y_real_samples)
+            self._variational_autoencoder_model.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
 
-        # WassersteinGP GAN model training
         elif arguments.model_type == 'wasserstein_gp':
-            self._training_wasserstein_gp_model(input_shape, arguments, x_real_samples, y_real_samples)
+            self._wasserstein_gp_model.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
 
-        # WassersteinGP GAN model training
         elif arguments.model_type == 'wasserstein':
-            self._training_wasserstein_model(input_shape, arguments, x_real_samples, y_real_samples)
+            self._wasserstein_model.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
 
-        # LatentDiffusion model training
         elif arguments.model_type == 'latent_diffusion':
-            self._training_latent_diffusion_model(input_shape, arguments, x_real_samples, y_real_samples)
+            self._latent_diffusion_model.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
 
-        # LatentDiffusion model training
         elif arguments.model_type == 'denoising_diffusion':
-            self._training_denoising_diffusion_model(input_shape, arguments, x_real_samples, y_real_samples)
+            self._denoising_diffusion_model.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
 
-        # LatentDiffusion Kernel model training
-        elif arguments.model_type == 'diffusion_kernel':
-            # Support for the 'diffusion_kernel' model type has not been implemented yet.
-            # This section is reserved for initializing a generator based on diffusion kernels,
-            # which may later leverage integral operators for non-parametric learning of diffusive dynamics.
-            # Stay tuned — the diffusion hasn't spread here yet 😉
-            pass
-
-        # Vector Quantized Variational Autoencoder (VQ-VAE) model training
         elif arguments.model_type == 'quantized':
-            self._training_quantized_VAE_model(input_shape, arguments, x_real_samples, y_real_samples)
-
-        else:
-            # If no valid model type is selected, do nothing
-            pass
+            self._quantized_vae_model.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
 
     def get_samples(self, number_samples_per_class):
         """
-        Generate and retrieve samples from a trained model.
-
-        This method generates synthetic samples using the trained model specified by the `model_type` argument.
-        It supports multiple model types for generating samples, including adversarial, diffusion, WassersteinGP,
-        variational, and autoencoder models. Depending on the selected model type, the corresponding algorithm
-        is called to generate the samples.
+        Generate synthetic samples using the trained model.
 
         Args:
-            number_samples_per_class (int): The number of samples to generate for each class.
-
-        Supports the following model types:
-            - 'adversarial': Uses the `AdversarialAlgorithm` to generate samples.
-            - 'diffusion': Uses the `DiffusionAlgorithm` to generate samples.
-            - 'wasserstein': Uses the `WassersteinAlgorithm` to generate samples.
-            - 'variational': Uses the `VariationalAlgorithm` to generate samples.
-            - 'autoencoder': Uses the `AutoencoderAlgorithm` to generate samples.
-
-        Note:
-            Additional models may be added in the future, such as a diffusion kernel model, but this is currently under
-            implementation. The corresponding algorithm for that model is not yet available.
-
+            number_samples_per_class: Number of samples to generate per class
         """
-
         if self.arguments.model_type == 'adversarial':
-            # Generate samples using the Adversarial algorithm
-            self._adversarial_algorithm.get_samples(number_samples_per_class)
-            pass
+            self._adversarial_model._adversarial_algorithm.get_samples(number_samples_per_class)
 
         elif self.arguments.model_type == 'latent_diffusion':
-            # Generate samples using the LatentDiffusion algorithm
-            self._latent_diffusion_algorithm.get_samples(number_samples_per_class)
-            pass
+            self._latent_diffusion_model._latent_diffusion_algorithm.get_samples(number_samples_per_class)
 
         elif self.arguments.model_type == 'denoising_diffusion':
-            # Generate samples using the LatentDiffusion algorithm
-            self._denoising_diffusion_algorithm.get_samples(number_samples_per_class)
-            pass
+            self._denoising_diffusion_model._denoising_diffusion_algorithm.get_samples(number_samples_per_class)
 
         elif self.arguments.model_type == 'wasserstein':
-            # Generate samples using the WassersteinGP algorithm
-            self._wasserstein_gp_algorithm.get_samples(number_samples_per_class)
-            pass
+            self._wasserstein_model._wasserstein_gp_algorithm.get_samples(number_samples_per_class)
 
         elif self.arguments.model_type == 'variational':
-            # Generate samples using the Variational algorithm
-            self._latent_variational_algorithm.get_samples(number_samples_per_class)
-            pass
+            self._variational_autoencoder_model._latent_variational_algorithm.get_samples(number_samples_per_class)
 
         elif self.arguments.model_type == 'autoencoder':
-            # Generate samples using the Autoencoder algorithm
-            self._autoencoder_algorithm.get_samples(number_samples_per_class)
-            pass
+            self._autoencoder_model._autoencoder_algorithm.get_samples(number_samples_per_class)
 
         elif self.arguments.model_type == 'random':
-            # Generate samples using the Autoencoder algorithm
             self._random_noise_algorithm.get_samples(number_samples_per_class)
-            pass
 
         elif self.arguments.model_type == 'quantized':
-            # Generate samples using the Quantized Variational Autoencoder algorithm
-            self._quantized_vae_algorithm.get_samples(number_samples_per_class)
-            pass
+            self._quantized_vae_model._quantized_vae_algorithm.get_samples(number_samples_per_class)
 
         elif self.arguments.model_type == 'smote':
-            # Generate samples using the Autoencoder algorithm
-            self._smote_algorithm.get_samples(number_samples_per_class)
-            pass
-
-
-        # Algorithm in implementation process for future models
-        # elif self.arguments.model_type == 'diffusion_kernel':
-        #    self._diffusion_algorithm_kernel.get_samples(number_samples_per_class)
-        #    pass
-
-        else:
-            # If the model type is not recognized, do nothing
-            pass
+            self._smote_model._smote_algorithm.get_samples(number_samples_per_class)
 
 
 def import_models(function):
     """
-    Decorator to create an instance of the Metrics class
+    Decorator to create an instance of GenerativeModels class
     before executing the wrapped function.
 
-    Parameters:
-        function (callable): The function to be wrapped.
+    Args:
+        function: The function to be wrapped
 
     Returns:
-        callable: The wrapped function that initializes Metrics.
+        The wrapped function that initializes GenerativeModels
     """
 
     def wrapper(self, *args, **kwargs):
-        # Create an instance of Metrics, passing the arguments from the instance
         GenerativeModels.__init__(self, self.arguments)
-        # Call the wrapped function with the metrics instance and other arguments
         return function(self, *args, **kwargs)
 
     return wrapper

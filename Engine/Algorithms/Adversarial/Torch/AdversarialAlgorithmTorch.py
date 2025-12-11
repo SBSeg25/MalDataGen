@@ -121,7 +121,7 @@ class AdversarialAlgorithmTorch(nn.Module):
         ...     optimizer_generator=torch.optim.Adam(generator.parameters(), lr=0.0002),
         ...     optimizer_discriminator=torch.optim.Adam(discriminator.parameters(), lr=0.0002)
         ... )
-        >>> history = adversarial_algorithm.fit(train_dataset, epochs=100)
+        >>> history = adversarial_algorithm.fit_model(train_dataset, epochs=100)
     """
 
     def __init__(self, generator_model: nn.Module,
@@ -314,7 +314,7 @@ class AdversarialAlgorithmTorch(nn.Module):
             real_samples_label = real_samples_label.unsqueeze(-1)
 
         # ==================== TRAIN DISCRIMINATOR ====================
-        self._discriminator.train()
+        self._discriminator.fit_model()
         self._generator.eval()
 
         self._optimizer_discriminator.zero_grad()
@@ -357,7 +357,7 @@ class AdversarialAlgorithmTorch(nn.Module):
         self._optimizer_discriminator.step()
 
         # ==================== TRAIN GENERATOR ====================
-        self._generator.train()
+        self._generator.fit_model()
         self._discriminator.eval()
 
         self._optimizer_generator.zero_grad()

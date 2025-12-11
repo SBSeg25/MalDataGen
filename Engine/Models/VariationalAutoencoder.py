@@ -291,7 +291,7 @@ class VariationalAutoencoder:
             if hasattr(self._variational_algorithm, 'models_saved_path'):
                 self._variational_algorithm.models_saved_path = self._variational_path_output_models
 
-    def _training_variational_autoencoder_model(
+    def fit_model(
             self,
             input_shape: tuple[int, ...],
             arguments: 'argparse.Namespace',

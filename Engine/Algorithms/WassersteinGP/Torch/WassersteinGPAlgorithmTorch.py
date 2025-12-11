@@ -129,7 +129,7 @@ class WassersteinGPAlgorithmTorch(nn.Module):
         ...     gradient_penalty_weight=10.0,
         ...     discriminator_steps=5
         ... )
-        >>> wgan.fit(x_train, y_train, batch_size=64, epochs=10)
+        >>> wgan.fit_model(x_train, y_train, batch_size=64, epochs=10)
     """
 
     def __init__(self,
@@ -546,7 +546,7 @@ class WassersteinGPAlgorithmTorch(nn.Module):
                 generated_data[label_class] = generated_samples
 
         # Set generator back to training mode
-        self._generator.train()
+        self._generator.fit_model()
 
         # Return the dictionary containing generated samples for all requested classes.
         return generated_data
