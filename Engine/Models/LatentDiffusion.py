@@ -38,7 +38,7 @@ try:
     import numpy as np
     import logging
     import tensorflow as tf
-
+    import tensorflow
     from tensorflow.keras.optimizers import Adam
     from tensorflow.keras.utils import to_categorical
     from tensorflow.python.keras.losses import MeanSquaredError, BinaryCrossentropy
