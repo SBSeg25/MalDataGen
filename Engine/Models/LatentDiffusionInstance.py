@@ -8,6 +8,7 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
+from Engine.Algorithms.LatentDiffusion.GaussianLatentDiffusion import GaussianLatentDiffusion
 
 # MIT License
 #
@@ -482,7 +483,7 @@ class LatentDiffusionTensorflow:
 
         # Initialize GaussianDiffusion utility if not provided
         if not self._has_external_gaussian_diffusion_util:
-            self._latent_gaussian_diffusion_util = GaussianLatentDiffusionTensorflow(
+            self._latent_gaussian_diffusion_util = GaussianLatentDiffusion(
                 beta_start=self._latent_diffusion_gaussian_beta_start,
                 beta_end=self._latent_diffusion_gaussian_beta_end,
                 time_steps=self._latent_diffusion_gaussian_time_steps,
