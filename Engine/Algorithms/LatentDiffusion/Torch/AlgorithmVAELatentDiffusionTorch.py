@@ -48,7 +48,7 @@ except ImportError as error:
     sys.exit(-1)
 
 
-class VAELatentDiffusionAlgorithmPyTorch(nn.Module):
+class VAELatentDiffusionAlgorithmTorch(nn.Module):
     """
     Implements a Variational AutoEncoder (VAE) model for generating synthetic data.
 

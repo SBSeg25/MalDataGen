@@ -8,6 +8,7 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
+from Engine.Algorithms.LatentDiffusion.AlgorithmVAELatentDiffusion import AlgorithmVAELatentDiffusion
 from Engine.Algorithms.LatentDiffusion.GaussianLatentDiffusion import GaussianLatentDiffusion
 
 # MIT License
@@ -50,8 +51,6 @@ try:
 
     from tensorflow.python.keras.losses import BinaryCrossentropy
 
-    from Engine.Algorithms.LatentDiffusion.Tensorflow.AlgorithmVAELatentDiffusionTensorflow import VAELatentDiffusionAlgorithmTensorflow
-    from Engine.Algorithms.LatentDiffusion.Tensorflow.GaussianLatentDiffusionTensorflow import GaussianLatentDiffusionTensorflow
     from Engine.Architectures.LatentDiffusion.Tensorflow.DiffusionModelUnetTensorflow import UNetModel
     from Engine.Algorithms.LatentDiffusion.Tensorflow.AlgorithmLatentDiffusionTensorflow import \
         LatentDiffusionAlgorithmTensorflow
@@ -103,8 +102,6 @@ try:
     from tensorflow.keras.utils import to_categorical
     from tensorflow.python.keras.losses import MeanSquaredError, BinaryCrossentropy
 
-    from Engine.Algorithms.LatentDiffusion.Tensorflow.AlgorithmVAELatentDiffusionTensorflow import \
-        VAELatentDiffusionAlgorithmTensorflow
     from Engine.Algorithms.LatentDiffusion.Tensorflow.GaussianLatentDiffusionTensorflow import \
         GaussianLatentDiffusionTensorflow
     from Engine.Architectures.LatentDiffusion.Tensorflow.DiffusionModelUnetTensorflow import UNetModel
@@ -281,11 +278,11 @@ class LatentDiffusionTensorflow:
                  time_steps: int = DEFAULT_LATENT_DIFFUSION_TIME_STEPS,
 
                  # Optional pre-initialized components
-                 variational_algorithm: VAELatentDiffusionAlgorithmTensorflow | None = None,
-                 variation_model: VariationalModelDiffusionTensorflow | None = None,
-                 first_unet: UNetModel | None = None,
-                 second_unet: UNetModel | None = None,
-                 gaussian_diffusion_util: GaussianLatentDiffusionTensorflow | None = None
+                 variational_algorithm = None,
+                 variation_model = None,
+                 first_unet = None,
+                 second_unet = None,
+                 gaussian_diffusion_util = None
                  ) -> None:
         """
         Initializes the latent diffusion instance with configuration parameters.
@@ -348,11 +345,11 @@ class LatentDiffusionTensorflow:
             gaussian_diffusion_util: Optional pre-initialized GaussianDiffusionTensorflow instance
         """
         # Store pre-initialized instances if provided
-        self._latent_variational_algorithm: VAELatentDiffusionAlgorithmTensorflow | None = variational_algorithm
-        self._latent_variation_model_diffusion: VariationalModelDiffusionTensorflow | None = variation_model
-        self._latent_first_instance_unet: UNetModel | None = first_unet
-        self._latent_second_instance_unet: UNetModel | None = second_unet
-        self._latent_gaussian_diffusion_util: GaussianLatentDiffusionTensorflow | None = gaussian_diffusion_util
+        self._latent_variational_algorithm = variational_algorithm
+        self._latent_variation_model_diffusion = variation_model
+        self._latent_first_instance_unet = first_unet
+        self._latent_second_instance_unet = second_unet
+        self._latent_gaussian_diffusion_util = gaussian_diffusion_util
 
         self._latent_first_unet_model = None
         self._latent_second_unet_model = None
@@ -513,7 +510,7 @@ class LatentDiffusionTensorflow:
             if self._latent_variation_model_diffusion is None:
                 raise ValueError("VariationalModelDiffusion instance is required but was not provided.")
 
-            self._latent_variational_algorithm = VAELatentDiffusionAlgorithmTensorflow(
+            self._latent_variational_algorithm = AlgorithmVAELatentDiffusion(
                 encoder_model=self._latent_variation_model_diffusion.get_encoder(),
                 decoder_model=self._latent_variation_model_diffusion.get_decoder(),
                 loss_function=self._latent_diffusion_VAE_loss_function,
@@ -563,7 +560,7 @@ class LatentDiffusionTensorflow:
                                                                  number_samples_per_class = self._number_samples_per_class)
 
         # Variational Algorithm setup for training and model operations
-        self._variational_algorithm = VAELatentDiffusionAlgorithmTensorflow(encoder_model=self._variation_model.get_encoder(),
+        self._variational_algorithm = AlgorithmVAELatentDiffusion(encoder_model=self._variation_model.get_encoder(),
                                                            decoder_model=self._variation_model.get_decoder(),
                                                            loss_function=self._latent_diffusion_VAE_loss_function,
                                                            latent_dimension=self._latent_diffusion_VAE_latent_dimension,

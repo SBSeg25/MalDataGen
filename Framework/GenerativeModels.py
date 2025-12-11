@@ -54,7 +54,7 @@ try:
     from Engine.Models.DenoisingDiffusion import DenoisingDiffusionInstanceTorch
     from Engine.Models.Adversarial import Adversarial
     from Engine.Models.Autoencoder import Autoencoder
-    from Engine.Models.LatentDiffusionInstance import LatentDiffusionTensorflow
+    from Engine.Models.LatentDiffusion import LatentDiffusionTensorflow
     from Engine.Models.QuantizedVAE import QuantizedVAE
     from Engine.Algorithms.RandomNoise.AlgorithmRandomNoise import RandomNoiseAlgorithm
     from Engine.Callbacks.CallbackModel import ModelMonitorCallback

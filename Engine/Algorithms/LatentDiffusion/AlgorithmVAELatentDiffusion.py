@@ -8,6 +8,9 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/12/07'
 __credits__ = ['Synthetic Ocean AI']
 
+from Engine.Algorithms.LatentDiffusion.Tensorflow.AlgorithmVAELatentDiffusionTensorflow import \
+    VAELatentDiffusionAlgorithmTensorflow
+from Engine.Algorithms.LatentDiffusion.Torch.AlgorithmVAELatentDiffusionTorch import VAELatentDiffusionAlgorithmTorch
 
 # MIT License
 #
@@ -30,35 +33,29 @@ __credits__ = ['Synthetic Ocean AI']
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-
 try:
     import os
     import sys
-
     import logging
 
-    from Engine.Algorithms.LatentDiffusion.Torch import AlgorithmVAELatentDiffusionTorch
-    from Engine.Algorithms.LatentDiffusion.Tensorflow import AlgorithmVAELatentDiffusionTensorflow
 
     framework = os.getenv("ML_FRAMEWORK", "tensorflow").lower()
 
     if framework == "pytorch":
-        AlgorithmVAELatentDiffusionBase = AlgorithmVAELatentDiffusionTorch
-
+        AlgorithmVAELatentDiffusionBase = VAELatentDiffusionAlgorithmTorch
     else:
-        AlgorithmVAELatentDiffusionBase = AlgorithmVAELatentDiffusionTensorflow
+        AlgorithmVAELatentDiffusionBase = VAELatentDiffusionAlgorithmTensorflow
 
 except ImportError as error:
     logging.error(error)
     sys.exit(-1)
 
+
 class AlgorithmVAELatentDiffusion(AlgorithmVAELatentDiffusionBase):
     def __init__(self, *args, **kwargs):
-
         super().__init__(*args, **kwargs)
 
         if framework == "pytorch":
             self._framework = "pytorch"
-
         else:
             self._framework = "tensorflow"
