@@ -10,7 +10,7 @@ __credits__ = ['Synthetic Ocean AI']
 
 from Engine.Algorithms.LatentDiffusion.Torch.AlgorithmLatentDiffusionTorch import AlgorithmLatentDiffusionTorch
 from Engine.Algorithms.LatentDiffusion.Torch.AlgorithmVAELatentDiffusionTorch import VAELatentDiffusionAlgorithmPyTorch
-from Engine.Algorithms.LatentDiffusion.Torch.GaussianLatentDiffusionTorch import GaussianDiffusionTorch
+from Engine.Algorithms.LatentDiffusion.Torch.GaussianLatentDiffusionTorch import GaussianLatentDiffusionTorch
 from Engine.Architectures.LatentDiffusion.Torch.UNetModelTorch import UNetModelTorch
 from Engine.Architectures.LatentDiffusion.Torch.VariationalModelDiffusionTorch import VariationalModelDiffusionTorch
 
@@ -387,7 +387,7 @@ class LatentDiffusionTorch:
         print(f"  Expected input: (batch, {embedding_seq_len * embedding_channels})")
 
         # Initialize GaussianDiffusion
-        self._latent_gaussian_diffusion_util = GaussianDiffusionTorch(
+        self._latent_gaussian_diffusion_util = GaussianLatentDiffusionTorch(
             beta_start=self._latent_diffusion_gaussian_beta_start,
             beta_end=self._latent_diffusion_gaussian_beta_end,
             time_steps=self._latent_diffusion_gaussian_time_steps,

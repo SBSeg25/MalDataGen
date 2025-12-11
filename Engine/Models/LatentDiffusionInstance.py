@@ -50,7 +50,7 @@ try:
     from tensorflow.python.keras.losses import BinaryCrossentropy
 
     from Engine.Algorithms.LatentDiffusion.Tensorflow.AlgorithmVAELatentDiffusionTensorflow import VAELatentDiffusionAlgorithmTensorflow
-    from Engine.Algorithms.LatentDiffusion.Tensorflow.GaussianLatentDiffusionTensorflow import GaussianDiffusionTensorflow
+    from Engine.Algorithms.LatentDiffusion.Tensorflow.GaussianLatentDiffusionTensorflow import GaussianLatentDiffusionTensorflow
     from Engine.Architectures.LatentDiffusion.Tensorflow.DiffusionModelUnetTensorflow import UNetModel
     from Engine.Algorithms.LatentDiffusion.Tensorflow.AlgorithmLatentDiffusionTensorflow import \
         LatentDiffusionAlgorithmTensorflow
@@ -105,7 +105,7 @@ try:
     from Engine.Algorithms.LatentDiffusion.Tensorflow.AlgorithmVAELatentDiffusionTensorflow import \
         VAELatentDiffusionAlgorithmTensorflow
     from Engine.Algorithms.LatentDiffusion.Tensorflow.GaussianLatentDiffusionTensorflow import \
-        GaussianDiffusionTensorflow
+        GaussianLatentDiffusionTensorflow
     from Engine.Architectures.LatentDiffusion.Tensorflow.DiffusionModelUnetTensorflow import UNetModel
     from Engine.Architectures.LatentDiffusion.Tensorflow.VariationalAutoencoderModelTensorflow import VariationalModelDiffusionTensorflow
     from Engine.Algorithms.LatentDiffusion.Tensorflow.AlgorithmLatentDiffusionTensorflow import \
@@ -284,7 +284,7 @@ class LatentDiffusionTensorflow:
                  variation_model: VariationalModelDiffusionTensorflow | None = None,
                  first_unet: UNetModel | None = None,
                  second_unet: UNetModel | None = None,
-                 gaussian_diffusion_util: GaussianDiffusionTensorflow | None = None
+                 gaussian_diffusion_util: GaussianLatentDiffusionTensorflow | None = None
                  ) -> None:
         """
         Initializes the latent diffusion instance with configuration parameters.
@@ -351,7 +351,7 @@ class LatentDiffusionTensorflow:
         self._latent_variation_model_diffusion: VariationalModelDiffusionTensorflow | None = variation_model
         self._latent_first_instance_unet: UNetModel | None = first_unet
         self._latent_second_instance_unet: UNetModel | None = second_unet
-        self._latent_gaussian_diffusion_util: GaussianDiffusionTensorflow | None = gaussian_diffusion_util
+        self._latent_gaussian_diffusion_util: GaussianLatentDiffusionTensorflow | None = gaussian_diffusion_util
 
         self._latent_first_unet_model = None
         self._latent_second_unet_model = None
@@ -482,7 +482,7 @@ class LatentDiffusionTensorflow:
 
         # Initialize GaussianDiffusion utility if not provided
         if not self._has_external_gaussian_diffusion_util:
-            self._latent_gaussian_diffusion_util = GaussianDiffusionTensorflow(
+            self._latent_gaussian_diffusion_util = GaussianLatentDiffusionTensorflow(
                 beta_start=self._latent_diffusion_gaussian_beta_start,
                 beta_end=self._latent_diffusion_gaussian_beta_end,
                 time_steps=self._latent_diffusion_gaussian_time_steps,

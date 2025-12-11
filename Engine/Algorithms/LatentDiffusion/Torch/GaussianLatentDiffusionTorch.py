@@ -47,7 +47,7 @@ DEFAULT_DIFFUSION_GAUSSIAN_TIME_STEPS = 1000
 DEFAULT_DIFFUSION_GAUSSIAN_CLIP_MIN = -1.0
 DEFAULT_DIFFUSION_GAUSSIAN_CLIP_MAX = 1.0
 
-class GaussianDiffusionTorch:
+class GaussianLatentDiffusionTorch:
     """
     A class representing the Gaussian diffusion process used in diffusion models for denoising
     and generative tasks.

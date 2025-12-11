@@ -8,8 +8,6 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
-from Engine.Algorithms.LatentDiffusion.Torch.LatentDiffusionTorch import LatentDiffusionTorch
-
 # MIT License
 #
 # Copyright (c) 2025 Synthetic Ocean AI
@@ -56,7 +54,7 @@ try:
     from Engine.Models.DenoisingDiffusion import DenoisingDiffusionInstanceTorch
     from Engine.Models.Adversarial import Adversarial
     from Engine.Models.Autoencoder import Autoencoder
-    from Engine.Models.LatentDiffusionInstanceTensorflow import LatentDiffusionTensorflow
+    from Engine.Models.LatentDiffusionInstance import LatentDiffusionTensorflow
     from Engine.Models.QuantizedVAE import QuantizedVAE
     from Engine.Algorithms.RandomNoise.AlgorithmRandomNoise import RandomNoiseAlgorithm
     from Engine.Callbacks.CallbackModel import ModelMonitorCallback
