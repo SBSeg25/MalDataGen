@@ -8,7 +8,6 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/12/07'
 __credits__ = ['Synthetic Ocean AI']
 
-
 # MIT License
 #
 # Copyright (c) 2025 Synthetic Ocean AI
@@ -34,31 +33,37 @@ __credits__ = ['Synthetic Ocean AI']
 try:
     import os
     import sys
-
     import logging
-
-    from Engine.Algorithms.DenoisingDiffusion.Tensorflow import GaussianDenoisingDiffusionTensorflow
-    from Engine.Algorithms.DenoisingDiffusion.Torch import GaussianDenoisingDiffusionTorch
 
     framework = os.getenv("ML_FRAMEWORK", "tensorflow").lower()
 
     if framework == "pytorch":
-        GaussianDenoisingDiffusionBase = GaussianDenoisingDiffusionTorch
-
+        # Import the CLASS, not the module
+        from Engine.Algorithms.DenoisingDiffusion.Torch.GaussianDenoisingDiffusionTorch import \
+            GaussianDiffusionTorch as GaussianDenoisingDiffusionBase
     else:
-        GaussianDenoisingDiffusionBase = GaussianDenoisingDiffusionTensorflow
+        # Import the CLASS, not the module
+        from Engine.Algorithms.DenoisingDiffusion.Tensorflow.GaussianDenoisingDiffusionTensorflow import \
+            GaussianDenoisingDiffusionTensorflow as GaussianDenoisingDiffusionBase
 
 except ImportError as error:
-    logging.error(error)
+    logging.error(f"Import error: {error}")
     sys.exit(-1)
 
+
 class GaussianDenoisingDiffusion(GaussianDenoisingDiffusionBase):
+    """
+    Framework-agnostic Gaussian Denoising Diffusion wrapper.
+
+    Automatically selects the appropriate implementation (TensorFlow or PyTorch)
+    based on the ML_FRAMEWORK environment variable.
+    """
+
     def __init__(self, *args, **kwargs):
-
         super().__init__(*args, **kwargs)
+        self._framework = framework
 
-        if framework == "pytorch":
-            self._framework = "pytorch"
-
-        else:
-            self._framework = "tensorflow"
+    @property
+    def framework(self):
+        """Get the current framework being used."""
+        return self._framework

@@ -51,7 +51,7 @@ try:
 
     from Engine.Algorithms.Copy.CopyAlgorithm import CopyAlgorithm
 
-    from Engine.Models.DenoisingDiffusion import DenoisingDiffusionInstanceTorch
+    from Engine.Models.DenoisingDiffusion import DenoisingDiffusion
     from Engine.Models.Adversarial import Adversarial
     from Engine.Models.Autoencoder import Autoencoder
     from Engine.Models.LatentDiffusion import LatentDiffusionTensorflow
@@ -78,7 +78,7 @@ class GenerativeModels(Adversarial,
                        WassersteinGP,
                        VariationalAutoencoder,
                        Smote,
-                       DenoisingDiffusionInstanceTorch):
+                       DenoisingDiffusion):
     """
     A class to manage and facilitate the training and generation of various types of generative models,
     including Generative Adversarial Networks (GANs), Autoencoders (AEs), Variational Autoencoders (VAEs),
@@ -286,7 +286,7 @@ class GenerativeModels(Adversarial,
                              arguments.autoencoder_file_name_decoder,
                              arguments.autoencoder_path_output_models)
 
-        DenoisingDiffusionInstanceTorch.__init__(self,
+        DenoisingDiffusion.__init__(self,
                                                  arguments.denoising_diffusion_unet_last_layer_activation,
                                                  arguments.denoising_diffusion_latent_dimension,
                                                  arguments.denoising_diffusion_unet_num_embedding_channels,

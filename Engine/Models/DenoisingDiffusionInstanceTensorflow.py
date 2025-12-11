@@ -8,7 +8,7 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
-from Engine.Algorithms.DenoisingDiffusion.GaussianDenoisingDiffusion import GaussianDenoisingDiffusion
+from Engine.Algorithms.DenoisingDiffusion.AlgorithmDenoisingDiffusion import AlgorithmDenoisingDiffusion
 
 # MIT License
 #
@@ -50,16 +50,16 @@ try:
 
     from tensorflow.python.keras.losses import BinaryCrossentropy
 
+    from Engine.Algorithms.DenoisingDiffusion.GaussianDenoisingDiffusion import GaussianDenoisingDiffusion
+    from Engine.Architectures.DenoisingDiffusion.DenoisingDiffusionUnetModel import DenoisingDiffusionUNetModel
     from Engine.Algorithms.DenoisingDiffusion.Tensorflow.AlgorithmDenoisingDiffusionTensorflow import AlgorithmDenoisingDiffusionTensorflow
-    from Engine.Algorithms.DenoisingDiffusion.Tensorflow.GaussianDenoisingDiffusionTensorflow import GaussianDiffusionTensorflow
-    from Engine.Architectures.DenoisingDiffusion.Tensorflow.DenoisingDiffusionUNetModelTensorflow import DenoisingDiffusionUNetModelTensorflow
 
 except ImportError as error:
     logging.error(error)
     sys.exit(-1)
 
 
-class DenoisingDiffusionInstance:
+class DenoisingDiffusionTensorflow:
     """
     A class that implements a Denoising Diffusion Probabilistic Model (DDPM) for image generation.
     This implementation uses a dual-UNet architecture with Gaussian diffusion to progressively
@@ -176,7 +176,7 @@ class DenoisingDiffusionInstance:
 
 
         # Initialize the first instance of UNet for the diffusion model
-        self._denoising_first_instance_unet = DenoisingDiffusionUNetModelTensorflow(output_shape=input_shape,
+        self._denoising_first_instance_unet = DenoisingDiffusionUNetModel(output_shape=input_shape,
                                                                                     embedding_channels= self._denoising_diffusion_unet_num_embedding_channels,
                                                                                     list_neurons_per_level=self._denoising_diffusion_unet_channels_per_level,
                                                                                     list_attentions=self._denoising_diffusion_unet_attention_mode,
@@ -188,7 +188,7 @@ class DenoisingDiffusionInstance:
                                                                                     number_samples_per_class=self._number_samples_per_class)
 
         # Initialize the second instance of UNet with the same configuration
-        self._denoising_second_instance_unet = DenoisingDiffusionUNetModelTensorflow(output_shape=input_shape,
+        self._denoising_second_instance_unet = DenoisingDiffusionUNetModel(output_shape=input_shape,
                                                                                      embedding_channels= self._denoising_diffusion_unet_num_embedding_channels,
                                                                                      list_neurons_per_level=self._denoising_diffusion_unet_channels_per_level,
                                                                                      list_attentions=self._denoising_diffusion_unet_attention_mode,
@@ -247,7 +247,7 @@ class DenoisingDiffusionInstance:
             callbacks_list.append(self._callback_early_stop)
 
         # Initialize the final diffusion algorithm
-        self._denoising_diffusion_algorithm = AlgorithmDenoisingDiffusionTensorflow(output_shape=input_shape,
+        self._denoising_diffusion_algorithm = AlgorithmDenoisingDiffusion(output_shape=input_shape,
                                                                                     first_unet_model=self._denoising_first_unet_model,
                                                                                     second_unet_model=self._denoising_second_unet_model,
                                                                                     gdf_util=self._denoising_gaussian_diffusion_util,

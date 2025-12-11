@@ -8,25 +8,17 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
-from Engine.Algorithms.DenoisingDiffusion.Torch.AlgorithmDenoisingDiffusionTorch import \
-    AlgorithmDenoisingDiffusionTorch
-from Engine.Algorithms.DenoisingDiffusion.Torch.GaussianDenoisingDiffusionTorch import GaussianDiffusionTorch
-from Engine.Architectures.DenoisingDiffusion.Torch.DenoisingDiffusionUnetModelTorch import DenoisingDiffusionUNetModelTorch
-
 try:
     import sys
-    import numpy as np
+    import os
     import logging
-    import torch
-    import torch.nn as nn
-    from torch.utils.data import DataLoader
-    from torch.utils.data import TensorDataset
+    import numpy as np
 
 except ImportError as error:
     logging.error(error)
     sys.exit(-1)
 
-# Default values from your constants file
+# Default values
 DEFAULT_DIFFUSION_UNET_LAST_LAYER_ACTIVATION = 'linear'
 DEFAULT_DIFFUSION_LATENT_DIMENSION = 64
 DEFAULT_DIFFUSION_UNET_NUMBER_EMBEDDING_CHANNELS = 1
@@ -48,9 +40,19 @@ DEFAULT_DIFFUSION_EMA = 0.999
 DEFAULT_DIFFUSION_TIME_STEPS = 1000
 
 
-class DenoisingDiffusionInstanceTorch:
+class DenoisingDiffusion:
     """
-    A class that implements a Denoising Diffusion Probabilistic Model (DDPM) for image generation.
+    Framework-agnostic Denoising Diffusion Probabilistic Model (DDPM) implementation.
+
+    This class contains BOTH TensorFlow and PyTorch implementations in a single class.
+    The framework is selected based on the ML_FRAMEWORK environment variable.
+
+    Supported frameworks:
+        - 'tensorflow': Uses TensorFlow/Keras implementation
+        - 'pytorch': Uses PyTorch implementation
+
+    Set the framework by: os.environ['ML_FRAMEWORK'] = 'pytorch' or 'tensorflow'
+    Default framework is TensorFlow if ML_FRAMEWORK is not set.
     """
 
     def __init__(
@@ -74,13 +76,13 @@ class DenoisingDiffusionInstanceTorch:
             margin: float = DEFAULT_DIFFUSION_MARGIN,
             ema: float = DEFAULT_DIFFUSION_EMA,
             time_steps: int = DEFAULT_DIFFUSION_TIME_STEPS,
-            first_unet_model: DenoisingDiffusionUNetModelTorch | None = None,
-            second_unet_model: DenoisingDiffusionUNetModelTorch | None = None,
-            gaussian_diffusion_util: GaussianDiffusionTorch | None = None,
-            algorithm: AlgorithmDenoisingDiffusionTorch | None = None
+            first_unet_model=None,
+            second_unet_model=None,
+            gaussian_diffusion_util=None,
+            algorithm=None
     ) -> None:
         """
-        Initializes the denoising diffusion instance with configuration parameters.
+        Initializes the framework-agnostic denoising diffusion instance.
 
         Args:
             unet_last_layer_activation: Activation for last layer (default: 'linear')
@@ -107,52 +109,65 @@ class DenoisingDiffusionInstanceTorch:
             gaussian_diffusion_util: Optional pre-initialized diffusion util (default: None)
             algorithm: Optional pre-initialized algorithm (default: None)
         """
+        # Detect framework from environment variable
+        self._framework = os.environ.get('ML_FRAMEWORK', 'tensorflow').lower()
+
+        if self._framework not in ['tensorflow', 'pytorch']:
+            raise ValueError(
+                f"Unsupported framework: {self._framework}. "
+                f"Supported frameworks are 'tensorflow' or 'pytorch'"
+            )
+
+        logging.info(f"Initializing DenoisingDiffusionInstance with framework: {self._framework}")
+
         # Store pre-initialized instances if provided
-        self._denoising_first_unet_model: DenoisingDiffusionUNetModelTorch | None = first_unet_model
-        self._denoising_second_unet_model: DenoisingDiffusionUNetModelTorch | None = second_unet_model
-        self._denoising_gaussian_diffusion_util: GaussianDiffusionTorch | None = gaussian_diffusion_util
-        self._denoising_diffusion_algorithm: AlgorithmDenoisingDiffusionTorch | None = algorithm
+        self._denoising_first_unet_model = first_unet_model
+        self._denoising_second_unet_model = second_unet_model
+        self._denoising_gaussian_diffusion_util = gaussian_diffusion_util
+        self._denoising_diffusion_algorithm = algorithm
 
         # Internal instances
-        self._denoising_first_instance_unet: DenoisingDiffusionUNetModelTorch | None = None
-        self._denoising_second_instance_unet: DenoisingDiffusionUNetModelTorch | None = None
+        self._denoising_first_instance_unet = None
+        self._denoising_second_instance_unet = None
 
         # Configuration parameters
-        self._denoising_diffusion_unet_last_layer_activation: str = unet_last_layer_activation
-        self._denoising_diffusion_latent_dimension: int = latent_dimension
-        self._denoising_diffusion_unet_num_embedding_channels: int = unet_num_embedding_channels
+        self._denoising_diffusion_unet_last_layer_activation = unet_last_layer_activation
+        self._denoising_diffusion_latent_dimension = latent_dimension
+        self._denoising_diffusion_unet_num_embedding_channels = unet_num_embedding_channels
 
         # Handle mutable default values safely
-        self._denoising_diffusion_unet_channels_per_level: list[int] = (
+        self._denoising_diffusion_unet_channels_per_level = (
             unet_channels_per_level
             if unet_channels_per_level is not None
             else DEFAULT_DIFFUSION_UNET_CHANNELS_PER_LEVEL.copy()
         )
-        self._denoising_diffusion_unet_attention_mode: list[bool] = (
+        self._denoising_diffusion_unet_attention_mode = (
             unet_attention_mode
             if unet_attention_mode is not None
             else DEFAULT_DIFFUSION_UNET_ATTENTION_MODE.copy()
         )
 
-        self._denoising_diffusion_unet_batch_size: int = unet_batch_size
-        self._denoising_diffusion_unet_num_residual_blocks: int = unet_num_residual_blocks
-        self._denoising_diffusion_unet_group_normalization: int = unet_group_normalization
-        self._denoising_diffusion_unet_intermediary_activation: str = unet_intermediary_activation
-        self._denoising_diffusion_unet_intermediary_activation_alpha: float = unet_intermediary_activation_alpha
-        self._denoising_diffusion_unet_epochs: int = unet_epochs
+        self._denoising_diffusion_unet_batch_size = unet_batch_size
+        self._denoising_diffusion_unet_num_residual_blocks = unet_num_residual_blocks
+        self._denoising_diffusion_unet_group_normalization = unet_group_normalization
+        self._denoising_diffusion_unet_intermediary_activation = unet_intermediary_activation
+        self._denoising_diffusion_unet_intermediary_activation_alpha = unet_intermediary_activation_alpha
+        self._denoising_diffusion_unet_epochs = unet_epochs
 
         # Diffusion Process Parameters
-        self._denoising_diffusion_gaussian_beta_start: float = gaussian_beta_start
-        self._denoising_diffusion_gaussian_beta_end: float = gaussian_beta_end
-        self._denoising_diffusion_gaussian_time_steps: int = gaussian_time_steps
-        self._denoising_diffusion_gaussian_clip_min: float = gaussian_clip_min
-        self._denoising_diffusion_gaussian_clip_max: float = gaussian_clip_max
-        self._denoising_diffusion_margin: float = margin
-        self._denoising_diffusion_ema: float = ema
-        self._denoising_diffusion_time_steps: int = time_steps
+        self._denoising_diffusion_gaussian_beta_start = gaussian_beta_start
+        self._denoising_diffusion_gaussian_beta_end = gaussian_beta_end
+        self._denoising_diffusion_gaussian_time_steps = gaussian_time_steps
+        self._denoising_diffusion_gaussian_clip_min = gaussian_clip_min
+        self._denoising_diffusion_gaussian_clip_max = gaussian_clip_max
+        self._denoising_diffusion_margin = margin
+        self._denoising_diffusion_ema = ema
+        self._denoising_diffusion_time_steps = time_steps
 
-        # Device configuration
-        self._device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        # Framework-specific attributes
+        if self._framework == 'pytorch':
+            import torch
+            self._device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         # Training history
         self._training_history = {
@@ -162,20 +177,30 @@ class DenoisingDiffusionInstanceTorch:
         }
 
         # Flags to indicate if instances were provided
-        self._has_external_first_unet: bool = first_unet_model is not None
-        self._has_external_second_unet: bool = second_unet_model is not None
-        self._has_external_diffusion_util: bool = gaussian_diffusion_util is not None
-        self._has_external_algorithm: bool = algorithm is not None
+        self._has_external_first_unet = first_unet_model is not None
+        self._has_external_second_unet = second_unet_model is not None
+        self._has_external_diffusion_util = gaussian_diffusion_util is not None
+        self._has_external_algorithm = algorithm is not None
 
-    def _get_denoising_diffusion(self, input_shape: tuple[int, ...]) -> None:
-        """
-        Initializes and configures the LatentDiffusion model using UNet architecture.
+        # Callback placeholders
+        self._callback_model_monitor = None
+        self._callback_early_stop = None
+        self._callback_resources_monitor = None
 
-        If pre-initialized instances were provided in the constructor, they are used instead of creating new ones.
+    def _get_denoising_diffusion_pytorch(self, input_shape: tuple[int, ...]) -> None:
         """
+        PyTorch implementation: Initializes and configures the diffusion model using UNet architecture.
+        """
+        import torch
+        from Engine.Architectures.DenoisingDiffusion.Torch.DenoisingDiffusionUnetModelTorch import \
+            DenoisingDiffusionUNetModelTorch
+        from Engine.Algorithms.DenoisingDiffusion.Torch.GaussianDenoisingDiffusionTorch import \
+            GaussianDiffusionTorch
+        from Engine.Algorithms.DenoisingDiffusion.Torch.AlgorithmDenoisingDiffusionTorch import \
+            AlgorithmDenoisingDiffusionTorch
+
         # Only create new UNet models if none were provided
         if not self._has_external_first_unet:
-            # Initialize the first instance of UNet
             self._denoising_first_instance_unet = DenoisingDiffusionUNetModelTorch(
                 output_shape=input_shape,
                 embedding_channels=self._denoising_diffusion_unet_num_embedding_channels,
@@ -190,11 +215,9 @@ class DenoisingDiffusionInstanceTorch:
             ).to(self._device)
             self._denoising_first_unet_model = self._denoising_first_instance_unet
         else:
-            # Use provided model and move to device
             self._denoising_first_unet_model = self._denoising_first_unet_model.to(self._device)
 
         if not self._has_external_second_unet:
-            # Initialize the second instance of UNet
             self._denoising_second_instance_unet = DenoisingDiffusionUNetModelTorch(
                 output_shape=input_shape,
                 embedding_channels=self._denoising_diffusion_unet_num_embedding_channels,
@@ -215,12 +238,10 @@ class DenoisingDiffusionInstanceTorch:
                     self._denoising_first_unet_model.state_dict()
                 )
         else:
-            # Use provided model and move to device
             self._denoising_second_unet_model = self._denoising_second_unet_model.to(self._device)
 
         # Only create new GaussianDiffusion utility if none was provided
         if not self._has_external_diffusion_util:
-            # Initialize the GaussianDiffusion utility
             self._denoising_gaussian_diffusion_util = GaussianDiffusionTorch(
                 beta_start=self._denoising_diffusion_gaussian_beta_start,
                 beta_end=self._denoising_diffusion_gaussian_beta_end,
@@ -231,7 +252,6 @@ class DenoisingDiffusionInstanceTorch:
 
         # Only create new algorithm if none was provided
         if not self._has_external_algorithm:
-            # Ensure we have all required components
             if self._denoising_first_unet_model is None:
                 raise ValueError("First UNet model is required but was not provided.")
             if self._denoising_second_unet_model is None:
@@ -239,7 +259,6 @@ class DenoisingDiffusionInstanceTorch:
             if self._denoising_gaussian_diffusion_util is None:
                 raise ValueError("GaussianDiffusion utility is required but was not provided.")
 
-            # Initialize optimizers
             optimizer_diffusion = torch.optim.Adam(
                 self._denoising_first_unet_model.parameters(),
                 lr=0.0001
@@ -249,7 +268,6 @@ class DenoisingDiffusionInstanceTorch:
                 lr=0.0001
             )
 
-            # Initialize the diffusion algorithm
             self._denoising_diffusion_algorithm = AlgorithmDenoisingDiffusionTorch(
                 output_shape=input_shape,
                 first_unet_model=self._denoising_first_unet_model,
@@ -262,33 +280,128 @@ class DenoisingDiffusionInstanceTorch:
                 margin=self._denoising_diffusion_margin
             ).to(self._device)
         else:
-            # If algorithm was provided externally, update its configuration if needed
-            # (assuming AlgorithmDenoisingDiffusionTorch has setters for these properties)
             if hasattr(self._denoising_diffusion_algorithm, 'time_steps'):
                 self._denoising_diffusion_algorithm.time_steps = self._denoising_diffusion_gaussian_time_steps
             if hasattr(self._denoising_diffusion_algorithm, 'ema'):
                 self._denoising_diffusion_algorithm.ema = self._denoising_diffusion_ema
             if hasattr(self._denoising_diffusion_algorithm, 'margin'):
                 self._denoising_diffusion_algorithm.margin = self._denoising_diffusion_margin
-            # Move algorithm to device
             self._denoising_diffusion_algorithm = self._denoising_diffusion_algorithm.to(self._device)
 
-    def _training_denoising_diffusion_model(
+    def _get_denoising_diffusion_tensorflow(self, input_shape: tuple[int, ...]) -> None:
+        """
+        TensorFlow implementation: Initializes and configures the diffusion model using UNet architecture.
+        """
+        # Skip if models already provided externally
+        if (self._has_external_first_unet and
+                self._has_external_second_unet and
+                self._has_external_diffusion_util):
+            logging.info("Using externally provided TensorFlow models")
+            return
+
+        try:
+            from Engine.Architectures.DenoisingDiffusion.DenoisingDiffusionUnetModel import \
+                DenoisingDiffusionUNetModel
+        except ImportError as e:
+            try:
+                from Engine.Architectures.DenoisingDiffusion.Tensorflow.DenoisingDiffusionUnetModel import \
+                    DenoisingDiffusionUNetModel
+            except ImportError as e2:
+                raise ImportError(
+                    f"Failed to import DenoisingDiffusionUNetModel for TensorFlow. "
+                    f"First attempt: {e}. Second attempt: {e2}"
+                ) from e2
+
+        try:
+            from Engine.Algorithms.DenoisingDiffusion.GaussianDenoisingDiffusion import \
+                GaussianDenoisingDiffusion
+        except (ImportError, TypeError) as e:
+            try:
+                from Engine.Algorithms.DenoisingDiffusion.Tensorflow.GaussianDenoisingDiffusion import \
+                    GaussianDenoisingDiffusion
+            except (ImportError, TypeError) as e2:
+                raise ImportError(
+                    f"Failed to import GaussianDenoisingDiffusion for TensorFlow. "
+                    f"First attempt: {e}. Second attempt: {e2}. "
+                    f"\n\n"
+                    f"TROUBLESHOOTING:\n"
+                    f"The error 'module() takes at most 2 arguments (3 given)' usually means:\n"
+                    f"1. GaussianDenoisingDiffusionBase is being imported as a module instead of a class\n"
+                    f"2. Check your GaussianDenoisingDiffusion.py file around line 55\n"
+                    f"3. Verify the import: 'from X import GaussianDenoisingDiffusionBase' imports a class, not a module\n"
+                    f"\n"
+                    f"WORKAROUND:\n"
+                    f"Initialize the models externally and pass them to the constructor:\n"
+                    f"  model = DenoisingDiffusionInstance(\n"
+                    f"      gaussian_diffusion_util=your_gaussian_util,\n"
+                    f"      first_unet_model=your_first_unet,\n"
+                    f"      second_unet_model=your_second_unet\n"
+                    f"  )\n"
+                ) from e2
+
+        # Initialize the first instance of UNet
+        self._denoising_first_instance_unet = DenoisingDiffusionUNetModel(
+            output_shape=input_shape,
+            embedding_channels=self._denoising_diffusion_unet_num_embedding_channels,
+            list_neurons_per_level=self._denoising_diffusion_unet_channels_per_level,
+            list_attentions=self._denoising_diffusion_unet_attention_mode,
+            number_residual_blocks=self._denoising_diffusion_unet_num_residual_blocks,
+            normalization_groups=self._denoising_diffusion_unet_group_normalization,
+            intermediary_activation_function=self._denoising_diffusion_unet_intermediary_activation,
+            intermediary_activation_alpha=self._denoising_diffusion_unet_intermediary_activation_alpha,
+            last_layer_activation=self._denoising_diffusion_unet_last_layer_activation,
+            number_samples_per_class=self._number_samples_per_class
+        )
+
+        # Initialize the second instance of UNet
+        self._denoising_second_instance_unet = DenoisingDiffusionUNetModel(
+            output_shape=input_shape,
+            embedding_channels=self._denoising_diffusion_unet_num_embedding_channels,
+            list_neurons_per_level=self._denoising_diffusion_unet_channels_per_level,
+            list_attentions=self._denoising_diffusion_unet_attention_mode,
+            number_residual_blocks=self._denoising_diffusion_unet_num_residual_blocks,
+            normalization_groups=self._denoising_diffusion_unet_group_normalization,
+            intermediary_activation_function=self._denoising_diffusion_unet_intermediary_activation,
+            intermediary_activation_alpha=self._denoising_diffusion_unet_intermediary_activation_alpha,
+            last_layer_activation=self._denoising_diffusion_unet_last_layer_activation,
+            number_samples_per_class=self._number_samples_per_class
+        )
+
+        # Build the models
+        self._denoising_first_unet_model = self._denoising_first_instance_unet.build_model()
+        self._denoising_second_unet_model = self._denoising_second_instance_unet.build_model()
+
+        # Synchronize weights
+        self._denoising_second_unet_model.set_weights(self._denoising_first_unet_model.get_weights())
+
+        # Initialize GaussianDiffusion utility
+        self._denoising_gaussian_diffusion_util = GaussianDenoisingDiffusion(
+            beta_start=self._denoising_diffusion_gaussian_beta_start,
+            beta_end=self._denoising_diffusion_gaussian_beta_end,
+            time_steps=self._denoising_diffusion_gaussian_time_steps,
+            clip_min=self._denoising_diffusion_gaussian_clip_min,
+            clip_max=self._denoising_diffusion_gaussian_clip_max
+        )
+
+    def _training_denoising_diffusion_model_pytorch(
             self,
             input_shape: tuple[int, ...],
-            arguments: 'argparse.Namespace',
+            arguments,
             x_real_samples: np.ndarray,
             y_real_samples: np.ndarray
     ) -> None:
         """
-        Executes the complete denoising diffusion training pipeline.
+        PyTorch training implementation.
         """
-        # Initialize the diffusion model (or use provided)
-        self._get_denoising_diffusion(input_shape)
+        import torch
+        from torch.utils.data import DataLoader, TensorDataset
+
+        # Initialize the diffusion model
+        self._get_denoising_diffusion_pytorch(input_shape)
 
         # Print model summaries
         print("\n" + "=" * 80)
-        print("DENOISING DIFFUSION MODEL ARCHITECTURE")
+        print("DENOISING DIFFUSION MODEL ARCHITECTURE (PyTorch)")
         print("=" * 80)
         print(f"\nDevice: {self._device}")
         print(f"Input Shape: {input_shape}")
@@ -306,7 +419,6 @@ class DenoisingDiffusionInstanceTorch:
 
         print("=" * 80 + "\n")
 
-        # Ensure we have an algorithm
         if self._denoising_diffusion_algorithm is None:
             raise ValueError("Denoising diffusion algorithm is required but was not provided or created.")
 
@@ -353,7 +465,7 @@ class DenoisingDiffusionInstanceTorch:
                 epoch_loss += current_loss
                 num_batches += 1
 
-            # Calculate average loss for the epoch
+            # Calculate average loss
             avg_loss = epoch_loss / num_batches
 
             # Store training history
@@ -375,33 +487,25 @@ class DenoisingDiffusionInstanceTorch:
 
             print(f"{'─' * 80}\n")
 
-            # Handle callbacks properly
-            if hasattr(self, '_callback_model_monitor'):
+            # Handle callbacks
+            if self._callback_model_monitor:
                 try:
-                    # Try calling as a function
                     if callable(self._callback_model_monitor):
                         self._callback_model_monitor(epoch, avg_loss)
-                    # Try calling with on_epoch_end method
                     elif hasattr(self._callback_model_monitor, 'on_epoch_end'):
                         self._callback_model_monitor.on_epoch_end(epoch, {'loss': avg_loss})
-                    # Try calling with __call__ method
-                    elif hasattr(self._callback_model_monitor, '__call__'):
-                        self._callback_model_monitor.__call__(epoch, avg_loss)
                 except Exception as e:
                     print(f"Warning: Could not call model monitor callback: {e}")
 
             # Handle early stopping
             if hasattr(arguments, 'use_early_stop') and arguments.use_early_stop:
-                if hasattr(self, '_callback_early_stop'):
+                if self._callback_early_stop:
                     try:
                         should_stop = False
-                        # Try different callback interfaces
                         if callable(self._callback_early_stop):
                             should_stop = self._callback_early_stop(epoch, avg_loss)
                         elif hasattr(self._callback_early_stop, 'on_epoch_end'):
                             should_stop = self._callback_early_stop.on_epoch_end(epoch, {'loss': avg_loss})
-                        elif hasattr(self._callback_early_stop, '__call__'):
-                            should_stop = self._callback_early_stop.__call__(epoch, avg_loss)
 
                         if should_stop:
                             print("\n" + "=" * 80)
@@ -411,7 +515,7 @@ class DenoisingDiffusionInstanceTorch:
                     except Exception as e:
                         print(f"Warning: Could not call early stop callback: {e}")
 
-        # Print final training summary
+        # Print final summary
         print("\n" + "=" * 80)
         print("TRAINING COMPLETED")
         print("=" * 80)
@@ -420,26 +524,156 @@ class DenoisingDiffusionInstanceTorch:
         print(f"  Final Loss:     {avg_loss:.6f}")
         print("=" * 80 + "\n")
 
-    # Additional getters for the components
-    @property
-    def denoising_first_unet_model(self) -> DenoisingDiffusionUNetModelTorch | None:
-        """Get the first UNet model instance."""
-        return self._denoising_first_unet_model
+    def _training_denoising_diffusion_model_tensorflow(
+            self,
+            input_shape: tuple[int, ...],
+            arguments,
+            x_real_samples: np.ndarray,
+            y_real_samples: np.ndarray
+    ) -> None:
+        """
+        TensorFlow training implementation.
+        """
+        try:
+            import tensorflow as tf
+            from tensorflow.keras.optimizers import Adam
+            from tensorflow.keras.utils import to_categorical
+            from tensorflow.python.keras.losses import MeanSquaredError
+        except ImportError as e:
+            raise ImportError(
+                f"Failed to import TensorFlow dependencies: {e}. "
+                "Make sure TensorFlow is installed."
+            ) from e
 
-    @property
-    def denoising_second_unet_model(self) -> DenoisingDiffusionUNetModelTorch | None:
-        """Get the second UNet model instance."""
-        return self._denoising_second_unet_model
+        try:
+            from Engine.Algorithms.DenoisingDiffusion.AlgorithmDenoisingDiffusion import \
+                AlgorithmDenoisingDiffusion
+        except ImportError:
+            try:
+                from Engine.Algorithms.DenoisingDiffusion.Tensorflow.AlgorithmDenoisingDiffusion import \
+                    AlgorithmDenoisingDiffusion
+            except ImportError as e:
+                raise ImportError(
+                    f"Failed to import AlgorithmDenoisingDiffusion: {e}. "
+                    "Check your import paths."
+                ) from e
 
-    @property
-    def denoising_gaussian_diffusion_util(self) -> GaussianDiffusionTorch | None:
-        """Get the Gaussian diffusion utility instance."""
-        return self._denoising_gaussian_diffusion_util
+        # Initialize the diffusion model
+        self._get_denoising_diffusion_tensorflow(input_shape)
 
-    @property
-    def denoising_diffusion_algorithm(self) -> AlgorithmDenoisingDiffusionTorch | None:
-        """Get the diffusion algorithm instance."""
-        return self._denoising_diffusion_algorithm
+        # Print model summaries
+        print("\n" + "=" * 80)
+        print("DENOISING DIFFUSION MODEL ARCHITECTURE (TensorFlow)")
+        print("=" * 80)
+        self._denoising_first_unet_model.summary()
+        self._denoising_second_unet_model.summary()
+        print("=" * 80 + "\n")
+
+        # Setup callbacks
+        callbacks_list = [self._callback_model_monitor] if self._callback_model_monitor else []
+
+        if hasattr(arguments, 'use_early_stop') and arguments.use_early_stop:
+            if self._callback_early_stop:
+                callbacks_list.append(self._callback_early_stop)
+
+        # Initialize the diffusion algorithm
+        self._denoising_diffusion_algorithm = AlgorithmDenoisingDiffusion(
+            output_shape=input_shape,
+            first_unet_model=self._denoising_first_unet_model,
+            second_unet_model=self._denoising_second_unet_model,
+            gdf_util=self._denoising_gaussian_diffusion_util,
+            optimizer_autoencoder=Adam(learning_rate=0.0001),
+            optimizer_diffusion=Adam(learning_rate=0.0001),
+            time_steps=self._denoising_diffusion_gaussian_time_steps,
+            ema=self._denoising_diffusion_ema,
+            margin=self._denoising_diffusion_margin
+        )
+
+        # Compile the model
+        self._denoising_diffusion_algorithm.compile(
+            loss=MeanSquaredError(),
+            optimizer=Adam(learning_rate=0.0001)
+        )
+
+        # Prepare data
+        x_real_samples = np.array(x_real_samples)
+        x_real_samples = tf.expand_dims(x_real_samples, axis=-1)
+
+        # Train the model
+        history = self._denoising_diffusion_algorithm.fit(
+            x_real_samples,
+            to_categorical(y_real_samples, num_classes=self._number_samples_per_class["number_classes"]),
+            epochs=self._denoising_diffusion_unet_epochs,
+            batch_size=self._denoising_diffusion_unet_batch_size,
+            callbacks=callbacks_list
+        )
+
+        # Store training history
+        if history and hasattr(history, 'history'):
+            for epoch in range(len(history.history.get('loss', []))):
+                self._training_history['epoch'].append(epoch + 1)
+                self._training_history['loss'].append(history.history['loss'][epoch])
+                self._training_history['avg_loss'].append(history.history['loss'][epoch])
+
+    def _training_denoising_diffusion_model(
+            self,
+            input_shape: tuple,
+            arguments,
+            x_real_samples: np.ndarray,
+            y_real_samples: np.ndarray
+    ) -> None:
+        """
+        Train the denoising diffusion model using the appropriate framework.
+        This method routes to the framework-specific implementation.
+
+        Args:
+            input_shape: Shape of input data
+            arguments: Training arguments/configuration
+            x_real_samples: Training samples
+            y_real_samples: Training labels
+        """
+        # Set number_samples_per_class if provided
+        if hasattr(arguments, 'number_samples_per_class'):
+            self._number_samples_per_class = arguments.number_samples_per_class
+
+        # Set callbacks if they exist
+        if hasattr(arguments, 'callback_model_monitor'):
+            self._callback_model_monitor = arguments.callback_model_monitor
+        if hasattr(arguments, 'callback_early_stop'):
+            self._callback_early_stop = arguments.callback_early_stop
+        if hasattr(arguments, 'callback_resources_monitor'):
+            self._callback_resources_monitor = arguments.callback_resources_monitor
+
+        # Route to appropriate training method
+        if self._framework == 'pytorch':
+            self._training_denoising_diffusion_model_pytorch(
+                input_shape, arguments, x_real_samples, y_real_samples
+            )
+        elif self._framework == 'tensorflow':
+            self._training_denoising_diffusion_model_tensorflow(
+                input_shape, arguments, x_real_samples, y_real_samples
+            )
+
+    def train(
+            self,
+            input_shape: tuple,
+            arguments,
+            x_real_samples: np.ndarray,
+            y_real_samples: np.ndarray
+    ) -> None:
+        """
+        Public method to train the denoising diffusion model.
+        This is an alias to _training_denoising_diffusion_model for convenience.
+
+        Args:
+            input_shape: Shape of input data
+            arguments: Training arguments/configuration
+            x_real_samples: Training samples
+            y_real_samples: Training labels
+        """
+        self._training_denoising_diffusion_model(
+            input_shape, arguments, x_real_samples, y_real_samples
+        )
 
     def get_training_history(self) -> dict:
         """
@@ -450,193 +684,188 @@ class DenoisingDiffusionInstanceTorch:
         """
         return self._training_history
 
-    # Property getters and setters
+    # Properties
+    @property
+    def framework(self) -> str:
+        """Get the current framework being used."""
+        return self._framework
+
+    @property
+    def denoising_first_unet_model(self):
+        """Get the first UNet model instance."""
+        return self._denoising_first_unet_model
+
+    @property
+    def denoising_second_unet_model(self):
+        """Get the second UNet model instance."""
+        return self._denoising_second_unet_model
+
+    @property
+    def denoising_gaussian_diffusion_util(self):
+        """Get the Gaussian diffusion utility instance."""
+        return self._denoising_gaussian_diffusion_util
+
+    @property
+    def denoising_diffusion_algorithm(self):
+        """Get the diffusion algorithm instance."""
+        return self._denoising_diffusion_algorithm
+
+    # Property getters and setters for all configuration parameters
     @property
     def denoising_diffusion_unet_last_layer_activation(self) -> str:
-        """Get the last layer activation."""
         return self._denoising_diffusion_unet_last_layer_activation
 
     @denoising_diffusion_unet_last_layer_activation.setter
     def denoising_diffusion_unet_last_layer_activation(self, value: str) -> None:
-        """Set the last layer activation."""
         self._denoising_diffusion_unet_last_layer_activation = value
 
     @property
     def denoising_diffusion_latent_dimension(self) -> int:
-        """Get the latent dimension."""
         return self._denoising_diffusion_latent_dimension
 
     @denoising_diffusion_latent_dimension.setter
     def denoising_diffusion_latent_dimension(self, value: int) -> None:
-        """Set the latent dimension."""
         self._denoising_diffusion_latent_dimension = value
 
     @property
     def denoising_diffusion_unet_num_embedding_channels(self) -> int:
-        """Get the number of embedding channels."""
         return self._denoising_diffusion_unet_num_embedding_channels
 
     @denoising_diffusion_unet_num_embedding_channels.setter
     def denoising_diffusion_unet_num_embedding_channels(self, value: int) -> None:
-        """Set the number of embedding channels."""
         self._denoising_diffusion_unet_num_embedding_channels = value
 
     @property
     def denoising_diffusion_unet_channels_per_level(self) -> list[int]:
-        """Get the channels per level."""
         return self._denoising_diffusion_unet_channels_per_level
 
     @denoising_diffusion_unet_channels_per_level.setter
     def denoising_diffusion_unet_channels_per_level(self, value: list[int]) -> None:
-        """Set the channels per level."""
         self._denoising_diffusion_unet_channels_per_level = value
 
     @property
     def denoising_diffusion_unet_batch_size(self) -> int:
-        """Get the batch size."""
         return self._denoising_diffusion_unet_batch_size
 
     @denoising_diffusion_unet_batch_size.setter
     def denoising_diffusion_unet_batch_size(self, value: int) -> None:
-        """Set the batch size."""
         self._denoising_diffusion_unet_batch_size = value
 
     @property
     def denoising_diffusion_unet_attention_mode(self) -> list[bool]:
-        """Get the attention mode."""
         return self._denoising_diffusion_unet_attention_mode
 
     @denoising_diffusion_unet_attention_mode.setter
     def denoising_diffusion_unet_attention_mode(self, value: list[bool]) -> None:
-        """Set the attention mode."""
         self._denoising_diffusion_unet_attention_mode = value
 
     @property
     def denoising_diffusion_unet_num_residual_blocks(self) -> int:
-        """Get the number of residual blocks."""
         return self._denoising_diffusion_unet_num_residual_blocks
 
     @denoising_diffusion_unet_num_residual_blocks.setter
     def denoising_diffusion_unet_num_residual_blocks(self, value: int) -> None:
-        """Set the number of residual blocks."""
         self._denoising_diffusion_unet_num_residual_blocks = value
 
     @property
     def denoising_diffusion_unet_group_normalization(self) -> int:
-        """Get the group normalization value."""
         return self._denoising_diffusion_unet_group_normalization
 
     @denoising_diffusion_unet_group_normalization.setter
     def denoising_diffusion_unet_group_normalization(self, value: int) -> None:
-        """Set the group normalization value."""
         self._denoising_diffusion_unet_group_normalization = value
 
     @property
     def denoising_diffusion_unet_intermediary_activation(self) -> str:
-        """Get the intermediary activation."""
         return self._denoising_diffusion_unet_intermediary_activation
 
     @denoising_diffusion_unet_intermediary_activation.setter
     def denoising_diffusion_unet_intermediary_activation(self, value: str) -> None:
-        """Set the intermediary activation."""
         self._denoising_diffusion_unet_intermediary_activation = value
 
     @property
     def denoising_diffusion_unet_intermediary_activation_alpha(self) -> float:
-        """Get the intermediary activation alpha."""
         return self._denoising_diffusion_unet_intermediary_activation_alpha
 
     @denoising_diffusion_unet_intermediary_activation_alpha.setter
     def denoising_diffusion_unet_intermediary_activation_alpha(self, value: float) -> None:
-        """Set the intermediary activation alpha."""
         self._denoising_diffusion_unet_intermediary_activation_alpha = value
 
     @property
     def denoising_diffusion_unet_epochs(self) -> int:
-        """Get the number of epochs."""
         return self._denoising_diffusion_unet_epochs
 
     @denoising_diffusion_unet_epochs.setter
     def denoising_diffusion_unet_epochs(self, value: int) -> None:
-        """Set the number of epochs."""
         self._denoising_diffusion_unet_epochs = value
 
     @property
     def denoising_diffusion_gaussian_beta_start(self) -> float:
-        """Get the Gaussian beta start value."""
         return self._denoising_diffusion_gaussian_beta_start
 
     @denoising_diffusion_gaussian_beta_start.setter
     def denoising_diffusion_gaussian_beta_start(self, value: float) -> None:
-        """Set the Gaussian beta start value."""
         self._denoising_diffusion_gaussian_beta_start = value
 
     @property
     def denoising_diffusion_gaussian_beta_end(self) -> float:
-        """Get the Gaussian beta end value."""
         return self._denoising_diffusion_gaussian_beta_end
 
     @denoising_diffusion_gaussian_beta_end.setter
     def denoising_diffusion_gaussian_beta_end(self, value: float) -> None:
-        """Set the Gaussian beta end value."""
         self._denoising_diffusion_gaussian_beta_end = value
 
     @property
     def denoising_diffusion_gaussian_time_steps(self) -> int:
-        """Get the Gaussian time steps."""
         return self._denoising_diffusion_gaussian_time_steps
 
     @denoising_diffusion_gaussian_time_steps.setter
     def denoising_diffusion_gaussian_time_steps(self, value: int) -> None:
-        """Set the Gaussian time steps."""
         self._denoising_diffusion_gaussian_time_steps = value
 
     @property
     def denoising_diffusion_gaussian_clip_min(self) -> float:
-        """Get the Gaussian clip minimum."""
         return self._denoising_diffusion_gaussian_clip_min
 
     @denoising_diffusion_gaussian_clip_min.setter
     def denoising_diffusion_gaussian_clip_min(self, value: float) -> None:
-        """Set the Gaussian clip minimum."""
         self._denoising_diffusion_gaussian_clip_min = value
 
     @property
     def denoising_diffusion_gaussian_clip_max(self) -> float:
-        """Get the Gaussian clip maximum."""
         return self._denoising_diffusion_gaussian_clip_max
 
     @denoising_diffusion_gaussian_clip_max.setter
     def denoising_diffusion_gaussian_clip_max(self, value: float) -> None:
-        """Set the Gaussian clip maximum."""
         self._denoising_diffusion_gaussian_clip_max = value
 
     @property
     def denoising_diffusion_margin(self) -> float:
-        """Get the diffusion margin."""
         return self._denoising_diffusion_margin
 
     @denoising_diffusion_margin.setter
     def denoising_diffusion_margin(self, value: float) -> None:
-        """Set the diffusion margin."""
         self._denoising_diffusion_margin = value
 
     @property
     def denoising_diffusion_ema(self) -> float:
-        """Get the EMA value."""
         return self._denoising_diffusion_ema
 
     @denoising_diffusion_ema.setter
     def denoising_diffusion_ema(self, value: float) -> None:
-        """Set the EMA value."""
         self._denoising_diffusion_ema = value
 
     @property
     def denoising_diffusion_time_steps(self) -> int:
-        """Get the time steps."""
         return self._denoising_diffusion_time_steps
 
     @denoising_diffusion_time_steps.setter
     def denoising_diffusion_time_steps(self, value: int) -> None:
-        """Set the time steps."""
         self._denoising_diffusion_time_steps = value
+
+    def __repr__(self) -> str:
+        return (
+            f"DenoisingDiffusionInstance(framework='{self._framework}', "
+            f"epochs={self._denoising_diffusion_unet_epochs}, "
+            f"batch_size={self._denoising_diffusion_unet_batch_size})"
+        )
