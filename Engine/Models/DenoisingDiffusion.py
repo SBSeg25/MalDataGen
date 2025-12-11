@@ -19,7 +19,8 @@ try:
     import logging
     import torch
     import torch.nn as nn
-    from torch.utils.data import DataLoader, TensorDataset
+    from torch.utils.data import DataLoader
+    from torch.utils.data import TensorDataset
 
 except ImportError as error:
     logging.error(error)

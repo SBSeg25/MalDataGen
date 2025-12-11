@@ -50,7 +50,7 @@ try:
 
     from tensorflow.python.keras.losses import BinaryCrossentropy
 
-    from Engine.Algorithms.DenoisingDiffusion.Tensorflow.AlgorithmDenoisingDiffusionTensorflow import AlgorithmDenoisingDiffusion
+    from Engine.Algorithms.DenoisingDiffusion.Tensorflow.AlgorithmDenoisingDiffusionTensorflow import AlgorithmDenoisingDiffusionTensorflow
     from Engine.Algorithms.DenoisingDiffusion.Tensorflow.GaussianDenoisingDiffusionTensorflow import GaussianDiffusionTensorflow
     from Engine.Architectures.DenoisingDiffusion.Tensorflow.DenoisingDiffusionUNetModelTensorflow import DenoisingDiffusionUNetModelTensorflow
 
@@ -247,17 +247,17 @@ class DenoisingDiffusionInstance:
             callbacks_list.append(self._callback_early_stop)
 
         # Initialize the final diffusion algorithm
-        self._denoising_diffusion_algorithm = AlgorithmDenoisingDiffusion(output_shape=input_shape,
-                                                                          first_unet_model=self._denoising_first_unet_model,
-                                                                          second_unet_model=self._denoising_second_unet_model,
-                                                                          gdf_util=self._denoising_gaussian_diffusion_util,
-                                                                          optimizer_autoencoder=Adam(
+        self._denoising_diffusion_algorithm = AlgorithmDenoisingDiffusionTensorflow(output_shape=input_shape,
+                                                                                    first_unet_model=self._denoising_first_unet_model,
+                                                                                    second_unet_model=self._denoising_second_unet_model,
+                                                                                    gdf_util=self._denoising_gaussian_diffusion_util,
+                                                                                    optimizer_autoencoder=Adam(
                                                                               learning_rate=0.0001),
-                                                                          optimizer_diffusion=Adam(
+                                                                                    optimizer_diffusion=Adam(
                                                                               learning_rate=0.0001),
-                                                                          time_steps=self._denoising_diffusion_gaussian_time_steps,
-                                                                          ema=self._denoising_diffusion_ema,
-                                                                          margin=self._denoising_diffusion_margin)
+                                                                                    time_steps=self._denoising_diffusion_gaussian_time_steps,
+                                                                                    ema=self._denoising_diffusion_ema,
+                                                                                    margin=self._denoising_diffusion_margin)
 
         # Compile the diffusion model
         self._denoising_diffusion_algorithm.compile(loss=MeanSquaredError(),
