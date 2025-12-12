@@ -45,8 +45,6 @@ try:
 
     from Engine.Algorithms.LatentDiffusion.AlgorithmVAELatentDiffusion import AlgorithmVAELatentDiffusion
     from Engine.Algorithms.LatentDiffusion.GaussianLatentDiffusion import GaussianLatentDiffusion
-    from Engine.Algorithms.LatentDiffusion.Tensorflow.AlgorithmLatentDiffusionTensorflow import \
-        LatentDiffusionAlgorithmTensorflow
     from Engine.Architectures.LatentDiffusion.DiffusionModelUNetModel import DiffusionModelUNetModel
     from Engine.Architectures.LatentDiffusion.VariationalModelDiffusion import VariationalModelDiffusion
 

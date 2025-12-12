@@ -8,6 +8,8 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
+from Engine.Models.LatentDiffusionTorch import LatentDiffusion
+
 # MIT License
 #
 # Copyright (c) 2025 Synthetic Ocean AI
@@ -197,7 +199,7 @@ class GenerativeModels:
         )
 
         # Initialize Latent Diffusion Model
-        self._latent_diffusion_model = LatentDiffusionTensorflow(
+        self._latent_diffusion_model = LatentDiffusion(
             unet_last_layer_activation=args.latent_diffusion_unet_last_layer_activation,
             latent_dimension=args.latent_diffusion_latent_dimension,
             unet_num_embedding_channels=args.latent_diffusion_unet_num_embedding_channels,
