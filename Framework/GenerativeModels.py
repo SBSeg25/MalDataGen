@@ -8,7 +8,7 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
-from Engine.Models.LatentDiffusionTorch import LatentDiffusion
+from Engine.Models.LatentDiffusion import LatentDiffusion
 
 # MIT License
 #
@@ -50,7 +50,6 @@ try:
     from Engine.Models.DenoisingDiffusion import DenoisingDiffusion
     from Engine.Models.Adversarial import Adversarial
     from Engine.Models.Autoencoder import Autoencoder
-    from Engine.Models.LatentDiffusion import LatentDiffusionTensorflow
     from Engine.Models.QuantizedVAE import QuantizedVAE
     from Engine.Algorithms.RandomNoise.AlgorithmRandomNoise import RandomNoiseAlgorithm
     from Engine.Callbacks.CallbackModel import ModelMonitorCallback
@@ -408,7 +407,7 @@ class GenerativeModels:
             self._adversarial_model.get_samples(number_samples_per_class)
 
         elif self.arguments.model_type == 'latent_diffusion':
-            self._latent_diffusion_model._latent_diffusion_algorithm.get_samples(number_samples_per_class)
+            self._latent_diffusion_model.get_samples(number_samples_per_class)
 
         elif self.arguments.model_type == 'denoising_diffusion':
             self._denoising_diffusion_model._denoising_diffusion_algorithm.get_samples(number_samples_per_class)
@@ -420,7 +419,7 @@ class GenerativeModels:
             self._variational_autoencoder_model._latent_variational_algorithm.get_samples(number_samples_per_class)
 
         elif self.arguments.model_type == 'autoencoder':
-            self._autoencoder_model._autoencoder_algorithm.get_samples(number_samples_per_class)
+            self._autoencoder_model.get_samples(number_samples_per_class)
 
         elif self.arguments.model_type == 'random':
             self._random_noise_algorithm.get_samples(number_samples_per_class)

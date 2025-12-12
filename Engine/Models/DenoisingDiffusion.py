@@ -13,6 +13,16 @@ try:
     import os
     import logging
     import numpy as np
+    import torch
+    from torch.utils.data import DataLoader, TensorDataset
+    from Engine.Architectures.DenoisingDiffusion.Torch.DenoisingDiffusionUnetModelTorch import \
+        DenoisingDiffusionUNetModelTorch
+    from Engine.Algorithms.DenoisingDiffusion.Torch.GaussianDenoisingDiffusionTorch import \
+        GaussianDiffusionTorch
+    from Engine.Algorithms.DenoisingDiffusion.Torch.AlgorithmDenoisingDiffusionTorch import \
+        AlgorithmDenoisingDiffusionTorch
+    from Engine.Algorithms.DenoisingDiffusion.GaussianDenoisingDiffusion import GaussianDenoisingDiffusion
+
 
 except ImportError as error:
     logging.error(error)
@@ -191,13 +201,6 @@ class DenoisingDiffusion:
         """
         PyTorch implementation: Initializes and configures the diffusion model using UNet architecture.
         """
-        import torch
-        from Engine.Architectures.DenoisingDiffusion.Torch.DenoisingDiffusionUnetModelTorch import \
-            DenoisingDiffusionUNetModelTorch
-        from Engine.Algorithms.DenoisingDiffusion.Torch.GaussianDenoisingDiffusionTorch import \
-            GaussianDiffusionTorch
-        from Engine.Algorithms.DenoisingDiffusion.Torch.AlgorithmDenoisingDiffusionTorch import \
-            AlgorithmDenoisingDiffusionTorch
 
         # Only create new UNet models if none were provided
         if not self._has_external_first_unet:
@@ -312,33 +315,6 @@ class DenoisingDiffusion:
                     f"First attempt: {e}. Second attempt: {e2}"
                 ) from e2
 
-        try:
-            from Engine.Algorithms.DenoisingDiffusion.GaussianDenoisingDiffusion import \
-                GaussianDenoisingDiffusion
-        except (ImportError, TypeError) as e:
-            try:
-                from Engine.Algorithms.DenoisingDiffusion.Tensorflow.GaussianDenoisingDiffusion import \
-                    GaussianDenoisingDiffusion
-            except (ImportError, TypeError) as e2:
-                raise ImportError(
-                    f"Failed to import GaussianDenoisingDiffusion for TensorFlow. "
-                    f"First attempt: {e}. Second attempt: {e2}. "
-                    f"\n\n"
-                    f"TROUBLESHOOTING:\n"
-                    f"The error 'module() takes at most 2 arguments (3 given)' usually means:\n"
-                    f"1. GaussianDenoisingDiffusionBase is being imported as a module instead of a class\n"
-                    f"2. Check your GaussianDenoisingDiffusion.py file around line 55\n"
-                    f"3. Verify the import: 'from X import GaussianDenoisingDiffusionBase' imports a class, not a module\n"
-                    f"\n"
-                    f"WORKAROUND:\n"
-                    f"Initialize the models externally and pass them to the constructor:\n"
-                    f"  model = DenoisingDiffusionInstance(\n"
-                    f"      gaussian_diffusion_util=your_gaussian_util,\n"
-                    f"      first_unet_model=your_first_unet,\n"
-                    f"      second_unet_model=your_second_unet\n"
-                    f"  )\n"
-                ) from e2
-
         # Initialize the first instance of UNet
         self._denoising_first_instance_unet = DenoisingDiffusionUNetModel(
             output_shape=input_shape,
@@ -393,8 +369,6 @@ class DenoisingDiffusion:
         """
         PyTorch training implementation.
         """
-        import torch
-        from torch.utils.data import DataLoader, TensorDataset
 
         # Initialize the diffusion model
         self._get_denoising_diffusion_pytorch(input_shape)

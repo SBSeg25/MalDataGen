@@ -8,8 +8,6 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
-from Engine.Algorithms.Autoencoder.AutoencoderAlgorithm import AutoencoderAlgorithm
-from Engine.Architectures.Autoencoder.AutoencoderModel import AutoencoderModel
 
 # MIT License
 #
@@ -39,12 +37,14 @@ try:
     import keras
     import numpy as np
     import logging
-    import tensorflow as tf
 
     from tensorflow.keras.optimizers import Adam
     from tensorflow.keras.utils import to_categorical
-    from tensorflow.python.keras.losses import MeanSquaredError, BinaryCrossentropy
+    from tensorflow.python.keras.losses import MeanSquaredError
+    from tensorflow.python.keras.losses import BinaryCrossentropy
     from Engine.Callbacks.CallbackEarlyStop import EarlyStopping
+    from Engine.Algorithms.Autoencoder.AutoencoderAlgorithm import AutoencoderAlgorithm
+    from Engine.Architectures.Autoencoder.AutoencoderModel import AutoencoderModel
 
 except ImportError as error:
     logging.error(error)
@@ -545,3 +545,7 @@ class Autoencoder:
     def autoencoder_path_output_models(self, value: str) -> None:
         """Set the path for saving models."""
         self._autoencoder_path_output_models = value
+
+    def get_samples(self, number_samples_per_class):
+
+        return self._autoencoder_algorithm.get_samples(number_samples_per_class)
