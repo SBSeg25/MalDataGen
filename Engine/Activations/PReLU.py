@@ -71,7 +71,7 @@ class PReLU(Layer):
 
     Example
     -------
-    >>> import tensorflow as tf
+    >>> import _tensorflow as tf
     >>> x = tf.constant([-10, -5, 0, 5, 10], dtype=tf.float32)
     >>> prelu_layer = PReLU()
     >>> output = prelu_layer(x)

@@ -60,14 +60,14 @@ class Swish(Layer):
 
     Methods
     -------
-        call(neural_network_flow: tensorflow.Tensor) -> tensorflow.Tensor
+        call(neural_network_flow: _tensorflow.Tensor) -> _tensorflow.Tensor
             Applies the Swish activation function to the input tensor and returns the output tensor.
 
     Example
     -------
-    >>> import tensorflow
+    >>> import _tensorflow
     ...    # Example tensor with shape (batch_size, feature_dim)
-    ...    input_tensor = tensorflow.random.uniform((2, 5))
+    ...    input_tensor = _tensorflow.random.uniform((2, 5))
     ...    # Instantiate and apply Swish
     ...    swish_layer = Swish()
     ...    output_tensor = swish_layer(input_tensor)
@@ -103,7 +103,7 @@ class Swish(Layer):
 
         Example
         -------
-        >>> input_tensor = tensorflow.random.uniform((2, 5))
+        >>> input_tensor = _tensorflow.random.uniform((2, 5))
         ...     swish = Swish()
         ...     output = swish(input_tensor)
         ...     print(output.shape)

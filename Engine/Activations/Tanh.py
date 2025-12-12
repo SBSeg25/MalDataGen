@@ -61,14 +61,14 @@ class Tanh(Layer):
 
     Methods
     -------
-    call(neural_network_flow: tensorflow.Tensor) -> tensorflow.Tensor
+    call(neural_network_flow: _tensorflow.Tensor) -> _tensorflow.Tensor
         Applies the tanh activation function to the input tensor and returns the output tensor.
 
     Example
     -------
-    >>> import tensorflow
+    >>> import _tensorflow
     ...    # Example tensor with shape (batch_size, sequence_length, 8)
-    ...    input_tensor = tensorflow.random.uniform((2, 5, 8))
+    ...    input_tensor = _tensorflow.random.uniform((2, 5, 8))
     ...    # Instantiate and apply Tanh
     ...    tanh_layer = Tanh()
     ...    output_tensor = tanh_layer(input_tensor)
@@ -96,7 +96,7 @@ class Tanh(Layer):
 
         Parameters
         ----------
-            neural_network_flow : tensorflow.Tensor
+            neural_network_flow : _tensorflow.Tensor
                 Input tensor with any shape.
 
         Returns

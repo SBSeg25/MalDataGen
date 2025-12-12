@@ -57,23 +57,23 @@ DEFAULT_VARIATIONAL_AUTOENCODER_STANDER_DEVIATION = 0.125
 def add_argument_variation_autoencoder(parser):
     parser.add_argument("--variational_autoencoder_latent_dimension", type=int,
                         default=DEFAULT_VARIATIONAL_AUTOENCODER_LATENT_DIMENSION,
-                        help="Latent space dimension for the Variational Autoencoder")
+                        help="Latent space dimension for the Variational autoencoder")
 
     parser.add_argument("--variational_autoencoder_training_algorithm", type=str,
                         default=DEFAULT_VARIATIONAL_AUTOENCODER_TRAINING_ALGORITHM,
-                        help="Training algorithm for the Variational Autoencoder.")
+                        help="Training algorithm for the Variational autoencoder.")
 
     parser.add_argument("--variational_autoencoder_activation_function",
                         type=str, default=DEFAULT_VARIATIONAL_AUTOENCODER_ACTIVATION_INTERMEDIARY,
-                        help="Intermediate activation function of the Variational Autoencoder.")
+                        help="Intermediate activation function of the Variational autoencoder.")
 
     parser.add_argument("--variational_autoencoder_dropout_decay_rate_encoder", type=float,
                         default=DEFAULT_VARIATIONAL_AUTOENCODER_DROPOUT_DECAY_RATE_ENCODER,
-                        help="Dropout decay rate for the encoder of the Variational Autoencoder")
+                        help="Dropout decay rate for the encoder of the Variational autoencoder")
 
     parser.add_argument("--variational_autoencoder_dropout_decay_rate_decoder", type=float,
                         default=DEFAULT_VARIATIONAL_AUTOENCODER_DROPOUT_DECAY_RATE_DECODER,
-                        help="Dropout decay rate for the discriminator of the Variational Autoencoder")
+                        help="Dropout decay rate for the discriminator of the Variational autoencoder")
 
     parser.add_argument("--variational_autoencoder_dense_layer_sizes_encoder", type=int, nargs='+',
                         default=DEFAULT_VARIATIONAL_AUTOENCODER_DENSE_LAYERS_SETTINGS_ENCODER,
@@ -85,20 +85,20 @@ def add_argument_variation_autoencoder(parser):
 
     parser.add_argument('--variational_autoencoder_number_epochs', type=int,
                         default=DEFAULT_VARIATIONAL_AUTOENCODER_NUMBER_EPOCHS,
-                        help='Number of classes for the Autoencoder.')
+                        help='Number of classes for the autoencoder.')
 
 
     parser.add_argument('--variational_autoencoder_batch_size', type=int,
                         default=DEFAULT_VARIATIONAL_AUTOENCODER_BATCH_SIZE,
-                        help='Batch size for the Variational Autoencoder.')
+                        help='Batch size for the Variational autoencoder.')
 
     parser.add_argument('--variational_autoencoder_number_classes', type=int,
                         default=DEFAULT_VARIATIONAL_AUTOENCODER_NUMBER_CLASSES,
-                        help='Number of classes for the Variational Autoencoder.')
+                        help='Number of classes for the Variational autoencoder.')
 
     parser.add_argument("--variational_autoencoder_loss_function", type=str,
                         default=DEFAULT_VARIATIONAL_AUTOENCODER_LOSS,
-                        help="Loss function for the Variational Autoencoder.")
+                        help="Loss function for the Variational autoencoder.")
 
     parser.add_argument("--variational_autoencoder_momentum", type=float,
                         default=DEFAULT_VARIATIONAL_AUTOENCODER_MOMENTUM,

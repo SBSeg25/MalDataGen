@@ -104,7 +104,7 @@ class AutoencoderAlgorithmTensorflow(Model):
         ...     autoencoder = AutoencoderAlgorithm(
         ...     encoder_model=encoder_model,
         ...     decoder_model=decoder_model,
-        ...     loss_function=tensorflow.keras.losses.MeanSquaredError(),
+        ...     loss_function=_tensorflow.keras.losses.MeanSquaredError(),
         ...     file_name_encoder="encoder_model.h5",
         ...     file_name_decoder="decoder_model.h5",
         ...     models_saved_path="./autoencoder_models/",
@@ -112,7 +112,7 @@ class AutoencoderAlgorithmTensorflow(Model):
         ...     latent_stander_deviation=1.0,
         ...     latent_dimension=64
         ...     )
-        ...     autoencoder.compile(optimizer=tensorflow.keras.optimizers.Adam(learning_rate=0.001))
+        ...     autoencoder.compile(optimizer=_tensorflow.keras.optimizers.Adam(learning_rate=0.001))
         >>> autoencoder.fit_model(train_dataset, epochs=50)
     """
 

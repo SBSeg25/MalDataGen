@@ -67,6 +67,8 @@ except ImportError as error:
     sys.exit(-1)
 
 
+
+
 DEFAULT_VERBOSITY_LEVEL = logging.INFO  # Logging verbosity level for the experiment
 NUM_EPOCHS = 40  # Default number of training epochs (overridden per campaign)
 TIME_FORMAT = '%Y-%m-%d_%H:%M:%S'  # Format for timestamps in logs
@@ -184,7 +186,7 @@ campaigns_available['adversarial_demo'] = {
     'adversarial_smoothing_rate': [0.15]
 }
 
-# === Autoencoder Campaign ===
+# === autoencoder Campaign ===
 campaigns_available['autoencoder'] = {
     'classifier': DEFAULT_CLASSIFIER,
     'model_type': ['autoencoder'],
@@ -208,7 +210,7 @@ campaigns_available['autoencoder'] = {
     'autoencoder_latent_mean_distribution': [0.5],
     'autoencoder_latent_stander_deviation': [0.500],
 }
-# === Variational Autoencoder Campaign ===
+# === Variational autoencoder Campaign ===
 campaigns_available['variational_demo'] = {
     'classifier': DEFAULT_CLASSIFIER,
     'model_type': ['variational'],
@@ -236,7 +238,7 @@ campaigns_available['variational_demo'] = {
 
 
 
-# === Variational Autoencoder Campaign ===
+# === Variational autoencoder Campaign ===
 campaigns_available['variational'] = {
     'classifier': DEFAULT_CLASSIFIER,
     'model_type': ['variational'],
@@ -623,7 +625,7 @@ def main():
     -----
         - Automatically creates output directories.
         - Uses RotatingFileHandler to manage large log files.
-        - Handles Variational Autoencoder (VAE) special cases (decoder = reversed encoder).
+        - Handles Variational autoencoder (VAE) special cases (decoder = reversed encoder).
         - Plotting is skipped for baseline models like 'copula', 'ctgan', etc.
 
     Expected Globals

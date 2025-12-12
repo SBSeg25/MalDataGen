@@ -168,16 +168,16 @@ class SynDataGen(Arguments, CSVDataProcessor, Metrics, GenerativeModels, Classif
             optimizing the generator to produce realistic data while training the discriminator to differentiate
             between real and fake data.
 
-        2. Autoencoder [model_type='autoencoder']
+        2. autoencoder [model_type='autoencoder']
 
             Implements a  AutoEncoder model for generating synthetic data.
 
-            This class implements an Autoencoder model by inheriting from the VanillaEncoder and VanillaDecoder classes.
+            This class implements an autoencoder model by inheriting from the VanillaEncoder and VanillaDecoder classes.
             It constructs an autoencoder architecture by combining both an encoder and a decoder with customizable
             hyperparameters. The autoencoder is typically used for tasks such as dimensionality reduction, feature learning,
             and denoising.
 
-        3. Variational Autoencoder [model_type='variational']
+        3. Variational autoencoder [model_type='variational']
 
             Implements a Variational AutoEncoder (VAE) model for generating synthetic data.
 
@@ -185,9 +185,9 @@ class SynDataGen(Arguments, CSVDataProcessor, Metrics, GenerativeModels, Classif
             it from a learned latent space. During training, it computes both the reconstruction loss
             and the KL divergence loss. The trained decoder can be used to generate synthetic data.
 
-        4. Vector Quantized Variational Autoencoder [model_type='quantized']
+        4. Vector Quantized Variational autoencoder [model_type='quantized']
 
-            Implements a Vector Quantized Variational Autoencoder (VQ-VAE) model for generating synthetic data.
+            Implements a Vector Quantized Variational autoencoder (VQ-VAE) model for generating synthetic data.
 
             This class implements a VQ-VAE by combining an encoder, a quantized latent space with a codebook,
             and a decoder. The model learns discrete latent representations by mapping encoder outputs to
@@ -552,7 +552,7 @@ class SynDataGen(Arguments, CSVDataProcessor, Metrics, GenerativeModels, Classif
 
                 # Using autoencoder model to generate synthetic data
                 self.generator_name = 'autoencoder'
-                logging.info("Generating data using Autoencoder algorithm.")
+                logging.info("Generating data using autoencoder algorithm.")
                 self.data_generated = self._autoencoder_algorithm.get_samples(number_samples_per_class)
 
 
@@ -603,7 +603,7 @@ class SynDataGen(Arguments, CSVDataProcessor, Metrics, GenerativeModels, Classif
             elif self.arguments.model_type == "quantized":
                 # Using copy-paste model to generate synthetic data (by copying and pasting from real data)
                 self.generator_name = 'quantized'
-                logging.info("Generating data using Vector Quantized Variational Autoencoder algorithm.")
+                logging.info("Generating data using Vector Quantized Variational autoencoder algorithm.")
 
                 self.data_generated = self._quantized_vae_algorithm.get_samples(number_samples_per_class)
 

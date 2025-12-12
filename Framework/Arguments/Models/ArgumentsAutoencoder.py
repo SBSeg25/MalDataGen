@@ -66,15 +66,15 @@ def add_argument_autoencoder(parser):
 
     parser.add_argument("--autoencoder_latent_dimension", type=int,
                         default=DEFAULT_AUTOENCODER_LATENT_DIMENSION,
-                        help="Latent space dimension for the Autoencoder.")
+                        help="Latent space dimension for the autoencoder.")
 
     parser.add_argument("--autoencoder_training_algorithm", type=str,
                         default=DEFAULT_AUTOENCODER_TRAINING_ALGORITHM,
-                        help="Training algorithm for the Autoencoder.")
+                        help="Training algorithm for the autoencoder.")
 
     parser.add_argument("--autoencoder_activation_function", type=str,
                         default=DEFAULT_AUTOENCODER_MODEL_ACTIVATION,
-                        help="Activation function for the Autoencoder.")
+                        help="Activation function for the autoencoder.")
 
     parser.add_argument("--autoencoder_dropout_decay_rate_encoder", type=float,
                         default=DEFAULT_AUTOENCODER_DROPOUT_DECAY_RATE_ENCODER,
@@ -94,20 +94,20 @@ def add_argument_autoencoder(parser):
 
     parser.add_argument('--autoencoder_batch_size', type=int,
                         default=DEFAULT_AUTOENCODER_BATCH_SIZE,
-                        help='Batch size for the Autoencoder.')
+                        help='Batch size for the autoencoder.')
 
     parser.add_argument('--autoencoder_number_classes', type=int,
                         default=DEFAULT_AUTOENCODER_NUMBER_CLASSES,
-                        help='Number of classes for the Autoencoder.')
+                        help='Number of classes for the autoencoder.')
 
     parser.add_argument('--autoencoder_number_epochs', type=int,
                         default=DEFAULT_AUTOENCODER_NUMBER_EPOCHS,
-                        help='Number of classes for the Autoencoder.')
+                        help='Number of classes for the autoencoder.')
 
 
     parser.add_argument("--autoencoder_loss_function", type=str,
                         default=DEFAULT_AUTOENCODER_LOSS_FUNCTION,
-                        help="Loss function for the Autoencoder.")
+                        help="Loss function for the autoencoder.")
 
     parser.add_argument("--autoencoder_momentum", type=float,
                         default=DEFAULT_AUTOENCODER_MOMENTUM,

@@ -81,7 +81,7 @@ class GLU(Layer):
 
     Example
     -------
-    >>> import tensorflow as tf
+    >>> import _tensorflow as tf
     ...    # Example tensor with shape (batch_size, sequence_length, 8) — divisible by 2
     ...    input_tensor = tf.random.uniform((2, 5, 8))
     ...    # Instantiate and apply GLU
@@ -114,11 +114,11 @@ class GLU(Layer):
 
         Parameters
         ----------
-            neural_network_flow : tensorflow.Tensor Input tensor with shape (..., 2d). The last dimension must be even.
+            neural_network_flow : _tensorflow.Tensor Input tensor with shape (..., 2d). The last dimension must be even.
 
         Returns
         -------
-        tensorflow.Tensor
+        _tensorflow.Tensor
             Output tensor with shape (..., d), after applying the GLU transformation.
 
         Raises

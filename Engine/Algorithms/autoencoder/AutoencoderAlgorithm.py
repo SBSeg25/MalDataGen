@@ -37,10 +37,10 @@ try:
 
     import logging
 
-    from Engine.Algorithms.Autoencoder.Tensorflow.AutoencoderAlgorithmTensorflow import AutoencoderAlgorithmTensorflow
-    from Engine.Algorithms.Autoencoder.Torch.AutoencoderAlgorithmTorch import AutoencoderAlgorithmTorch
+    from Engine.Algorithms.autoencoder._tensorflow.AutoencoderAlgorithm import AutoencoderAlgorithmTensorflow
+    from Engine.Algorithms.autoencoder._torch.AutoencoderAlgorithm import AutoencoderAlgorithmTorch
 
-    framework = os.getenv("ML_FRAMEWORK", "tensorflow").lower()
+    framework = os.getenv("ML_FRAMEWORK", "_tensorflow").lower()
 
     if framework == "pytorch":
         AutoencoderModelTorchAlgorithmBase = AutoencoderAlgorithmTorch
@@ -61,4 +61,4 @@ class AutoencoderAlgorithm(AutoencoderModelTorchAlgorithmBase):
             self._framework = "pytorch"
 
         else:
-            self._framework = "tensorflow"
+            self._framework = "_tensorflow"

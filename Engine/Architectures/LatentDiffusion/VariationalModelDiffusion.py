@@ -39,7 +39,7 @@ try:
         VariationalModelDiffusionTensorflow
     from Engine.Architectures.LatentDiffusion.Torch.VariationalModelDiffusionTorch import VariationalModelDiffusionTorch
 
-    framework = os.getenv("ML_FRAMEWORK", "tensorflow").lower()
+    framework = os.getenv("ML_FRAMEWORK", "_tensorflow").lower()
 
     if framework == "pytorch":
         VariationalModelDiffusionBase = VariationalModelDiffusionTorch
@@ -58,4 +58,4 @@ class VariationalModelDiffusion(VariationalModelDiffusionBase):
         if framework == "pytorch":
             self._framework = "pytorch"
         else:
-            self._framework = "tensorflow"
+            self._framework = "_tensorflow"

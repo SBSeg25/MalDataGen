@@ -60,14 +60,14 @@ class Softplus(Layer):
 
     Methods
     -------
-    call(neural_network_flow: tensorflow.Tensor) -> tf.Tensor
+    call(neural_network_flow: _tensorflow.Tensor) -> tf.Tensor
         Applies the Softplus activation function to the input tensor and returns the output tensor.
 
     Example
     -------
-    >>> import tensorflow
+    >>> import _tensorflow
     ...    # Example tensor with shape (batch_size, sequence_length, 8) — divisible by 2
-    ...    input_tensor = tensorflow.random.uniform((2, 5, 8))
+    ...    input_tensor = _tensorflow.random.uniform((2, 5, 8))
     ...    # Instantiate and apply SoftPlus
     ...    softplus_layer = SoftPlus()
     ...    output_tensor = softplus_layer(input_tensor)
@@ -93,12 +93,12 @@ class Softplus(Layer):
 
         Parameters
         ----------
-            neural_network_flow : tensorflow.Tensor
+            neural_network_flow : _tensorflow.Tensor
                 Input tensor with any shape.
 
         Returns
         -------
-        tensorflow.Tensor
+        _tensorflow.Tensor
             Output tensor with the same shape as input, after applying Softplus transformation.
         """
         return tensorflow.math.log(tensorflow.math.exp(neural_network_flow) + 1)

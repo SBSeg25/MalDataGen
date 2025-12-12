@@ -43,7 +43,7 @@ try:
     from tensorflow.python.keras.losses import MeanSquaredError
     from tensorflow.python.keras.losses import BinaryCrossentropy
     from Engine.Callbacks.CallbackEarlyStop import EarlyStopping
-    from Engine.Algorithms.Autoencoder.AutoencoderAlgorithm import AutoencoderAlgorithm
+    from Engine.Algorithms.autoencoder.AutoencoderAlgorithm import AutoencoderAlgorithm
     from Engine.Architectures.Autoencoder.AutoencoderModel import AutoencoderModel
 
 except ImportError as error:
@@ -75,7 +75,7 @@ DEFAULT_AUTOENCODER_STANDER_DEVIATION = 0.125
 
 class Autoencoder:
     """
-    A class that instantiates and manages an Autoencoder model.
+    A class that instantiates and manages an autoencoder model.
     This implementation provides complete configuration, training, and management capabilities
     for autoencoder-based learning tasks within the Synthetic Ocean ecosystem.
 
@@ -167,7 +167,7 @@ class Autoencoder:
         self._autoencoder_algorithm: AutoencoderAlgorithm | None = algorithm
         self._autoencoder_model: AutoencoderModel | None = model
 
-        # ** Autoencoder Model Configuration Parameters **
+        # ** autoencoder Model Configuration Parameters **
         self._autoencoder_latent_dimension: int = latent_dimension
         self._autoencoder_training_algorithm: str = training_algorithm
         self._autoencoder_activation_function: str = activation_function
@@ -217,9 +217,9 @@ class Autoencoder:
 
     def _get_autoencoder(self, input_shape: tuple[int, ...]) -> None:
         """
-        Initialize and configure the Autoencoder model, including encoder and decoder components.
+        Initialize and configure the autoencoder model, including encoder and decoder components.
 
-        This method sets up an Autoencoder model by configuring both the encoder and decoder using the `AutoencoderModel`
+        This method sets up an autoencoder model by configuring both the encoder and decoder using the `AutoencoderModel`
         class and links them with the `AutoencoderAlgorithm` class. The model is initialized with specified configurations
         such as latent dimension, activation functions, dropout rates, and layer sizes for both the encoder and decoder.
 
@@ -238,7 +238,7 @@ class Autoencoder:
         """
         # Only create new model if none was provided
         if not self._has_external_model:
-            # Autoencoder Model setup for Encoder and Decoder
+            # autoencoder Model setup for Encoder and Decoder
             self._autoencoder_model = AutoencoderModel(
                 latent_dimension=self._autoencoder_latent_dimension,
                 output_shape=input_shape,
@@ -260,7 +260,7 @@ class Autoencoder:
             if self._autoencoder_model is None:
                 raise ValueError("AutoencoderModel instance is required but was not provided.")
 
-            # Autoencoder Algorithm setup for training and model operations
+            # autoencoder Algorithm setup for training and model operations
             self._autoencoder_algorithm = AutoencoderAlgorithm(
                 encoder_model=self._autoencoder_model.get_encoder(input_shape),
                 decoder_model=self._autoencoder_model.get_decoder(input_shape),

@@ -56,7 +56,7 @@ except ImportError as error:
 
 class QuantizedVAEAlgorithmTensorflow(Model):
     """
-    Implements a Vector Quantized Variational Autoencoder (VQ-VAE) for discrete latent
+    Implements a Vector Quantized Variational autoencoder (VQ-VAE) for discrete latent
     representation learning and generation. This model combines an encoder, decoder,
     and vector quantization layer to learn compressed representations of input data.
 
@@ -106,7 +106,7 @@ class QuantizedVAEAlgorithmTensorflow(Model):
         ...     file_name_decoder="decoder_weights.h5",
         ...     models_saved_path="./saved_models/"
         ... )
-        >>> vae.compile(optimizer=tensorflow.keras.optimizers.Adam())
+        >>> vae.compile(optimizer=_tensorflow.keras.optimizers.Adam())
         >>> vae.fit_model(train_dataset, epochs=10)
         >>> generated_samples = vae.get_samples({
         ...     "classes": {0: 5, 1: 5},

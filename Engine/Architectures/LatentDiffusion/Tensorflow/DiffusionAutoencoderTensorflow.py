@@ -66,7 +66,7 @@ DEFAULT_DIFFUSION_AUTOENCODER_ACTIVATION_OUTPUT_ENCODER = 'sigmoid'
 
 class DiffusionAutoencoderModel(Activations):
     """
-    A LatentDiffusion Autoencoder model that combines an encoder-decoder architecture
+    A LatentDiffusion autoencoder model that combines an encoder-decoder architecture
     with diffusion-based latent space learning. This model enables flexible
     configuration of activation functions, layer structures, and loss functions,
     making it suitable for various generative and representation learning tasks.

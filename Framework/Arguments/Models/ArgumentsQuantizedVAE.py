@@ -59,31 +59,31 @@ DEFAULT_QUANTIZED_VAE_STANDER_DEVIATION = 0.125
 def add_argument_quantized_vae(parser):
     parser.add_argument("--quantized_vae_latent_dimension", type=int,
                         default=DEFAULT_QUANTIZED_VAE_LATENT_DIMENSION,
-                        help="Latent space dimension for the Quantized Variational Autoencoder")
+                        help="Latent space dimension for the Quantized Variational autoencoder")
 
     parser.add_argument("--quantized_vae_train_variance", type=float,
                         default=DEFAULT_QUANTIZED_VAE_TRAIN_VARIANCE,
-                        help="Dataset variance for generate samples in Quantized Variational Autoencoder")
+                        help="Dataset variance for generate samples in Quantized Variational autoencoder")
 
     parser.add_argument("--quantized_vae_number_embedding", type=int,
                         default=DEFAULT_QUANTIZED_VAE_NUMBER_EMBEDDING,
-                        help="Number embedding for the Quantized Variational Autoencoder")
+                        help="Number embedding for the Quantized Variational autoencoder")
 
     parser.add_argument("--quantized_vae_training_algorithm", type=str,
                         default=DEFAULT_QUANTIZED_VAE_TRAINING_ALGORITHM,
-                        help="Training algorithm for the Quantized Variational Autoencoder.")
+                        help="Training algorithm for the Quantized Variational autoencoder.")
 
     parser.add_argument("--quantized_vae_activation_function",
                         type=str, default=DEFAULT_QUANTIZED_VAE_ACTIVATION_INTERMEDIARY,
-                        help="Intermediate activation function of the Quantized Variational Autoencoder.")
+                        help="Intermediate activation function of the Quantized Variational autoencoder.")
 
     parser.add_argument("--quantized_vae_dropout_decay_rate_encoder", type=float,
                         default=DEFAULT_QUANTIZED_VAE_DROPOUT_DECAY_RATE_ENCODER,
-                        help="Dropout decay rate for the encoder of the Quantized Variational Autoencoder")
+                        help="Dropout decay rate for the encoder of the Quantized Variational autoencoder")
 
     parser.add_argument("--quantized_vae_dropout_decay_rate_decoder", type=float,
                         default=DEFAULT_QUANTIZED_VAE_DROPOUT_DECAY_RATE_DECODER,
-                        help="Dropout decay rate for the discriminator of the Quantized Variational Autoencoder")
+                        help="Dropout decay rate for the discriminator of the Quantized Variational autoencoder")
 
     parser.add_argument("--quantized_vae_dense_layer_sizes_encoder", type=int, nargs='+',
                         default=DEFAULT_QUANTIZED_VAE_DENSE_LAYERS_SETTINGS_ENCODER,
@@ -95,19 +95,19 @@ def add_argument_quantized_vae(parser):
 
     parser.add_argument('--quantized_vae_number_epochs', type=int,
                         default=DEFAULT_QUANTIZED_VAE_NUMBER_EPOCHS,
-                        help='Number of classes for the Quantized Autoencoder.')
+                        help='Number of classes for the Quantized autoencoder.')
 
     parser.add_argument('--quantized_vae_batch_size', type=int,
                         default=DEFAULT_QUANTIZED_VAE_BATCH_SIZE,
-                        help='Batch size for the Quantized Variational Autoencoder.')
+                        help='Batch size for the Quantized Variational autoencoder.')
 
     parser.add_argument('--quantized_vae_number_classes', type=int,
                         default=DEFAULT_QUANTIZED_VAE_NUMBER_CLASSES,
-                        help='Number of classes for the Quantized Variational Autoencoder.')
+                        help='Number of classes for the Quantized Variational autoencoder.')
 
     parser.add_argument("--quantized_vae_loss_function", type=str,
                         default=DEFAULT_QUANTIZED_VAE_LOSS,
-                        help="Loss function for the Quantized Variational Autoencoder.")
+                        help="Loss function for the Quantized Variational autoencoder.")
 
     parser.add_argument("--quantized_vae_momentum", type=float,
                         default=DEFAULT_QUANTIZED_VAE_MOMENTUM,

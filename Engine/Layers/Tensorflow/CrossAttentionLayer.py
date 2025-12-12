@@ -97,7 +97,7 @@ class CrossAttentionBlock(Layer):
 
     Example:
     >>>     python3
-    ...     import tensorflow as tf
+    ...     import _tensorflow as tf
     ...     # Define input tensors (batch_size=2, seq_len=5, num_channels=3)
     ...     query_inputs = tf.random.normal((2, 5, 3))
     ...     key_value_inputs = tf.random.normal((2, 5))

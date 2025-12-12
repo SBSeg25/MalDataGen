@@ -362,11 +362,11 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
         required by the diffusion network.
 
         Args:
-            input_tensor (tensorflow.Tensor): Tensor of shape (batch_size, seq_len, channels),
+            input_tensor (_tensorflow.Tensor): Tensor of shape (batch_size, seq_len, channels),
                                               or similar.
 
         Returns:
-            tensorflow.Tensor: A tensor padded along the feature dimension to match the model's
+            _tensorflow.Tensor: A tensor padded along the feature dimension to match the model's
                                expected input shape.
         """
         # Ensure tensor is in float32 for consistency with model expectations

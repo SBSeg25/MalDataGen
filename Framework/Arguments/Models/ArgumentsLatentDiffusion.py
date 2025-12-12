@@ -37,7 +37,7 @@ DEFAULT_LATENT_DIFFUSION_UNET_NUMBER_EMBEDDING_CHANNELS = 1
 DEFAULT_LATENT_DIFFUSION_UNET_CHANNELS_PER_LEVEL = [1, 2, 4]
 DEFAULT_LATENT_DIFFUSION_UNET_BATCH_SIZE = 128
 DEFAULT_LATENT_DIFFUSION_UNET_ATTENTION_MODE = [False, True, True]
-# DEFAULT_DIFFUSION_UNET_OPTIMIZER = tensorflow.keras.optimizers.Adam(learning_rate=0.0001)
+# DEFAULT_DIFFUSION_UNET_OPTIMIZER = _tensorflow.keras.optimizers.Adam(learning_rate=0.0001)
 DEFAULT_LATENT_DIFFUSION_UNET_NUMBER_RESIDUAL_BLOCKS = 2
 DEFAULT_LATENT_DIFFUSION_UNET_GROUP_NORMALIZATION = 1
 DEFAULT_LATENT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION = 'swish'
@@ -50,7 +50,7 @@ DEFAULT_LATENT_DIFFUSION_GAUSSIAN_TIME_STEPS = 1000
 DEFAULT_LATENT_DIFFUSION_GAUSSIAN_CLIP_MIN = -1.0
 DEFAULT_LATENT_DIFFUSION_GAUSSIAN_CLIP_MAX = 1.0
 
-# DEFAULT_DIFFUSION_AUTOENCODER_OPTIMIZER = tensorflow.keras.optimizers.Adam(learning_rate=0.0001)
+# DEFAULT_DIFFUSION_AUTOENCODER_OPTIMIZER = _tensorflow.keras.optimizers.Adam(learning_rate=0.0001)
 DEFAULT_LATENT_DIFFUSION_AUTOENCODER_LOSS = 'mse'
 DEFAULT_LATENT_DIFFUSION_AUTOENCODER_ENCODER_FILTERS = [320, 160]
 DEFAULT_LATENT_DIFFUSION_AUTOENCODER_DECODER_FILTERS = [160, 320]
@@ -150,47 +150,47 @@ def add_argument_latent_diffusion(parser):
 
     parser.add_argument('--latent_diffusion_autoencoder_loss', type=str,
                         default=DEFAULT_LATENT_DIFFUSION_AUTOENCODER_LOSS,
-                        help='Loss function for Autoencoder.')
+                        help='Loss function for autoencoder.')
 
     parser.add_argument('--latent_diffusion_autoencoder_encoder_filters', nargs='+', type=int,
                         default=DEFAULT_LATENT_DIFFUSION_AUTOENCODER_ENCODER_FILTERS,
-                        help='List of filters for Autoencoder encoder.')
+                        help='List of filters for autoencoder encoder.')
 
     parser.add_argument('--latent_diffusion_autoencoder_decoder_filters', nargs='+', type=int,
                         default=DEFAULT_LATENT_DIFFUSION_AUTOENCODER_DECODER_FILTERS,
-                        help='List of filters for Autoencoder decoder.')
+                        help='List of filters for autoencoder decoder.')
 
     parser.add_argument('--latent_diffusion_autoencoder_last_layer_activation', type=str,
                         default=DEFAULT_LATENT_DIFFUSION_AUTOENCODER_LAST_LAYER_ACTIVATION,
-                        help='Activation function for the last layer of Autoencoder.')
+                        help='Activation function for the last layer of autoencoder.')
 
     parser.add_argument('--latent_diffusion_autoencoder_latent_dimension', type=int,
                         default=DEFAULT_LATENT_DIFFUSION_AUTOENCODER_LATENT_DIMENSION,
-                        help='Dimension of the latent in Autoencoder.')
+                        help='Dimension of the latent in autoencoder.')
 
     parser.add_argument('--latent_diffusion_autoencoder_batch_size_create_embedding', type=int,
                         default=DEFAULT_LATENT_DIFFUSION_AUTOENCODER_BATCH_SIZE_CREATE_EMBEDDING,
-                        help='Batch size for creating embeddings in Autoencoder.')
+                        help='Batch size for creating embeddings in autoencoder.')
 
     parser.add_argument('--latent_diffusion_autoencoder_batch_size_training', type=int,
                         default=DEFAULT_LATENT_DIFFUSION_AUTOENCODER_BATCH_SIZE_TRAINING,
-                        help='Batch size for training Autoencoder.')
+                        help='Batch size for training autoencoder.')
 
     parser.add_argument('--latent_diffusion_autoencoder_epochs', type=int,
                         default=DEFAULT_LATENT_DIFFUSION_AUTOENCODER_EPOCHS,
-                        help='Number of epochs for Autoencoder training.')
+                        help='Number of epochs for autoencoder training.')
 
     parser.add_argument('--latent_diffusion_autoencoder_intermediary_activation_function', type=str,
                         default=DEFAULT_LATENT_DIFFUSION_AUTOENCODER_INTERMEDIARY_ACTIVATION,
-                        help='Intermediary activation function for Autoencoder.')
+                        help='Intermediary activation function for autoencoder.')
 
     parser.add_argument('--latent_diffusion_autoencoder_intermediary_activation_alpha', type=float,
                         default=DEFAULT_LATENT_DIFFUSION_AUTOENCODER_INTERMEDIARY_ACTIVATION_ALPHA,
-                        help='Alpha value for intermediary activation function in Autoencoder.')
+                        help='Alpha value for intermediary activation function in autoencoder.')
 
     parser.add_argument('--latent_diffusion_autoencoder_activation_output_encoder', type=str,
                         default=DEFAULT_LATENT_DIFFUSION_AUTOENCODER_ACTIVATION_OUTPUT_ENCODER,
-                        help='Activation function for the output of the encoder in Autoencoder.')
+                        help='Activation function for the output of the encoder in autoencoder.')
 
     parser.add_argument('--latent_diffusion_margin', type=float,
                         default=DEFAULT_LATENT_DIFFUSION_MARGIN, help='Margin for diffusion process.')

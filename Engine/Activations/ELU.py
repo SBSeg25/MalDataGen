@@ -67,9 +67,9 @@ class ELU(Layer):
 
     Example
     -------
-    >>> import tensorflow
+    >>> import _tensorflow
     ...    # Example tensor with shape (batch_size, feature_dim)
-    ...    input_tensor = tensorflow.random.uniform((2, 5))
+    ...    input_tensor = _tensorflow.random.uniform((2, 5))
     ...    # Instantiate and apply ELU
     ...    elu_layer = ELU(alpha=1.0)
     ...    output_tensor = elu_layer(input_tensor)
@@ -108,7 +108,7 @@ class ELU(Layer):
 
         Example
         -------
-        >>> input_tensor = tensorflow.random.uniform((2, 5))
+        >>> input_tensor = _tensorflow.random.uniform((2, 5))
         ...     elu = ELU(alpha=1.0)
         ...     output = elu(input_tensor)
         ...     print(output.shape)

@@ -72,13 +72,13 @@ class ReLU(Layer):
 
     Methods
     -------
-        call(neural_network_flow: tensorflow.Tensor) -> tensorflow.Tensor
+        call(neural_network_flow: _tensorflow.Tensor) -> _tensorflow.Tensor
             Applies the ReLU activation function to the input tensor and returns the output tensor.
 
     Example
     -------
-    >>> import tensorflow
-    >>> x = tensorflow.constant([-10, -5, 0, 5, 10], dtype=tensorflow.float32)
+    >>> import _tensorflow
+    >>> x = _tensorflow.constant([-10, -5, 0, 5, 10], dtype=_tensorflow.float32)
     >>> relu_layer = ReLU(negative_slope=0.5, max_value=5.0)
     >>> output = relu_layer(x)
     >>> print(output.numpy())  # Output will be adjusted based on negative_slope and max_value
@@ -110,12 +110,12 @@ class ReLU(Layer):
 
         Parameters
         ----------
-            neural_network_flow : tensorflow.Tensor
+            neural_network_flow : _tensorflow.Tensor
                 Input tensor with any shape.
 
         Returns
         -------
-        tensorflow.Tensor
+        _tensorflow.Tensor
             Output tensor with the same shape as input, after applying ReLU transformation.
         """
         # Apply threshold and negative slope

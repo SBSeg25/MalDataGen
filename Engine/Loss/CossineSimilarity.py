@@ -73,9 +73,9 @@ class CosineSimilarity(Loss):
     Example:
     -------
         >>> python
-        ...     import tensorflow
-        ...     y_true = tensorflow.constant([[1.0, 0.0, -1.0], [0.0, 1.0, 1.0]], dtype=tensorflow.float32)
-        ...     y_predicted = tensorflow.constant([[0.5, 0.5, -0.5], [0.0, 1.0, 1.0]], dtype=tensorflow.float32)
+        ...     import _tensorflow
+        ...     y_true = _tensorflow.constant([[1.0, 0.0, -1.0], [0.0, 1.0, 1.0]], dtype=_tensorflow.float32)
+        ...     y_predicted = _tensorflow.constant([[0.5, 0.5, -0.5], [0.0, 1.0, 1.0]], dtype=_tensorflow.float32)
         ...     loss_fn = CosineSimilarity()
         ...     loss = loss_fn(y_true, y_predicted)
         >>>     print(loss.numpy())  # Output: similarity loss value

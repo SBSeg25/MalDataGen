@@ -65,9 +65,9 @@ class LogSigmoid(Layer):
 
     Example
     -------
-    >>> import tensorflow
+    >>> import _tensorflow
     ...    # Example tensor with shape (batch_size, sequence_length, 8)
-    ...    input_tensor = tensorflow.random.uniform((2, 5, 8))
+    ...    input_tensor = _tensorflow.random.uniform((2, 5, 8))
     ...    # Instantiate and apply LogSigmoid
     ...    log_sigmoid_layer = LogSigmoid()
     ...    output_tensor = log_sigmoid_layer(input_tensor)

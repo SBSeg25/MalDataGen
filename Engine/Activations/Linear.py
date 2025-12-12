@@ -62,13 +62,13 @@ class Linear(Layer):
 
     Methods
     -------
-        call(neural_network_flow: tensorflow.Tensor) -> tensorflow.Tensor
+        call(neural_network_flow: _tensorflow.Tensor) -> _tensorflow.Tensor
             Applies the linear activation function to the input tensor and returns the output tensor.
 
     Example
     -------
-    >>> import tensorflow
-    >>> x = tensorflow.constant([-10, -5, 0, 5, 10], dtype=tensorflow.float32)
+    >>> import _tensorflow
+    >>> x = _tensorflow.constant([-10, -5, 0, 5, 10], dtype=_tensorflow.float32)
     >>> linear_layer = Linear(scale=2.0)
     >>> output = linear_layer(x)
     >>> print(output.numpy())  # Output: [-20. -10.   0.  10.  20.]
@@ -94,12 +94,12 @@ class Linear(Layer):
 
         Parameters
         ----------
-            neural_network_flow : tensorflow.Tensor
+            neural_network_flow : _tensorflow.Tensor
                 Input tensor with any shape.
 
         Returns
         -------
-        tensorflow.Tensor
+        _tensorflow.Tensor
             Output tensor with the same shape as input, scaled if specified.
         """
         return self.scale * neural_network_flow

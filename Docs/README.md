@@ -452,7 +452,7 @@ number_samples_per_class = {
 }
 input_shape = (1200,)
 
-# Autoencoder Model setup for Encoder and Decoder
+# autoencoder Model setup for Encoder and Decoder
 autoencoder_model = AutoencoderModel(latent_dimension=64,
                                      output_shape=input_shape,
                                      activation_function="LeakyReLU",
@@ -466,7 +466,7 @@ autoencoder_model = AutoencoderModel(latent_dimension=64,
                                      dataset_type=numpy.float32,
                                      number_samples_per_class=2)
 
-# Autoencoder Algorithm setup for training and model operations
+# autoencoder Algorithm setup for training and model operations
 autoencoder_algorithm = AutoencoderAlgorithm(encoder_model=autoencoder_model.get_encoder(input_shape),
                                              decoder_model=autoencoder_model.get_decoder(input_shape),
                                              loss_function="binary_crossentropy",

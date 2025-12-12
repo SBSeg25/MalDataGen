@@ -82,7 +82,7 @@ class Router(Layer):
         ...     )
         ...
         ...     # Example input (batch_size=4, sequence_length=64, embed_dim=512)
-        ...     inputs = tensorflow.random.normal([4, 64, 512])
+        ...     inputs = _tensorflow.random.normal([4, 64, 512])
         ...
         ...     # Get routing masks
         ...     dispatch_tensor, combine_tensor = router(inputs, training=True)
@@ -99,9 +99,9 @@ class Router(Layer):
         ...
         ...         def call(self, inputs):
         ...             dispatch, combine = self.router(inputs)
-        ...             expert_inputs = tensorflow.einsum('bte,btec->bec', inputs, dispatch)
+        ...             expert_inputs = _tensorflow.einsum('bte,btec->bec', inputs, dispatch)
         ...             expert_outputs = [expert(expert_inputs[:,i]) for i,expert in enumerate(self.experts)]
-        ...             return tensorflow.einsum('bec,btec->bte', tensorflow.stack(expert_outputs, 1), combine)
+        ...             return _tensorflow.einsum('bec,btec->bte', _tensorflow.stack(expert_outputs, 1), combine)
         >>>
     """
 
@@ -210,11 +210,11 @@ class Router(Layer):
         """Computes the load-balanced loss for routing experts in the mixture of experts model.
 
         Args:
-            router_probs (tensorflow.Tensor): The probabilities produced by the router for each expert.
-            expert_mask (tensorflow.Tensor): The mask indicating which expert was chosen for each token.
+            router_probs (_tensorflow.Tensor): The probabilities produced by the router for each expert.
+            expert_mask (_tensorflow.Tensor): The mask indicating which expert was chosen for each token.
 
         Returns:
-            tensorflow.Tensor: A scalar tensor representing the load-balanced loss.
+            _tensorflow.Tensor: A scalar tensor representing the load-balanced loss.
 
         Raises:
             ValueError: If any parameter has an incorrect shape or type.

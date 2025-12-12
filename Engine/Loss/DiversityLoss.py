@@ -85,8 +85,8 @@ class ContrastiveLoss(Loss):
         >>> # Create a ContrastiveLoss object with a margin of 1.0
         ...     contrastive_loss_layer = ContrastiveLoss(margin=1.0)
         ...     # Example tensors for true labels and predicted embeddings
-        ...     y_true = tensorflow.constant([1, 0, 1])  # Labels: 1 for similar, 0 for dissimilar
-        ...     y_pred = tensorflow.random.normal((2, 3, 128))  # Predicted embeddings of shape (2, batch_size, embedding_dim)
+        ...     y_true = _tensorflow.constant([1, 0, 1])  # Labels: 1 for similar, 0 for dissimilar
+        ...     y_pred = _tensorflow.random.normal((2, 3, 128))  # Predicted embeddings of shape (2, batch_size, embedding_dim)
         ...     # Compute the contrastive loss
         ...     loss = contrastive_loss_layer(y_true, y_pred)
         >>>     print(loss)

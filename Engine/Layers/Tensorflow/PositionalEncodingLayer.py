@@ -160,12 +160,12 @@ class PositionalEncoding(Layer):
 
         Parameters
         ----------
-        x : tensorflow.Tensor
+        x : _tensorflow.Tensor
             The input tensor of shape (batch_size, sequence_length, embedding_dimension).
 
         Returns
         -------
-        tensorflow.Tensor
+        _tensorflow.Tensor
             A tensor of the same shape as the input, with positional encodings added
             to the embeddings.
         """

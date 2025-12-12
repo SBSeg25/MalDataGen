@@ -39,7 +39,7 @@ try:
     from Engine.Architectures.Adversarial.Tensorflow.AdversarialModelTensorflow import AdversarialModelTensorflow
     from Engine.Architectures.Adversarial.Torch.AdversarialModelTorch import AdversarialModelTorch
 
-    framework = os.getenv("ML_FRAMEWORK", "tensorflow").lower()
+    framework = os.getenv("ML_FRAMEWORK", "_tensorflow").lower()
 
     if framework == "pytorch":
         AdversarialModelBase = AdversarialModelTorch
@@ -65,4 +65,4 @@ class AdversarialModel(AdversarialModelBase):
             self._framework = "pytorch"
 
         else:
-            self._framework = "tensorflow"
+            self._framework = "_tensorflow"

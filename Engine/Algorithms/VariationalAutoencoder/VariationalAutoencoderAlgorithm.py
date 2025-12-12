@@ -41,7 +41,7 @@ try:
     from Engine.Algorithms.VariationalAutoencoder.Torch.AlgorithmVariationalAutoencoderTorch import \
         VariationalAutoencoderAlgorithmTorch
 
-    framework = os.getenv("ML_FRAMEWORK", "tensorflow").lower()
+    framework = os.getenv("ML_FRAMEWORK", "_tensorflow").lower()
 
     if framework == "pytorch":
         VariationalAutoencoderAlgorithmBase = VariationalAutoencoderAlgorithmTorch
@@ -62,4 +62,4 @@ class VariationalAutoencoderAlgorithm(VariationalAutoencoderAlgorithmBase):
             self._framework = "pytorch"
 
         else:
-            self._framework = "tensorflow"
+            self._framework = "_tensorflow"

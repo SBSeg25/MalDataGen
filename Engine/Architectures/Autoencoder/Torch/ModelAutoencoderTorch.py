@@ -65,7 +65,7 @@ class AutoencoderModelTorch(VanillaEncoderTorch, VanillaDecoderTorch):
     """
     AutoencoderModel
 
-    Esta classe implementa um modelo Autoencoder herdando das classes VanillaEncoder e VanillaDecoder.
+    Esta classe implementa um modelo autoencoder herdando das classes VanillaEncoder e VanillaDecoder.
     Constrói uma arquitetura de autoencoder combinando encoder e decoder com hiperparâmetros customizáveis.
     Versão PyTorch do modelo.
 
@@ -73,7 +73,7 @@ class AutoencoderModelTorch(VanillaEncoderTorch, VanillaDecoderTorch):
     e denoising.
 
     Variável de Ambiente:
-        ML_FRAMEWORK: Define o framework a ser usado ('tensorflow' ou 'pytorch').
+        ML_FRAMEWORK: Define o framework a ser usado ('_tensorflow' ou 'pytorch').
                      Padrão: 'pytorch'
 
     Attributes:
@@ -232,7 +232,7 @@ class AutoencoderModelTorch(VanillaEncoderTorch, VanillaDecoderTorch):
         Retorna o framework sendo utilizado.
 
         Returns:
-            str: O nome do framework ('tensorflow' ou 'pytorch').
+            str: O nome do framework ('_tensorflow' ou 'pytorch').
         """
         return self._framework
 

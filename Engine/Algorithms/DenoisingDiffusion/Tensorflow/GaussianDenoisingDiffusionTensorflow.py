@@ -103,20 +103,20 @@ class GaussianDenoisingDiffusionTensorflow:
 
     Derived Attributes:
     -------------------
-        @betas : tensorflow.Tensor
+        @betas : _tensorflow.Tensor
             The linearly spaced beta values used in the diffusion process.
-        @alphas_cumulative_product: tensorflow.Tensor
+        @alphas_cumulative_product: _tensorflow.Tensor
             The cumulative product of (1 - beta) over time steps, controlling noise accumulation.
-        @alphas_cumulative_product_previous: tensorflow.Tensor
+        @alphas_cumulative_product_previous: _tensorflow.Tensor
             The cumulative product of (1 - beta) for the previous time step.
-        @posterior_variance: tensorflow.Tensor
+        @posterior_variance: _tensorflow.Tensor
             Variance of the posterior distribution for each time step, used in reverse diffusion.
         @posterior_log_variance_clipped:
-            tensorflow.Tensor Logarithm of the posterior variance, clipped to avoid numerical instability.
+            _tensorflow.Tensor Logarithm of the posterior variance, clipped to avoid numerical instability.
         @posterior_mean_first_coefficient:
-            tensorflow.Tensor Coefficient for the first term in the posterior mean computation.
+            _tensorflow.Tensor Coefficient for the first term in the posterior mean computation.
         @posterior_mean_second_coefficient:
-            tensorflow.Tensor Coefficient for the second term in the posterior mean computation.
+            _tensorflow.Tensor Coefficient for the second term in the posterior mean computation.
 
     Methods:
     --------
@@ -257,16 +257,16 @@ class GaussianDenoisingDiffusionTensorflow:
 
         Parameters:
         -----------
-            a : tensorflow.Tensor
+            a : _tensorflow.Tensor
                 Tensor from which values are extracted.
-            t : tensorflow.Tensor
+            t : _tensorflow.Tensor
                 Time step indices.
-            x_shape : tensorflow.Tensor
+            x_shape : _tensorflow.Tensor
                 Shape of the input tensor.
 
         Returns:
         --------
-            tensorflow.Tensor
+            _tensorflow.Tensor
                 Extracted and reshaped values.
         """
 
@@ -282,14 +282,14 @@ class GaussianDenoisingDiffusionTensorflow:
 
         Parameters:
         -----------
-            x_start : tensorflow.Tensor
+            x_start : _tensorflow.Tensor
                 Original input data.
-            t : tensorflow.Tensor
+            t : _tensorflow.Tensor
                 Time step indices.
 
         Returns:
         --------
-            tuple of tensorflow.Tensor
+            tuple of _tensorflow.Tensor
                 Mean, variance, and log variance of the forward process.
         """
 
@@ -312,16 +312,16 @@ class GaussianDenoisingDiffusionTensorflow:
 
         Parameters:
         -----------
-            x_start : tensorflow.Tensor
+            x_start : _tensorflow.Tensor
                 Original input data.
-            t : tensorflow.Tensor
+            t : _tensorflow.Tensor
                 Time step indices.
-            noise : tensorflow.Tensor
+            noise : _tensorflow.Tensor
                 Gaussian noise to add.
 
         Returns:
         --------
-            tensorflow.Tensor
+            _tensorflow.Tensor
                 Noisy sample at time step t.
         """
 
@@ -336,16 +336,16 @@ class GaussianDenoisingDiffusionTensorflow:
 
         Parameters:
         -----------
-            x_t : tensorflow.Tensor
+            x_t : _tensorflow.Tensor
                 Noisy input data at time step t.
-            t : tensorflow.Tensor
+            t : _tensorflow.Tensor
                 Time step indices.
-            noise : tensorflow.Tensor
+            noise : _tensorflow.Tensor
                 Gaussian noise applied during diffusion.
 
         Returns:
         --------
-            tensorflow.Tensor
+            _tensorflow.Tensor
                 Predicted x_start.
         """
         x_t_shape = tensorflow.shape(x_t)
@@ -359,16 +359,16 @@ class GaussianDenoisingDiffusionTensorflow:
 
         Parameters:
         -----------
-            x_start : tensorflow.Tensor
+            x_start : _tensorflow.Tensor
                 Original input data.
-            x_t : tensorflow.Tensor
+            x_t : _tensorflow.Tensor
                 Noisy input at time step t.
-            t : tensorflow.Tensor
+            t : _tensorflow.Tensor
                 Time step indices.
 
         Returns:
         --------
-            tuple of tensorflow.Tensor
+            tuple of _tensorflow.Tensor
                 Posterior mean, variance, and log variance.
         """
         x_t_shape = tensorflow.shape(x_t)
@@ -387,18 +387,18 @@ class GaussianDenoisingDiffusionTensorflow:
 
         Parameters:
         -----------
-            predicted_noise : tensorflow.Tensor
+            predicted_noise : _tensorflow.Tensor
                 Noise predicted by the model.
-            x : tensorflow.Tensor
+            x : _tensorflow.Tensor
                 Noisy input at time step t.
-            t : tensorflow.Tensor
+            t : _tensorflow.Tensor
                 Time step indices.
             clip_denoised : bool, optional
                 Whether to clip the denoised output.
 
         Returns:
         --------
-            tuple of tensorflow.Tensor
+            tuple of _tensorflow.Tensor
                 Predicted mean, variance, and log variance.
         """
         x_recon = self.predict_start_from_noise(x, t=t, noise=predicted_noise)
@@ -418,18 +418,18 @@ class GaussianDenoisingDiffusionTensorflow:
 
         Parameters:
         -----------
-            predicted_noise : tensorflow.Tensor
+            predicted_noise : _tensorflow.Tensor
                 Noise predicted by the model.
-            x : tensorflow.Tensor
+            x : _tensorflow.Tensor
                 Noisy input at time step t.
-            t : tensorflow.Tensor
+            t : _tensorflow.Tensor
                 Time step indices.
             clip_denoised : bool, optional
                 Whether to clip the denoised output.
 
         Returns:
         --------
-            tensorflow.Tensor
+            _tensorflow.Tensor
                 Sampled output at time step t.
         """
 

@@ -100,7 +100,7 @@ class GenerativeModels:
             args.variational_autoencoder_number_epochs
         )
 
-        # Initialize Autoencoder Model
+        # Initialize autoencoder Model
         self._autoencoder_algorithm = Autoencoder(
             args.autoencoder_latent_dimension,
             args.autoencoder_training_algorithm,
@@ -264,7 +264,7 @@ class GenerativeModels:
             args.wasserstein_gp_discriminator_steps
         )
 
-        # Initialize Variational Autoencoder Model
+        # Initialize Variational autoencoder Model
         self._variational_algorithm = VariationalAutoencoder(
             args.variational_autoencoder_latent_dimension,
             args.variational_autoencoder_training_algorithm,

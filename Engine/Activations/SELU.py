@@ -72,9 +72,9 @@ class SELU(Layer):
 
     Example
     -------
-    >>> import tensorflow
+    >>> import _tensorflow
     ...    # Example tensor with shape (batch_size, sequence_length, 8) — divisible by 2
-    ...    input_tensor = tensorflow.random.uniform((2, 5, 8))
+    ...    input_tensor = _tensorflow.random.uniform((2, 5, 8))
     ...    # Instantiate and apply SELU
     ...    selu_layer = SELU()
     ...    output_tensor = selu_layer(input_tensor)

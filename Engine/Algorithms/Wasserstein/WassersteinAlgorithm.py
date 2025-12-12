@@ -39,7 +39,7 @@ try:
     from Engine.Algorithms.Wasserstein.Tensorflow.AlgorithmWassersteinTensorflow import WassersteinAlgorithmTensorflow
     from Engine.Algorithms.Wasserstein.Torch.AlgorithmWassersteinTorch import WassersteinAlgorithmTorch
 
-    framework = os.getenv("ML_FRAMEWORK", "tensorflow").lower()
+    framework = os.getenv("ML_FRAMEWORK", "_tensorflow").lower()
 
     if framework == "pytorch":
         WassersteinAlgorithmBase = WassersteinAlgorithmTorch
@@ -60,4 +60,4 @@ class WassersteinAlgorithm(WassersteinAlgorithmBase):
             self._framework = "pytorch"
 
         else:
-            self._framework = "tensorflow"
+            self._framework = "_tensorflow"

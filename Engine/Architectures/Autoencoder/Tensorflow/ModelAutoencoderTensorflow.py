@@ -44,7 +44,7 @@ try:
     from Engine.Architectures.Autoencoder.Tensorflow.VanillaEncoderTensorflow import VanillaEncoderTensorflow
 
     # Detecta o framework a partir da variável de ambiente
-    ML_FRAMEWORK = os.getenv('ML_FRAMEWORK', 'tensorflow').lower()
+    ML_FRAMEWORK = os.getenv('ML_FRAMEWORK', '_tensorflow').lower()
 
 except ImportError as error:
     print(error)
@@ -65,7 +65,7 @@ class AutoencoderModelTensorflow(VanillaEncoderTensorflow, VanillaDecoderTensorf
     """
     AutoencoderModel
 
-    Esta classe implementa um modelo Autoencoder herdando das classes VanillaEncoder e VanillaDecoder.
+    Esta classe implementa um modelo autoencoder herdando das classes VanillaEncoder e VanillaDecoder.
     Constrói uma arquitetura de autoencoder combinando encoder e decoder com hiperparâmetros customizáveis.
     Suporta tanto TensorFlow quanto PyTorch através da variável de ambiente ML_FRAMEWORK.
 
@@ -73,8 +73,8 @@ class AutoencoderModelTensorflow(VanillaEncoderTensorflow, VanillaDecoderTensorf
     e denoising.
 
     Variável de Ambiente:
-        ML_FRAMEWORK: Define o framework a ser usado ('tensorflow' ou 'pytorch').
-                     Padrão: 'tensorflow'
+        ML_FRAMEWORK: Define o framework a ser usado ('_tensorflow' ou 'pytorch').
+                     Padrão: '_tensorflow'
 
     Attributes:
         latent_dimension (int):
@@ -107,7 +107,7 @@ class AutoencoderModelTensorflow(VanillaEncoderTensorflow, VanillaDecoderTensorf
 
     Example:
         >>> import os
-        >>> os.environ['ML_FRAMEWORK'] = 'tensorflow'  # ou 'pytorch'
+        >>> os.environ['ML_FRAMEWORK'] = '_tensorflow'  # ou 'pytorch'
         >>> autoencoder_model = AutoencoderModel(
         ...     latent_dimension=64,
         ...     output_shape=(28, 28, 1),
@@ -232,7 +232,7 @@ class AutoencoderModelTensorflow(VanillaEncoderTensorflow, VanillaDecoderTensorf
         Retorna o framework sendo utilizado.
 
         Returns:
-            str: O nome do framework ('tensorflow' ou 'pytorch').
+            str: O nome do framework ('_tensorflow' ou 'pytorch').
         """
         return self._framework
 

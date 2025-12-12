@@ -69,7 +69,7 @@ DEFAULT_VARIATIONAL_AUTOENCODER_STANDER_DEVIATION = 0.125
 
 class VariationalAutoencoder:
     """
-    A class that instantiates and manages a Variational Autoencoder (VAE) model.
+    A class that instantiates and manages a Variational autoencoder (VAE) model.
     This implementation provides complete configuration, training, and management capabilities
     for variational autoencoder-based learning tasks within the Synthetic Ocean ecosystem.
 
@@ -169,7 +169,7 @@ class VariationalAutoencoder:
         # Store class distribution information
         self._number_samples_per_class: dict | None = number_classes
 
-        # ** Variational Autoencoder Model Configuration Parameters **
+        # ** Variational autoencoder Model Configuration Parameters **
         self._variational_latent_dimension: int = latent_dimension
         self._variational_training_algorithm: str = training_algorithm
         self._variational_activation_function: str = activation_function
@@ -211,9 +211,9 @@ class VariationalAutoencoder:
 
     def _get_variational(self, input_shape: tuple[int, ...]) -> None:
         """
-        Initialize and configure the Variational Autoencoder model.
+        Initialize and configure the Variational autoencoder model.
 
-        This method sets up a Variational Autoencoder model by configuring the encoder and decoder
+        This method sets up a Variational autoencoder model by configuring the encoder and decoder
         using the `VariationalAutoencoderModel` class and links them with the `VariationalAutoencoderAlgorithm` class.
         The model is initialized with specified configurations such as latent dimension, activation functions,
         dropout rates, and layer sizes for both the encoder and decoder.

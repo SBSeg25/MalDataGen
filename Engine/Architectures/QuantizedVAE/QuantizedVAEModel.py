@@ -40,7 +40,7 @@ try:
     from Engine.Architectures.QuantizedVAE.Tensorflow.ModelQuantizedVAETensorflow import QuantizedVAEModelTensorflow
     from Engine.Architectures.QuantizedVAE.Torch.QuantizedVAEVanillaModelTorch import QuantizedVAEModelTorch
 
-    framework = os.getenv("ML_FRAMEWORK", "tensorflow").lower()
+    framework = os.getenv("ML_FRAMEWORK", "_tensorflow").lower()
 
     if framework == "pytorch":
         QuantizedVAEModelBase = QuantizedVAEModelTorch
@@ -61,4 +61,4 @@ class QuantizedVAEModel(QuantizedVAEModelBase):
             self._framework = "pytorch"
 
         else:
-            self._framework = "tensorflow"
+            self._framework = "_tensorflow"

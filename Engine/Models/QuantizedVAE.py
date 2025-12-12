@@ -72,7 +72,7 @@ DEFAULT_QUANTIZED_VAE_STANDER_DEVIATION = 0.125
 
 class QuantizedVAE:
     """
-    A class that instantiates and manages a Vector Quantized Variational Autoencoder (VQ-VAE) model.
+    A class that instantiates and manages a Vector Quantized Variational autoencoder (VQ-VAE) model.
     This implementation provides complete configuration, training, and management capabilities
     for quantized latent space learning tasks within the Synthetic Ocean ecosystem.
 
@@ -145,7 +145,7 @@ class QuantizedVAE:
         self._quantized_vae_algorithm: QuantizedVAEAlgorithm | None = algorithm
         self._quantized_vae_model: QuantizedVAEModel | None = model
 
-        # ** Vector Quantized Variational Autoencoder (VQ-VAE) Configuration Parameters **
+        # ** Vector Quantized Variational autoencoder (VQ-VAE) Configuration Parameters **
         self._quantized_vae_number_epochs: int = number_epochs
         self._quantized_vae_batch_size: int = batch_size
         self._quantized_vae_latent_dimension: int = latent_dimension
@@ -180,7 +180,7 @@ class QuantizedVAE:
 
     def _get_quantized_vae(self, input_shape: tuple[int, ...]) -> None:
         """
-        Initialize and configure the Quantized Variational Autoencoder (VQ-VAE) model, including encoder, decoder,
+        Initialize and configure the Quantized Variational autoencoder (VQ-VAE) model, including encoder, decoder,
         and quantization components.
 
         This method sets up a Quantized VAE model by configuring the encoder, decoder, and quantization layers using the
