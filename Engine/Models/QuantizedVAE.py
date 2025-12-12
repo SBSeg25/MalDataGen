@@ -495,3 +495,7 @@ class QuantizedVAE:
     def quantized_vae_path_output_models(self, value: str) -> None:
         """Set the output models path."""
         self._quantized_vae_path_output_models = value
+
+    def get_samples(self, number_samples_per_class):
+
+        return self._quantized_vae_algorithm.get_samples(number_samples_per_class)

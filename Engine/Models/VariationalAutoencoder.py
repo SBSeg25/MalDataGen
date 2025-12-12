@@ -653,3 +653,7 @@ class VariationalAutoencoder:
     def variational_beta_2(self, value: float) -> None:
         """Set the beta 2 parameter."""
         self._variational_beta_2 = value
+
+    def get_samples(self, number_samples_per_class):
+
+        return self._variational_algorithm.get_samples(number_samples_per_class)

@@ -8,7 +8,6 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
-from Engine.Models.LatentDiffusion import LatentDiffusion
 
 # MIT License
 #
@@ -40,17 +39,19 @@ try:
     import logging
     import tensorflow
 
+    from Engine.Models.Adversarial import Adversarial
+    from Engine.Models.Autoencoder import Autoencoder
+    from Engine.Models.QuantizedVAE import QuantizedVAE
+
     from tensorflow.keras.optimizers import Adam
     from tensorflow.keras.utils import to_categorical
+    from Engine.Models.LatentDiffusion import LatentDiffusion
     from tensorflow.python.keras.losses import MeanSquaredError
     from Engine.Callbacks.CallbackEarlyStop import EarlyStopping
     from tensorflow.python.keras.losses import BinaryCrossentropy
 
     from Engine.Algorithms.Copy.CopyAlgorithm import CopyAlgorithm
     from Engine.Models.DenoisingDiffusion import DenoisingDiffusion
-    from Engine.Models.Adversarial import Adversarial
-    from Engine.Models.Autoencoder import Autoencoder
-    from Engine.Models.QuantizedVAE import QuantizedVAE
     from Engine.Algorithms.RandomNoise.AlgorithmRandomNoise import RandomNoiseAlgorithm
     from Engine.Callbacks.CallbackModel import ModelMonitorCallback
     from Engine.Callbacks.CallbackResources import ResourceMonitorCallback
@@ -410,13 +411,13 @@ class GenerativeModels:
             self._latent_diffusion_model.get_samples(number_samples_per_class)
 
         elif self.arguments.model_type == 'denoising_diffusion':
-            self._denoising_diffusion_model._denoising_diffusion_algorithm.get_samples(number_samples_per_class)
+            self._denoising_diffusion_model.get_samples(number_samples_per_class)
 
         elif self.arguments.model_type == 'wasserstein':
             self._wasserstein_model._wasserstein_gp_algorithm.get_samples(number_samples_per_class)
 
         elif self.arguments.model_type == 'variational':
-            self._variational_autoencoder_model._latent_variational_algorithm.get_samples(number_samples_per_class)
+            self._variational_autoencoder_model.get_samples(number_samples_per_class)
 
         elif self.arguments.model_type == 'autoencoder':
             self._autoencoder_model.get_samples(number_samples_per_class)
@@ -425,7 +426,7 @@ class GenerativeModels:
             self._random_noise_algorithm.get_samples(number_samples_per_class)
 
         elif self.arguments.model_type == 'quantized':
-            self._quantized_vae_model._quantized_vae_algorithm.get_samples(number_samples_per_class)
+            self._quantized_vae_model.get_samples(number_samples_per_class)
 
         elif self.arguments.model_type == 'smote':
             self._smote_model._smote_algorithm.get_samples(number_samples_per_class)

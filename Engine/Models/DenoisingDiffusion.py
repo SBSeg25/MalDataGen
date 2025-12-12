@@ -843,3 +843,7 @@ class DenoisingDiffusion:
             f"epochs={self._denoising_diffusion_unet_epochs}, "
             f"batch_size={self._denoising_diffusion_unet_batch_size})"
         )
+
+    def get_samples(self, number_samples_per_class):
+
+        return self._denoising_diffusion_algorithm.get_samples(number_samples_per_class)
