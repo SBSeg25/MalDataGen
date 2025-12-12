@@ -405,7 +405,7 @@ class GenerativeModels:
             number_samples_per_class: Number of samples to generate per class
         """
         if self.arguments.model_type == 'adversarial':
-            self._adversarial_model._adversarial_algorithm.get_samples(number_samples_per_class)
+            self._adversarial_model.get_samples(number_samples_per_class)
 
         elif self.arguments.model_type == 'latent_diffusion':
             self._latent_diffusion_model._latent_diffusion_algorithm.get_samples(number_samples_per_class)

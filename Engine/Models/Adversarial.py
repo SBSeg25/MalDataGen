@@ -357,6 +357,10 @@ class Adversarial:
             callbacks=callbacks_list
         )
 
+    def get_samples(self, number_samples_per_class):
+
+        return self._adversarial_algorithm.get_samples(number_samples_per_class)
+
     # Additional getters for the algorithm and model
     @property
     def adversarial_algorithm(self) -> AdversarialAlgorithm | None:
