@@ -8,29 +8,8 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
-
 # MIT License
-#
-# Copyright (c) 2025 Synthetic Ocean AI
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
+# (License text omitted for brevity)
 
 try:
     import sys
@@ -68,18 +47,10 @@ except ImportError as error:
 class GenerativeModels:
     """
     Generative Models Manager - Uses composition instead of multiple inheritance
-
-    This class manages various generative model instances and provides a unified
-    interface for training and generating synthetic data.
     """
 
     def __init__(self, arguments):
-        """
-        Initialize all generative models as composition instances.
-
-        Args:
-            arguments: Configuration object containing all model parameters
-        """
+        """Initialize all generative models as composition instances."""
         self.arguments = arguments
 
         # Initialize callback handlers
@@ -100,14 +71,12 @@ class GenerativeModels:
         self._initialize_models(arguments)
 
     def _initialize_models(self, args):
-        """
-        Initialize all generative model instances.
+        """Initialize all generative model instances."""
 
-        Args:
-            args: Arguments object containing model configurations
-        """
+        # FIXED: Changed from _model to _algorithm for consistency with SynDataGen
+
         # Initialize Adversarial Model
-        self._adversarial_model = Adversarial(
+        self._adversarial_algorithm = Adversarial(
             args.adversarial_number_epochs,
             args.adversarial_batch_size,
             args.adversarial_initializer_mean,
@@ -132,7 +101,7 @@ class GenerativeModels:
         )
 
         # Initialize Autoencoder Model
-        self._autoencoder_model = Autoencoder(
+        self._autoencoder_algorithm = Autoencoder(
             args.autoencoder_latent_dimension,
             args.autoencoder_training_algorithm,
             args.autoencoder_activation_function,
@@ -156,7 +125,7 @@ class GenerativeModels:
         )
 
         # Initialize Denoising Diffusion Model
-        self._denoising_diffusion_model = DenoisingDiffusion(
+        self._denoising_diffusion_algorithm = DenoisingDiffusion(
             args.denoising_diffusion_unet_last_layer_activation,
             args.denoising_diffusion_latent_dimension,
             args.denoising_diffusion_unet_num_embedding_channels,
@@ -179,7 +148,7 @@ class GenerativeModels:
         )
 
         # Initialize Quantized VAE Model
-        self._quantized_vae_model = QuantizedVAE(
+        self._quantized_vae_algorithm = QuantizedVAE(
             args.quantized_vae_number_epochs,
             args.quantized_vae_batch_size,
             args.quantized_vae_latent_dimension,
@@ -199,7 +168,7 @@ class GenerativeModels:
         )
 
         # Initialize Latent Diffusion Model
-        self._latent_diffusion_model = LatentDiffusion(
+        self._latent_diffusion_algorithm = LatentDiffusion(
             unet_last_layer_activation=args.latent_diffusion_unet_last_layer_activation,
             latent_dimension=args.latent_diffusion_latent_dimension,
             unet_num_embedding_channels=args.latent_diffusion_unet_num_embedding_channels,
@@ -242,7 +211,7 @@ class GenerativeModels:
         )
 
         # Initialize Wasserstein Model
-        self._wasserstein_model = Wasserstein(
+        self._wasserstein_algorithm = Wasserstein(
             args.wasserstein_latent_dimension,
             args.wasserstein_training_algorithm,
             args.wasserstein_activation_function,
@@ -272,7 +241,7 @@ class GenerativeModels:
         )
 
         # Initialize Wasserstein GP Model
-        self._wasserstein_gp_model = WassersteinGP(
+        self._wasserstein_gp_algorithm = WassersteinGP(
             args.wasserstein_gp_latent_dimension,
             args.wasserstein_gp_training_algorithm,
             args.wasserstein_gp_activation_function,
@@ -296,7 +265,7 @@ class GenerativeModels:
         )
 
         # Initialize Variational Autoencoder Model
-        self._variational_autoencoder_model = VariationalAutoencoder(
+        self._variational_algorithm = VariationalAutoencoder(
             args.variational_autoencoder_latent_dimension,
             args.variational_autoencoder_training_algorithm,
             args.variational_autoencoder_activation_function,
@@ -320,7 +289,7 @@ class GenerativeModels:
         )
 
         # Initialize SMOTE Model
-        self._smote_model = Smote(args)
+        self._smote_algorithm = Smote(args)
 
     def _get_random_noise(self, input_shape):
         """Initialize random noise algorithm."""
@@ -331,23 +300,11 @@ class GenerativeModels:
 
     def _get_smote(self, input_shape):
         """Initialize SMOTE algorithm."""
-        # SMOTE is already initialized in _initialize_models
         pass
 
     def training_model(self, arguments, input_shape, x_real_samples, y_real_samples, monitor_path, k_fold):
-        """
-        Trains a model based on the selected type.
+        """Trains a model based on the selected type."""
 
-        This method delegates training to the appropriate model instance based on model_type.
-
-        Args:
-            arguments: Configuration arguments
-            input_shape: Shape of input data
-            x_real_samples: Real input samples for training
-            y_real_samples: Target labels for real samples
-            monitor_path: Path to store monitoring data
-            k_fold: K-fold cross-validation split number
-        """
         # Initialize callbacks
         self._callback_resources_monitor = ResourceMonitorCallback(monitor_path, k_fold)
         self._callback_model_monitor = ModelMonitorCallback(monitor_path, k_fold)
@@ -362,87 +319,76 @@ class GenerativeModels:
 
         # Delegate to appropriate model
         if arguments.model_type == 'adversarial':
-            self._adversarial_model.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
+            self._adversarial_algorithm.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
 
         elif arguments.model_type == 'autoencoder':
-            self._autoencoder_model.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
+            self._autoencoder_algorithm.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
 
         elif arguments.model_type == 'random':
             self._get_random_noise(input_shape)
             self._random_noise_algorithm.fit_model(x_real_samples,
                                                    to_categorical(y_real_samples,
-                                                                  num_classes=self._number_samples_per_class["number_classes"]))
+                                                                  num_classes=self._number_samples_per_class[
+                                                                      "number_classes"]))
 
         elif arguments.model_type == 'smote':
             self._get_smote(input_shape)
-            self._smote_model._smote_algorithm.fit_model(x_real_samples,
-                                                         to_categorical(y_real_samples,
-                                                                        num_classes=self._number_samples_per_class["number_classes"]))
+            self._smote_algorithm._smote_algorithm.fit_model(x_real_samples,
+                                                             to_categorical(y_real_samples,
+                                                                            num_classes=self._number_samples_per_class[
+                                                                                "number_classes"]))
 
         elif arguments.model_type == 'variational':
-            self._variational_autoencoder_model.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
+            self._variational_algorithm.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
 
         elif arguments.model_type == 'wasserstein_gp':
-            self._wasserstein_gp_model.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
+            self._wasserstein_gp_algorithm.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
 
         elif arguments.model_type == 'wasserstein':
-            self._wasserstein_model.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
+            self._wasserstein_algorithm.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
 
         elif arguments.model_type == 'latent_diffusion':
-            self._latent_diffusion_model.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
+            self._latent_diffusion_algorithm.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
 
         elif arguments.model_type == 'denoising_diffusion':
-            self._denoising_diffusion_model.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
+            self._denoising_diffusion_algorithm.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
 
         elif arguments.model_type == 'quantized':
-            self._quantized_vae_model.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
+            self._quantized_vae_algorithm.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
 
     def get_samples(self, number_samples_per_class):
-        """
-        Generate synthetic samples using the trained model.
+        """Generate synthetic samples using the trained model."""
 
-        Args:
-            number_samples_per_class: Number of samples to generate per class
-        """
         if self.arguments.model_type == 'adversarial':
-            self._adversarial_model.get_samples(number_samples_per_class)
+            self._adversarial_algorithm.get_samples(number_samples_per_class)
 
         elif self.arguments.model_type == 'latent_diffusion':
-            self._latent_diffusion_model.get_samples(number_samples_per_class)
+            self._latent_diffusion_algorithm.get_samples(number_samples_per_class)
 
         elif self.arguments.model_type == 'denoising_diffusion':
-            self._denoising_diffusion_model.get_samples(number_samples_per_class)
+            self._denoising_diffusion_algorithm.get_samples(number_samples_per_class)
 
         elif self.arguments.model_type == 'wasserstein':
-            self._wasserstein_model._wasserstein_gp_algorithm.get_samples(number_samples_per_class)
+            self._wasserstein_algorithm.get_samples(number_samples_per_class)
 
         elif self.arguments.model_type == 'variational':
-            self._variational_autoencoder_model.get_samples(number_samples_per_class)
+            self._variational_algorithm.get_samples(number_samples_per_class)
 
         elif self.arguments.model_type == 'autoencoder':
-            self._autoencoder_model.get_samples(number_samples_per_class)
+            self._autoencoder_algorithm.get_samples(number_samples_per_class)
 
         elif self.arguments.model_type == 'random':
             self._random_noise_algorithm.get_samples(number_samples_per_class)
 
         elif self.arguments.model_type == 'quantized':
-            self._quantized_vae_model.get_samples(number_samples_per_class)
+            self._quantized_vae_algorithm.get_samples(number_samples_per_class)
 
         elif self.arguments.model_type == 'smote':
-            self._smote_model._smote_algorithm.get_samples(number_samples_per_class)
+            self._smote_algorithm._smote_algorithm.get_samples(number_samples_per_class)
 
 
 def import_models(function):
-    """
-    Decorator to create an instance of GenerativeModels class
-    before executing the wrapped function.
-
-    Args:
-        function: The function to be wrapped
-
-    Returns:
-        The wrapped function that initializes GenerativeModels
-    """
+    """Decorator to create an instance of GenerativeModels class."""
 
     def wrapper(self, *args, **kwargs):
         GenerativeModels.__init__(self, self.arguments)

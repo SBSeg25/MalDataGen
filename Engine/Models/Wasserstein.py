@@ -415,12 +415,6 @@ class Wasserstein:
                 f"either (N,) or (N, {num_classes}) for {num_classes} classes"
             )
 
-        # Fit the WassersteinGP GAN model
-        print(f"\nStarting training for {self._wasserstein_number_epochs} epochs...")
-        print(f"Batch size: {self._wasserstein_batch_size}")
-        print(f"Critic steps per generator step: {self._wasserstein_discriminator_steps}")
-        print(f"Training samples: {len(x_real_samples)}\n")
-
         self._wasserstein_algorithm.fit(
             x_real_samples,
             y_real_samples,
@@ -717,3 +711,7 @@ class Wasserstein:
     def wasserstein_path_output_models(self, value: str) -> None:
         """Set the output models path."""
         self._wasserstein_path_output_models = value
+
+    def get_samples(self, number_samples_per_class):
+
+        return self._wasserstein_algorithm.get_samples(number_samples_per_class)
