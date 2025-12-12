@@ -359,33 +359,34 @@ class GenerativeModels:
     def get_samples(self, number_samples_per_class):
         """Generate synthetic samples using the trained model."""
 
-        if self.arguments.model_type == 'adversarial':
-            self._adversarial_algorithm.get_samples(number_samples_per_class)
+        # if self.arguments.model_type == 'adversarial':
+        #     self._adversarial_algorithm.get_samples(number_samples_per_class)
+        #
+        # elif self.arguments.model_type == 'latent_diffusion':
+        #     self._latent_diffusion_algorithm.get_samples(number_samples_per_class)
+        #
+        # elif self.arguments.model_type == 'denoising_diffusion':
+        #     self._denoising_diffusion_algorithm.get_samples(number_samples_per_class)
+        #
+        # elif self.arguments.model_type == 'wasserstein':
+        #     self._wasserstein_algorithm.get_samples(number_samples_per_class)
+        #
+        # elif self.arguments.model_type == 'variational':
+        #     self._variational_algorithm.get_samples(number_samples_per_class)
+        #
+        # elif self.arguments.model_type == 'autoencoder':
+        #     self._autoencoder_algorithm.get_samples(number_samples_per_class)
+        #
+        # elif self.arguments.model_type == 'random':
+        #     self._random_noise_algorithm.get_samples(number_samples_per_class)
+        #
+        # elif self.arguments.model_type == 'quantized':
+        #     self._quantized_vae_algorithm.get_samples(number_samples_per_class)
+        #
+        # elif self.arguments.model_type == 'smote':
+        #     self._smote_algorithm._smote_algorithm.get_samples(number_samples_per_class)
 
-        elif self.arguments.model_type == 'latent_diffusion':
-            self._latent_diffusion_algorithm.get_samples(number_samples_per_class)
-
-        elif self.arguments.model_type == 'denoising_diffusion':
-            self._denoising_diffusion_algorithm.get_samples(number_samples_per_class)
-
-        elif self.arguments.model_type == 'wasserstein':
-            self._wasserstein_algorithm.get_samples(number_samples_per_class)
-
-        elif self.arguments.model_type == 'variational':
-            self._variational_algorithm.get_samples(number_samples_per_class)
-
-        elif self.arguments.model_type == 'autoencoder':
-            self._autoencoder_algorithm.get_samples(number_samples_per_class)
-
-        elif self.arguments.model_type == 'random':
-            self._random_noise_algorithm.get_samples(number_samples_per_class)
-
-        elif self.arguments.model_type == 'quantized':
-            self._quantized_vae_algorithm.get_samples(number_samples_per_class)
-
-        elif self.arguments.model_type == 'smote':
-            self._smote_algorithm._smote_algorithm.get_samples(number_samples_per_class)
-
+        pass
 
 def import_models(function):
     """Decorator to create an instance of GenerativeModels class."""

@@ -127,6 +127,9 @@ class Autoencoder:
                  file_name_encoder: str = DEFAULT_AUTOENCODER_FILE_NAME_ENCODER,
                  file_name_decoder: str = DEFAULT_AUTOENCODER_FILE_NAME_DECODER,
                  path_output_models: str = DEFAULT_AUTOENCODER_PATH_OUTPUT_MODELS,
+                 number_samples_per_class: dict = None,
+                 callback_model_monitor=None,
+                 callback_early_stop=None,
                  algorithm: AutoencoderAlgorithm | None = None,
                  model: AutoencoderModel | None = None
                  ) -> None:
@@ -154,6 +157,9 @@ class Autoencoder:
             file_name_encoder: Encoder model filename (default: "encoder_model")
             file_name_decoder: Decoder model filename (default: "decoder_model")
             path_output_models: Path for saving models (default: "models_saved/")
+            number_samples_per_class: Dictionary with class distribution info (default: None)
+            callback_model_monitor: Callback for monitoring model training (default: None)
+            callback_early_stop: Callback for early stopping (default: None)
             algorithm: Optional pre-initialized AutoencoderAlgorithm instance (default: None)
             model: Optional pre-initialized AutoencoderModel instance (default: None)
         """
@@ -193,6 +199,17 @@ class Autoencoder:
         self._autoencoder_file_name_encoder: str = file_name_encoder
         self._autoencoder_file_name_decoder: str = file_name_decoder
         self._autoencoder_path_output_models: str = path_output_models
+
+        # Initialize number_samples_per_class with default
+        self._number_samples_per_class: dict = (
+            number_samples_per_class
+            if number_samples_per_class is not None
+            else {"number_classes": number_classes}
+        )
+
+        # Initialize callbacks
+        self._callback_model_monitor = callback_model_monitor
+        self._callback_early_stop = callback_early_stop
 
         # Flag to indicate if instances were provided
         self._has_external_algorithm: bool = algorithm is not None
@@ -310,11 +327,15 @@ class Autoencoder:
         # Compile the autoencoder algorithm with the specified loss function
         self._autoencoder_algorithm.compile(loss=arguments.autoencoder_loss_function)
 
-        # callbacks_list = [self._callback_resources_monitor, self._callback_model_monitor]
-        callbacks_list = [self._callback_model_monitor]
+        # Build callbacks list - only include callbacks that exist
+        callbacks_list = []
 
-        if arguments.use_early_stop:
-            callbacks_list.append(self._callback_early_stop)
+        if self._callback_model_monitor is not None:
+            callbacks_list.append(self._callback_model_monitor)
+
+        if hasattr(arguments, 'use_early_stop') and arguments.use_early_stop:
+            if self._callback_early_stop is not None:
+                callbacks_list.append(self._callback_early_stop)
 
         # Fit the autoencoder model
         self._autoencoder_algorithm.fit(
@@ -323,7 +344,7 @@ class Autoencoder:
             x_real_samples,
             epochs=self._autoencoder_number_epochs,
             batch_size=self._autoencoder_batch_size,
-            callbacks=callbacks_list
+            callbacks=callbacks_list if callbacks_list else None
         )
 
     # Additional getters for the algorithm and model
@@ -549,3 +570,33 @@ class Autoencoder:
     def get_samples(self, number_samples_per_class):
 
         return self._autoencoder_algorithm.get_samples(number_samples_per_class)
+
+    @property
+    def callback_model_monitor(self):
+        """Get the model monitor callback."""
+        return self._callback_model_monitor
+
+    @callback_model_monitor.setter
+    def callback_model_monitor(self, value) -> None:
+        """Set the model monitor callback."""
+        self._callback_model_monitor = value
+
+    @property
+    def callback_early_stop(self):
+        """Get the early stop callback."""
+        return self._callback_early_stop
+
+    @callback_early_stop.setter
+    def callback_early_stop(self, value) -> None:
+        """Set the early stop callback."""
+        self._callback_early_stop = value
+
+    @property
+    def number_samples_per_class(self) -> dict:
+        """Get the number of samples per class dictionary."""
+        return self._number_samples_per_class
+
+    @number_samples_per_class.setter
+    def number_samples_per_class(self, value: dict) -> None:
+        """Set the number of samples per class dictionary."""
+        self._number_samples_per_class = value

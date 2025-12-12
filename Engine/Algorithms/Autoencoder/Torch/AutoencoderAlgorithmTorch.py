@@ -40,29 +40,11 @@ try:
     import torch.nn as nn
     import torch.nn.functional as F
     from torch.optim import Optimizer
+    from torch.utils.data import DataLoader, TensorDataset
 
 except ImportError as error:
     print(error)
     sys.exit(-1)
-
-
-class History:
-    """
-    History object for Keras compatibility.
-    Stores training history and provides access via .history attribute.
-    """
-
-    def __init__(self):
-        self.history = {}
-
-    def __getitem__(self, key):
-        return self.history[key]
-
-    def __setitem__(self, key, value):
-        self.history[key] = value
-
-    def keys(self):
-        return self.history.keys()
 
 
 class AutoencoderAlgorithmTorch(nn.Module):
@@ -321,32 +303,32 @@ class AutoencoderAlgorithmTorch(nn.Module):
         # Return a dictionary containing the current loss value
         return {"loss": self._total_loss_tracker}
 
-    def fit(self, x=None, y=None, epochs=1, batch_size=32, verbose=1, validation_data=None,
-            shuffle=True, optimizer=None, learning_rate=0.001, **kwargs):
+    def fit(self, x=None, y=None, batch_size=32, epochs=1, verbose=1,
+            callbacks=None, validation_data=None, shuffle=True,
+            initial_epoch=0, steps_per_epoch=None, validation_steps=None,
+            validation_freq=1, optimizer=None, learning_rate=0.001, **kwargs):
         """
-        Train the autoencoder model.
-
-        Supports both Keras-style (x, y arrays) and PyTorch-style (DataLoader) input.
+        Train the model with a simplified progress bar.
 
         Args:
-            x: Training data. Can be:
-               - Tuple of (x_train, y_train) arrays
-               - PyTorch DataLoader
-               - x_train array (when y is also provided)
-            y: Target data (optional, used when x is an array)
-            epochs (int): Number of training epochs.
-            batch_size (int): Batch size for training (used when x/y are arrays).
-            verbose (int): Verbosity level (0=silent, 1=progress bar).
-            validation_data: Validation data (not implemented yet).
-            shuffle (bool): Whether to shuffle training data.
+            x: Input data (array, tensor, tuple of (x,y), or DataLoader).
+            y: Target data.
+            batch_size: Number of samples per gradient update.
+            epochs: Number of epochs to train.
+            verbose: 0 = silent, 1 = progress bar, 2 = one line per epoch.
+            callbacks: List of callbacks to apply during training.
+            validation_data: Data for validation.
+            shuffle: Whether to shuffle data before each epoch.
+            initial_epoch: Epoch at which to start training.
+            steps_per_epoch: Number of steps per epoch.
+            validation_steps: Number of validation steps.
+            validation_freq: Validation frequency.
             optimizer: PyTorch optimizer (if None, Adam is used).
-            learning_rate (float): Learning rate for optimizer (default: 0.001).
-            **kwargs: Additional arguments (ignored for compatibility).
+            learning_rate: Learning rate for optimizer.
 
         Returns:
-            History: Training history object containing loss values.
+            A History object with training metrics.
         """
-        from torch.utils.data import DataLoader, TensorDataset
 
         # Create default optimizer if none provided
         if optimizer is None:
@@ -354,17 +336,14 @@ class AutoencoderAlgorithmTorch(nn.Module):
 
         # Handle different input formats
         if isinstance(x, DataLoader):
-            # PyTorch DataLoader provided
             dataloader = x
         elif isinstance(x, tuple) and len(x) == 2:
-            # Keras-style: fit((x_train, y_train), epochs=...)
             x_data, y_data = x
             x_tensor = torch.FloatTensor(x_data) if not isinstance(x_data, torch.Tensor) else x_data
             y_tensor = torch.FloatTensor(y_data) if not isinstance(y_data, torch.Tensor) else y_data
             dataset = TensorDataset(x_tensor, y_tensor)
             dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
         elif x is not None and y is not None:
-            # Keras-style: fit(x_train, y_train, epochs=...)
             x_tensor = torch.FloatTensor(x) if not isinstance(x, torch.Tensor) else x
             y_tensor = torch.FloatTensor(y) if not isinstance(y, torch.Tensor) else y
             dataset = TensorDataset(x_tensor, y_tensor)
@@ -372,26 +351,137 @@ class AutoencoderAlgorithmTorch(nn.Module):
         else:
             raise ValueError("Invalid input format. Provide either a DataLoader, (x, y) tuple, or x and y separately.")
 
-        history_obj = History()
-        history_obj['loss'] = []
+        # Calculate steps per epoch if not provided
+        if steps_per_epoch is None:
+            steps_per_epoch = len(dataloader)
 
-        for epoch in range(epochs):
+        # History to store metrics
+        history = self.History()
+        history['loss'] = []
+
+        # Training loop
+        for epoch in range(initial_epoch, epochs):
+            self._total_loss_tracker = 0.0
+
+            if verbose == 1:
+                print(f'\nEpoch {epoch + 1}/{epochs}')
+
+            # Progress tracking
+            step = 0
             epoch_loss = 0.0
-            num_batches = 0
 
-            for batch in dataloader:
-                loss_dict = self.train_step(batch, optimizer)
-                epoch_loss += loss_dict['loss']
-                num_batches += 1
+            for batch_data in dataloader:
+                step += 1
 
-            avg_loss = epoch_loss / num_batches if num_batches > 0 else 0.0
-            history_obj['loss'].append(avg_loss)
+                # Perform training step
+                metrics = self.train_step(batch_data, optimizer)
+                current_loss = metrics['loss']
+                epoch_loss += current_loss
 
-            if verbose:
-                print(f"Epoch {epoch + 1}/{epochs} - loss: {avg_loss:.4f}")
+                # Simple progress bar
+                if verbose == 1:
+                    progress = int(50 * step / steps_per_epoch)
+                    bar = '=' * progress + '>' + '.' * (50 - progress - 1)
+                    print(f'\r[{bar}] {step}/{steps_per_epoch} - loss: {current_loss:.4f}',
+                          end='', flush=True)
 
-        return history_obj
+                if step >= steps_per_epoch:
+                    break
 
+            # Calculate average epoch loss
+            avg_epoch_loss = epoch_loss / step if step > 0 else 0.0
+            history['loss'].append(avg_epoch_loss)
+
+            if verbose == 1:
+                print(f' - loss: {avg_epoch_loss:.4f}')
+            elif verbose == 2:
+                print(f'Epoch {epoch + 1}/{epochs} - loss: {avg_epoch_loss:.4f}')
+
+            # Validation
+            if validation_data is not None and (epoch + 1) % validation_freq == 0:
+                val_loss = self._evaluate_validation(validation_data, validation_steps)
+                if 'val_loss' not in history.history:
+                    history['val_loss'] = []
+                history['val_loss'].append(val_loss)
+
+                if verbose >= 1:
+                    print(f' - val_loss: {val_loss:.4f}')
+
+            # Callbacks
+            if callbacks is not None:
+                for callback in callbacks:
+                    if hasattr(callback, 'on_epoch_end'):
+                        callback.on_epoch_end(epoch, {'loss': avg_epoch_loss})
+
+        return history
+
+    def _evaluate_validation(self, validation_data, validation_steps=None):
+        """
+        Evaluate the model on validation data.
+
+        Args:
+            validation_data: Validation dataset (DataLoader or tuple).
+            validation_steps: Number of validation steps.
+
+        Returns:
+            Average validation loss.
+        """
+
+        # Set model to evaluation mode
+        self.eval()
+
+        # Handle different validation data formats
+        if isinstance(validation_data, DataLoader):
+            val_dataloader = validation_data
+        elif isinstance(validation_data, tuple) and len(validation_data) == 2:
+            x_val, y_val = validation_data
+            x_tensor = torch.FloatTensor(x_val) if not isinstance(x_val, torch.Tensor) else x_val
+            y_tensor = torch.FloatTensor(y_val) if not isinstance(y_val, torch.Tensor) else y_val
+            dataset = TensorDataset(x_tensor, y_tensor)
+            val_dataloader = DataLoader(dataset, batch_size=32, shuffle=False)
+        else:
+            return 0.0
+
+        val_losses = []
+        step = 0
+
+        with torch.no_grad():
+            for batch_data in val_dataloader:
+                batch_x, batch_y = batch_data
+                batch_x = batch_x.to(self.device)
+                batch_y = batch_y.to(self.device)
+
+                # Extract target data and labels (same logic as train_step)
+                if batch_y.shape[1] > batch_x.shape[1]:
+                    target_data = batch_y[:, :batch_x.shape[1]]
+                    one_hot_labels = batch_y[:, batch_x.shape[1]:]
+                else:
+                    target_data = batch_x
+                    if batch_y.shape[1] == self._num_classes:
+                        one_hot_labels = batch_y
+                    else:
+                        one_hot_labels = F.one_hot(batch_y.long(), num_classes=self._num_classes).float()
+
+                # Forward pass
+                latent_representation, _ = self._encoder([batch_x, one_hot_labels])
+                reconstructed = self._decoder([latent_representation, one_hot_labels])
+
+                # Calculate loss
+                if self._loss_function is not None:
+                    loss = self._loss_function(reconstructed, target_data)
+                else:
+                    loss = torch.mean(torch.square(target_data - reconstructed))
+
+                val_losses.append(loss.item())
+
+                step += 1
+                if validation_steps is not None and step >= validation_steps:
+                    break
+
+        # Set back to training mode
+        self.train()
+
+        return numpy.mean(val_losses) if val_losses else 0.0
     def get_samples(self, number_samples_per_class):
         """
         Generates synthetic data samples for each specified class using the trained decoder.
@@ -516,3 +606,21 @@ class AutoencoderAlgorithmTorch(nn.Module):
     def encoder(self, encoder):
         self._encoder = encoder
         self._encoder.to(self.device)
+
+    class History:
+        """
+        History object for Keras compatibility.
+        Stores training history and provides access via .history attribute.
+        """
+
+        def __init__(self):
+            self.history = {}
+
+        def __getitem__(self, key):
+            return self.history[key]
+
+        def __setitem__(self, key, value):
+            self.history[key] = value
+
+        def keys(self):
+            return self.history.keys()
