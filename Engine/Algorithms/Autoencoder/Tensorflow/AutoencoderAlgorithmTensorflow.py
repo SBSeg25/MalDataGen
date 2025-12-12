@@ -47,6 +47,11 @@ except ImportError as error:
     print(error)
     sys.exit(-1)
 
+DEFAULT_LATENT_MEAN_DISTRIBUTION=0.0
+DEFAULT_LATENT_STANDER_DEVIATION=1.0
+DEFAULT_LATENT_DIMENSION=64
+DEFAULT_NUMBER_CLASSES=2
+
 
 class AutoencoderAlgorithmTensorflow(Model):
     """
@@ -114,13 +119,13 @@ class AutoencoderAlgorithmTensorflow(Model):
     def __init__(self,
                  encoder_model,
                  decoder_model,
-                 loss_function,
-                 file_name_encoder,
-                 file_name_decoder,
-                 models_saved_path,
-                 latent_mean_distribution,
-                 latent_stander_deviation,
-                 latent_dimension):
+                 loss_function=None,
+                 file_name_encoder=None,
+                 file_name_decoder=None,
+                 models_saved_path=None,
+                 latent_mean_distribution=DEFAULT_LATENT_MEAN_DISTRIBUTION,
+                 latent_stander_deviation=DEFAULT_LATENT_STANDER_DEVIATION,
+                 latent_dimension=DEFAULT_LATENT_DIMENSION):
 
         super().__init__()
         """
@@ -221,7 +226,7 @@ class AutoencoderAlgorithmTensorflow(Model):
 
 
     @tensorflow.function
-    def train_step(self, batch):
+    def train_step(self, batch, optimizer = None):
         """
         Perform a training step for the AutoEncoder.
 
@@ -257,7 +262,7 @@ class AutoencoderAlgorithmTensorflow(Model):
     def fit(self, x=None, y=None, batch_size=32, epochs=1, verbose=1,
             callbacks=None, validation_data=None, shuffle=True,
             initial_epoch=0, steps_per_epoch=None, validation_steps=None,
-            validation_freq=1, **kwargs):
+            validation_freq=1, optimizer=None, learning_rate=0.001, **kwargs):
         """
         Train the model with a simplified progress bar.
 
@@ -274,10 +279,19 @@ class AutoencoderAlgorithmTensorflow(Model):
             steps_per_epoch: Number of steps per epoch.
             validation_steps: Number of validation steps.
             validation_freq: Validation frequency.
+            optimizer: TensorFlow optimizer (if None, uses already compiled optimizer).
+            learning_rate: Learning rate for optimizer (only used if optimizer is None).
 
         Returns:
             A History object with training metrics.
         """
+
+        # Set optimizer if provided
+        if optimizer is not None:
+            self.optimizer = optimizer
+        elif not hasattr(self, 'optimizer') or self.optimizer is None:
+            # Create default optimizer if none exists
+            self.optimizer = tensorflow.keras.optimizers.Adam(learning_rate=learning_rate)
 
         # Prepare the dataset
         if isinstance(x, tensorflow.data.Dataset):
@@ -354,6 +368,31 @@ class AutoencoderAlgorithmTensorflow(Model):
 
         return History(history)
 
+    def _evaluate_validation(self, validation_data, validation_steps=None):
+        """
+        Evaluate the model on validation data.
+
+        Args:
+            validation_data: Validation dataset.
+            validation_steps: Number of validation steps.
+
+        Returns:
+            Average validation loss.
+        """
+        val_losses = []
+        step = 0
+
+        for batch_data in validation_data:
+            batch_x, batch_y = batch_data
+            reconstructed = self._encoder_decoder_model(batch_x, training=False)
+            loss = tensorflow.reduce_mean(tensorflow.square(batch_y - reconstructed))
+            val_losses.append(float(loss))
+
+            step += 1
+            if validation_steps is not None and step >= validation_steps:
+                break
+
+        return numpy.mean(val_losses) if val_losses else 0.0
     def _evaluate_validation(self, validation_data, validation_steps=None):
         """
         Evaluate the model on validation data.

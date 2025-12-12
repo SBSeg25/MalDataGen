@@ -46,6 +46,12 @@ except ImportError as error:
     print(error)
     sys.exit(-1)
 
+DEFAULT_LATENT_MEAN_DISTRIBUTION=0.0
+DEFAULT_LATENT_STANDER_DEVIATION=1.0
+DEFAULT_LATENT_DIMENSION=64
+DEFAULT_NUMBER_CLASSES=2
+
+
 
 class AutoencoderAlgorithmTorch(nn.Module):
     """
@@ -98,10 +104,9 @@ class AutoencoderAlgorithmTorch(nn.Module):
                  file_name_encoder=None,
                  file_name_decoder=None,
                  models_saved_path=None,
-                 latent_mean_distribution=0.0,
-                 latent_stander_deviation=1.0,
-                 latent_dimension=64,
-                 number_classes=2):
+                 latent_mean_distribution=DEFAULT_LATENT_MEAN_DISTRIBUTION,
+                 latent_stander_deviation=DEFAULT_LATENT_STANDER_DEVIATION,
+                 latent_dimension=DEFAULT_LATENT_DIMENSION):
 
         super().__init__()
 
@@ -132,9 +137,6 @@ class AutoencoderAlgorithmTorch(nn.Module):
         if not isinstance(latent_dimension, int) or latent_dimension <= 0:
             raise ValueError("latent_dimension must be a positive integer.")
 
-        if not isinstance(number_classes, int) or number_classes <= 0:
-            raise ValueError("number_classes must be a positive integer.")
-
         # Initialize the encoder and decoder models
         self._encoder = encoder_model
         self._decoder = decoder_model
@@ -145,7 +147,7 @@ class AutoencoderAlgorithmTorch(nn.Module):
         self._latent_mean_distribution = latent_mean_distribution
         self._latent_stander_deviation = latent_stander_deviation
         self._latent_dimension = latent_dimension
-        self._num_classes = number_classes
+
 
         # File names for saving models
         self._file_name_encoder = file_name_encoder
@@ -270,13 +272,9 @@ class AutoencoderAlgorithmTorch(nn.Module):
             one_hot_labels = batch_y[:, batch_x.shape[1]:]
         else:
             # batch_y contains only labels, use batch_x as reconstruction target
-            target_data = batch_x  # ✅ Use input as target for autoencoder
+            target_data = batch_x  #  Use input as target for autoencoder
             # Assume batch_y is already one-hot encoded labels
-            if batch_y.shape[1] == self._num_classes:
-                one_hot_labels = batch_y
-            else:
-                # batch_y might be class indices, convert to one-hot
-                one_hot_labels = F.one_hot(batch_y.long(), num_classes=self._num_classes).float()
+            one_hot_labels = batch_y
 
         # Forward pass: encoder expects [data, labels], returns (latent, labels)
         latent_representation, labels_passthrough = self._encoder([batch_x, one_hot_labels])
@@ -302,6 +300,7 @@ class AutoencoderAlgorithmTorch(nn.Module):
 
         # Return a dictionary containing the current loss value
         return {"loss": self._total_loss_tracker}
+
 
     def fit(self, x=None, y=None, batch_size=32, epochs=1, verbose=1,
             callbacks=None, validation_data=None, shuffle=True,
@@ -337,17 +336,20 @@ class AutoencoderAlgorithmTorch(nn.Module):
         # Handle different input formats
         if isinstance(x, DataLoader):
             dataloader = x
+
         elif isinstance(x, tuple) and len(x) == 2:
             x_data, y_data = x
             x_tensor = torch.FloatTensor(x_data) if not isinstance(x_data, torch.Tensor) else x_data
             y_tensor = torch.FloatTensor(y_data) if not isinstance(y_data, torch.Tensor) else y_data
             dataset = TensorDataset(x_tensor, y_tensor)
             dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+
         elif x is not None and y is not None:
             x_tensor = torch.FloatTensor(x) if not isinstance(x, torch.Tensor) else x
             y_tensor = torch.FloatTensor(y) if not isinstance(y, torch.Tensor) else y
             dataset = TensorDataset(x_tensor, y_tensor)
             dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+
         else:
             raise ValueError("Invalid input format. Provide either a DataLoader, (x, y) tuple, or x and y separately.")
 
@@ -394,14 +396,18 @@ class AutoencoderAlgorithmTorch(nn.Module):
 
             if verbose == 1:
                 print(f' - loss: {avg_epoch_loss:.4f}')
+
             elif verbose == 2:
                 print(f'Epoch {epoch + 1}/{epochs} - loss: {avg_epoch_loss:.4f}')
 
             # Validation
             if validation_data is not None and (epoch + 1) % validation_freq == 0:
+
                 val_loss = self._evaluate_validation(validation_data, validation_steps)
+
                 if 'val_loss' not in history.history:
                     history['val_loss'] = []
+
                 history['val_loss'].append(val_loss)
 
                 if verbose >= 1:
@@ -433,12 +439,14 @@ class AutoencoderAlgorithmTorch(nn.Module):
         # Handle different validation data formats
         if isinstance(validation_data, DataLoader):
             val_dataloader = validation_data
+
         elif isinstance(validation_data, tuple) and len(validation_data) == 2:
             x_val, y_val = validation_data
             x_tensor = torch.FloatTensor(x_val) if not isinstance(x_val, torch.Tensor) else x_val
             y_tensor = torch.FloatTensor(y_val) if not isinstance(y_val, torch.Tensor) else y_val
             dataset = TensorDataset(x_tensor, y_tensor)
             val_dataloader = DataLoader(dataset, batch_size=32, shuffle=False)
+
         else:
             return 0.0
 
@@ -457,10 +465,7 @@ class AutoencoderAlgorithmTorch(nn.Module):
                     one_hot_labels = batch_y[:, batch_x.shape[1]:]
                 else:
                     target_data = batch_x
-                    if batch_y.shape[1] == self._num_classes:
-                        one_hot_labels = batch_y
-                    else:
-                        one_hot_labels = F.one_hot(batch_y.long(), num_classes=self._num_classes).float()
+                    one_hot_labels = batch_y
 
                 # Forward pass
                 latent_representation, _ = self._encoder([batch_x, one_hot_labels])
@@ -482,6 +487,7 @@ class AutoencoderAlgorithmTorch(nn.Module):
         self.train()
 
         return numpy.mean(val_losses) if val_losses else 0.0
+
     def get_samples(self, number_samples_per_class):
         """
         Generates synthetic data samples for each specified class using the trained decoder.
