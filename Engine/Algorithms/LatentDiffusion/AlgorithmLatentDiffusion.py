@@ -39,7 +39,7 @@ try:
     import logging
 
 
-    framework = os.getenv("ML_FRAMEWORK", "Tensorflow").lower()
+    framework = os.getenv("ML_FRAMEWORK", "tensorflow").lower()
 
     if framework == "pytorch":
         AlgorithmLatentDiffusionBase = AlgorithmLatentDiffusionTorch
@@ -58,4 +58,4 @@ class LatentDiffusionAlgorithm(AlgorithmLatentDiffusionBase):
         if framework == "pytorch":
             self._framework = "pytorch"
         else:
-            self._framework = "Tensorflow"
+            self._framework = "tensorflow"

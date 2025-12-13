@@ -437,6 +437,8 @@ class LatentDiffusion:
 
     def fit_model_tensorflow(self, input_shape, arguments, x_real_samples, y_real_samples):
         """TensorFlow-specific training pipeline."""
+        from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
+
         # Initialize the diffusion model
         self._get_latent_diffusion_tensorflow(input_shape)
 
@@ -453,12 +455,30 @@ class LatentDiffusion:
         # Compile the variational algorithm for diffusion
         self._latent_variational_algorithm.compile(loss=self._latent_diffusion_VAE_loss_function)
 
-        callbacks_list = [self._callback_model_monitor]
+        # Create callbacks for VAE training
+        callbacks_list = [
+            ModelCheckpoint(
+                filepath=os.path.join(self._latent_diffusion_VAE_path_output_models,
+                                      'vae_best_model.h5'),
+                monitor='loss',
+                save_best_only=True,
+                mode='min',
+                verbose=1
+            )
+        ]
 
-        if arguments.use_early_stop:
-            callbacks_list.append(self._callback_early_stop)
+        if hasattr(arguments, 'use_early_stop') and arguments.use_early_stop:
+            callbacks_list.append(
+                EarlyStopping(
+                    monitor='loss',
+                    patience=50,
+                    mode='min',
+                    verbose=1,
+                    restore_best_weights=True
+                )
+            )
 
-        # Fit the diffusion model with the training data
+        # Fit the VAE model with the training data
         self._latent_variational_algorithm.fit(
             (x_real_samples, to_categorical(y_real_samples,
                                             num_classes=self._number_samples_per_class["number_classes"])),
@@ -506,10 +526,28 @@ class LatentDiffusion:
         data_embedding = numpy.array(data_embedding)
         data_embedding = tensorflow.expand_dims(data_embedding, axis=-1)
 
-        callbacks_list = [self._callback_model_monitor]
+        # Create callbacks for diffusion training
+        callbacks_list = [
+            ModelCheckpoint(
+                filepath=os.path.join(self._latent_diffusion_VAE_path_output_models,
+                                      'diffusion_best_model.h5'),
+                monitor='loss',
+                save_best_only=True,
+                mode='min',
+                verbose=1
+            )
+        ]
 
-        if arguments.use_early_stop:
-            callbacks_list.append(self._callback_early_stop)
+        if hasattr(arguments, 'use_early_stop') and arguments.use_early_stop:
+            callbacks_list.append(
+                EarlyStopping(
+                    monitor='loss',
+                    patience=50,
+                    mode='min',
+                    verbose=1,
+                    restore_best_weights=True
+                )
+            )
 
         self._latent_diffusion_algorithm.fit(
             data_embedding,
@@ -749,7 +787,7 @@ class LatentDiffusion:
             x_real_samples (ndarray): Training samples
             y_real_samples (ndarray): Corresponding labels
         """
-        if self._framework == 'Tensorflow':
+        if self._framework == 'tensorflow':
             return self.fit_model_tensorflow(input_shape, arguments, x_real_samples, y_real_samples)
         else:  # pytorch
             return self.fit_model_pytorch(input_shape, arguments, x_real_samples, y_real_samples)
