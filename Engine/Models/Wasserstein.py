@@ -334,7 +334,7 @@ class Wasserstein:
             x_real_samples: Training samples
             y_real_samples: Corresponding labels
         """
-        # Initialize the WassersteinGP model (or use provided)
+        # Initialize the wassersteingp model (or use provided)
         self._get_wasserstein(input_shape)
 
         # Print the model summaries for the generator and discriminator if available

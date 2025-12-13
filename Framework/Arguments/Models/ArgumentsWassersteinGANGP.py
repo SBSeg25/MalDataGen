@@ -74,15 +74,15 @@ def add_argument_wasserstein_gan_gp(parser):
 
     parser.add_argument("--wasserstein_gp_latent_dimension", type=int,
                         default=DEFAULT_WASSERSTEIN_GAN_GP_LATENT_DIMENSION,
-                        help="Latent space dimension for the WassersteinGP GAN.")
+                        help="Latent space dimension for the wassersteingp GAN.")
 
     parser.add_argument("--wasserstein_gp_training_algorithm", type=str,
                         default=DEFAULT_WASSERSTEIN_GAN_GP_TRAINING_ALGORITHM,
-                        help="Training algorithm for the WassersteinGP GAN.")
+                        help="Training algorithm for the wassersteingp GAN.")
 
     parser.add_argument("--wasserstein_gp_activation_function", type=str,
                         default=DEFAULT_WASSERSTEIN_GAN_GP_ACTIVATION,
-                        help="Activation function for the WassersteinGP GAN.")
+                        help="Activation function for the wassersteingp GAN.")
 
     parser.add_argument("--wasserstein_gp_dropout_decay_rate_g", type=float,
                         default=DEFAULT_WASSERSTEIN_GAN_GP_DROPOUT_DECAY_RATE_G,
@@ -102,19 +102,19 @@ def add_argument_wasserstein_gan_gp(parser):
 
     parser.add_argument('--wasserstein_gp_batch_size', type=int,
                         default=DEFAULT_WASSERSTEIN_GAN_GP_BATCH_SIZE,
-                        help='Batch size for the WassersteinGP GAN.')
+                        help='Batch size for the wassersteingp GAN.')
 
     parser.add_argument('--wasserstein_gp_number_epochs', type=int,
                         default=DEFAULT_WASSERSTEIN_GAN_GP_NUMBER_EPOCHS,
-                        help='Number epochs for the WassersteinGP GAN.')
+                        help='Number epochs for the wassersteingp GAN.')
 
     parser.add_argument('--wasserstein_gp_number_classes', type=int,
                         default=DEFAULT_WASSERSTEIN_GAN_GP_NUMBER_CLASSES,
-                        help='Number of classes for the WassersteinGP GAN.')
+                        help='Number of classes for the wassersteingp GAN.')
 
     parser.add_argument("--wasserstein_gp_loss_function", type=str,
                         default=DEFAULT_WASSERSTEIN_GAN_GP_LOSS,
-                        help="Loss function for the WassersteinGP GAN.",
+                        help="Loss function for the wassersteingp GAN.",
                         choices=['binary_crossentropy', 'mean_squared_error'])
 
     parser.add_argument("--wasserstein_gp_momentum", type=float,
@@ -155,7 +155,7 @@ def add_argument_wasserstein_gan_gp(parser):
 
     parser.add_argument("--wasserstein_gp_smoothing_rate", type=float,
                         default=DEFAULT_WASSERSTEIN_GAN_GP_SMOOTHING_RATE,
-                        help="Smoothing rate for the WassersteinGP GAN.")
+                        help="Smoothing rate for the wassersteingp GAN.")
 
     parser.add_argument("--wasserstein_gp_latent_mean_distribution", type=float,
                         default=DEFAULT_WASSERSTEIN_GAN_GP_LATENT_MEAN_DISTRIBUTION,
@@ -167,7 +167,7 @@ def add_argument_wasserstein_gan_gp(parser):
 
     parser.add_argument("--wasserstein_gp_gradient_penalty", type=float,
                         default=DEFAULT_WASSERSTEIN_GAN_GP_GRADIENT_PENALTY,
-                        help="Gradient penalty value for the WassersteinGP GAN.")
+                        help="Gradient penalty value for the wassersteingp GAN.")
 
     parser.add_argument("--wasserstein_gp_file_name_discriminator", type=str,
                         default=DEFAULT_WASSERSTEIN_GAN_GP_FILE_NAME_DISCRIMINATOR,

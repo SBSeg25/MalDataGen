@@ -204,10 +204,10 @@ class SynDataGen(Arguments, CSVDataProcessor, Metrics, GenerativeModels, Classif
 
         6. wasserstein GP GAN [model_type='wasserstein_gp']
 
-            A wasserstein GP Generative adversarial Network (WassersteinGP GAN) model.
+            A wasserstein GP Generative adversarial Network (wassersteingp GAN) model.
 
-            This class represents a WassersteinGP GAN consisting of a generator and discriminator model.
-            It implements the WassersteinGP loss with gradient penalty to improve the training of the
+            This class represents a wassersteingp GAN consisting of a generator and discriminator model.
+            It implements the wassersteingp loss with gradient penalty to improve the training of the
             discriminator and generator.
 
         7. Latent Diffusion Architectures [model_type='latent_diffusion']
@@ -437,7 +437,7 @@ class SynDataGen(Arguments, CSVDataProcessor, Metrics, GenerativeModels, Classif
         This method is responsible for creating a model based on the specified model type, training it on real data,
         generating synthetic data using the trained model, and optionally saving the model and generated data.
 
-        It supports various model types including adversarial, autoencoder, variational, WassersteinGP, diffusion,
+        It supports various model types including adversarial, autoencoder, variational, wassersteingp, diffusion,
         and copy-paste algorithms. After training and generating data, it logs the completion of each step and saves the models
         and data if specified in the arguments.
 
@@ -565,14 +565,14 @@ class SynDataGen(Arguments, CSVDataProcessor, Metrics, GenerativeModels, Classif
 
             elif self.arguments.model_type == "wasserstein":
 
-                # Using WassersteinGP model to generate synthetic data
+                # Using wassersteingp model to generate synthetic data
                 self.generator_name = 'wasserstein'
                 logging.info("Generating data using wasserstein algorithm.")
                 self.data_generated = self._wasserstein_algorithm.get_samples(number_samples_per_class)
 
             elif self.arguments.model_type == "wasserstein_gp":
 
-                # Using WassersteinGP model to generate synthetic data
+                # Using wassersteingp model to generate synthetic data
                 self.generator_name = 'wasserstein_gp'
                 logging.info("Generating data using wasserstein GP algorithm.")
                 self.data_generated = self._wasserstein_gp_algorithm.get_samples(number_samples_per_class)

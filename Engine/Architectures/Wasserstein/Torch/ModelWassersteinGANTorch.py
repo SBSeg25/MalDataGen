@@ -64,7 +64,7 @@ DEFAULT_WASSERSTEIN_GAN_INITIALIZER_DEVIATION = 0.125
 
 class WassersteinModelTorch(VanillaDiscriminatorTorch, VanillaGeneratorTorch):
     """
-    WassersteinGP Generative adversarial Network (WGAN-GP) with Gradient Penalty (PyTorch version).
+    wassersteingp Generative adversarial Network (WGAN-GP) with Gradient Penalty (PyTorch version).
 
     This class implements a wasserstein GAN, a type of Generative adversarial
     Network designed to improve training stability and provide a more meaningful
