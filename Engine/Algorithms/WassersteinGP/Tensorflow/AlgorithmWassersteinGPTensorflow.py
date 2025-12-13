@@ -235,7 +235,8 @@ class WassersteinGPAlgorithmTensorflow(Model):
 
         return gradient_penalty_final
 
-    def calculate_samples_per_class(self, y_labels):
+    @staticmethod
+    def calculate_samples_per_class(y_labels):
         """
         Calculate the distribution of samples per class from labels.
 

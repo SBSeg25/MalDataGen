@@ -340,29 +340,60 @@ class WassersteinGPAlgorithmTorch(nn.Module):
             "number_classes": len(unique)
         }
 
-    def fit(self, x=None, y=None, batch_size=32, epochs=1, verbose=1, callbacks=None, **kwargs):
+    def fit(self, x=None, y=None, batch_size=32, epochs=1, verbose=1,
+            callbacks=None, validation_data=None, shuffle=True,
+            initial_epoch=0, steps_per_epoch=None, validation_steps=None,
+            validation_freq=1, optimizer=None, learning_rate=0.001, **kwargs):
         """
-        Train the model for a fixed number of epochs (iterations on a dataset).
+        Train the model for a fixed number of epochs with a simplified progress bar.
 
-        This method mimics Keras's fit() API for compatibility.
+        This method mimics Keras's fit() API for compatibility with PyTorch.
 
         Args:
-            x (array-like or torch.utils.data.Dataset): Training data features or dataset.
-            y (array-like, optional): Target data (labels). Not needed if x is a Dataset.
-            batch_size (int): Number of samples per gradient update.
-            epochs (int): Number of epochs to train the model.
-            verbose (int): Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch.
-            callbacks (list, optional): List of callbacks to apply during training.
+            x: Input data (array-like or torch.utils.data.Dataset).
+            y: Target data (labels). Not needed if x is a Dataset.
+            batch_size: Number of samples per gradient update.
+            epochs: Number of epochs to train.
+            verbose: 0 = silent, 1 = progress bar, 2 = one line per epoch.
+            callbacks: List of callbacks to apply during training.
+            validation_data: Data for validation (tuple of (x_val, y_val)).
+            shuffle: Whether to shuffle data before each epoch.
+            initial_epoch: Epoch at which to start training.
+            steps_per_epoch: Number of steps per epoch.
+            validation_steps: Number of validation steps.
+            validation_freq: Validation frequency.
+            optimizer: Optimizer (dict with 'generator' and 'discriminator' keys or single optimizer).
+            learning_rate: Learning rate for optimizers (if optimizer is None).
             **kwargs: Additional arguments for compatibility.
 
         Returns:
             History object containing training loss history.
         """
+        import torch.optim as optim
         from torch.utils.data import TensorDataset, DataLoader
 
-        # Create dataset and dataloader
+        # Set optimizers if provided
+        if optimizer is not None:
+            if isinstance(optimizer, dict):
+                self._generator_optimizer = optimizer.get('generator')
+                self._discriminator_optimizer = optimizer.get('discriminator')
+            else:
+                self._generator_optimizer = optimizer
+                self._discriminator_optimizer = optimizer
+        elif self._generator_optimizer is None or self._discriminator_optimizer is None:
+            # Create default optimizers if none exist
+            self._generator_optimizer = optim.Adam(
+                self._generator.parameters(),
+                lr=learning_rate
+            )
+            self._discriminator_optimizer = optim.Adam(
+                self._discriminator.parameters(),
+                lr=learning_rate
+            )
+
+        # Prepare the training dataset
         if isinstance(x, torch.utils.data.Dataset):
-            dataloader = DataLoader(x, batch_size=batch_size, shuffle=True)
+            train_loader = DataLoader(x, batch_size=batch_size, shuffle=shuffle)
         else:
             # Convert numpy arrays to tensors
             if not isinstance(x, torch.Tensor):
@@ -376,50 +407,180 @@ class WassersteinGPAlgorithmTorch(nn.Module):
                 y_tensor = y
 
             dataset = TensorDataset(x_tensor, y_tensor)
-            dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+            train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
 
-        # Training history
-        history = {'d_loss': [], 'g_loss': []}
+        # Calculate steps per epoch if not provided
+        if steps_per_epoch is None:
+            steps_per_epoch = len(train_loader)
+
+        # Prepare validation dataset if provided
+        val_loader = None
+        if validation_data is not None:
+            if isinstance(validation_data, torch.utils.data.Dataset):
+                val_loader = DataLoader(validation_data, batch_size=batch_size, shuffle=False)
+            else:
+                val_x, val_y = validation_data
+                if not isinstance(val_x, torch.Tensor):
+                    val_x = torch.tensor(val_x, dtype=torch.float32)
+                if not isinstance(val_y, torch.Tensor):
+                    val_y = torch.tensor(val_y, dtype=torch.long)
+                val_dataset = TensorDataset(val_x, val_y)
+                val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
         # Move models to device
         self._generator.to(self._device)
         self._discriminator.to(self._device)
 
+        # History to store metrics
+        history = {'d_loss': [], 'g_loss': []}
+
         # Training loop
-        for epoch in range(epochs):
-            epoch_d_loss = []
-            epoch_g_loss = []
+        for epoch in range(initial_epoch, epochs):
+            # Trackers for epoch metrics
+            epoch_d_losses = []
+            epoch_g_losses = []
 
-            for batch_idx, batch in enumerate(dataloader):
-                # Train step
-                losses = self.train_step(batch)
-                epoch_d_loss.append(losses['d_loss'])
-                epoch_g_loss.append(losses['g_loss'])
+            if verbose == 1:
+                print(f'\nEpoch {epoch + 1}/{epochs}')
 
-            # Calculate average losses for the epoch
-            avg_d_loss = sum(epoch_d_loss) / len(epoch_d_loss)
-            avg_g_loss = sum(epoch_g_loss) / len(epoch_g_loss)
+            # Progress tracking
+            step = 0
+            for batch_data in train_loader:
+                step += 1
 
-            history['d_loss'].append(avg_d_loss)
-            history['g_loss'].append(avg_g_loss)
+                # Perform training step
+                losses = self.train_step(batch_data)
+                current_d_loss = losses['d_loss']
+                current_g_loss = losses['g_loss']
 
-            # Verbose output
-            if verbose > 0:
+                # Track losses for this epoch
+                epoch_d_losses.append(current_d_loss)
+                epoch_g_losses.append(current_g_loss)
+
+                # Simple progress bar
                 if verbose == 1:
-                    print(f"\rEpoch {epoch + 1}/{epochs} - d_loss: {avg_d_loss:.4f} - g_loss: {avg_g_loss:.4f}", end='')
-                elif verbose == 2:
-                    print(f"Epoch {epoch + 1}/{epochs} - d_loss: {avg_d_loss:.4f} - g_loss: {avg_g_loss:.4f}")
+                    progress = int(50 * step / steps_per_epoch)
+                    bar = '=' * progress + '>' + '.' * (50 - progress - 1)
+                    print(
+                        f'\r[{bar}] {step}/{steps_per_epoch} - d_loss: {current_d_loss:.4f} - g_loss: {current_g_loss:.4f}',
+                        end='', flush=True)
 
-        if verbose == 1:
-            print()  # New line after progress
+                if step >= steps_per_epoch:
+                    break
 
-        # Return history object (mimicking Keras)
+            # Store epoch losses
+            epoch_d_loss = numpy.mean(epoch_d_losses) if epoch_d_losses else 0.0
+            epoch_g_loss = numpy.mean(epoch_g_losses) if epoch_g_losses else 0.0
+
+            history['d_loss'].append(epoch_d_loss)
+            history['g_loss'].append(epoch_g_loss)
+
+            if verbose == 1:
+                print(f' - d_loss: {epoch_d_loss:.4f} - g_loss: {epoch_g_loss:.4f}')
+            elif verbose == 2:
+                print(f'Epoch {epoch + 1}/{epochs} - d_loss: {epoch_d_loss:.4f} - g_loss: {epoch_g_loss:.4f}')
+
+            # Validation
+            if val_loader is not None and (epoch + 1) % validation_freq == 0:
+                val_loss = self._evaluate_validation(val_loader, validation_steps)
+                if 'val_loss' not in history:
+                    history['val_loss'] = []
+                history['val_loss'].append(val_loss)
+
+                if verbose >= 1:
+                    print(f' - val_loss: {val_loss:.4f}')
+
+            # Callbacks
+            if callbacks is not None:
+                for callback in callbacks:
+                    if hasattr(callback, 'on_epoch_end'):
+                        callback.on_epoch_end(epoch, {
+                            'd_loss': epoch_d_loss,
+                            'g_loss': epoch_g_loss
+                        })
+
+        # Return history object
         class History:
             def __init__(self, history_dict):
                 self.history = history_dict
 
         return History(history)
 
+    def _evaluate_validation(self, val_loader, validation_steps=None):
+        """
+        Evaluate the model on validation data.
+
+        Args:
+            val_loader: Validation DataLoader.
+            validation_steps: Number of validation steps.
+
+        Returns:
+            Average validation loss.
+        """
+        val_d_losses = []
+        val_g_losses = []
+        step = 0
+
+        # Set models to evaluation mode
+        self._generator.eval()
+        self._discriminator.eval()
+
+        with torch.no_grad():
+            for batch_data in val_loader:
+                real_feature, real_samples_label = batch_data
+
+                # Move data to device
+                if not isinstance(real_feature, torch.Tensor):
+                    real_feature = torch.tensor(real_feature, dtype=torch.float32, device=self._device)
+                else:
+                    real_feature = real_feature.to(self._device)
+
+                if not isinstance(real_samples_label, torch.Tensor):
+                    real_samples_label = torch.tensor(real_samples_label, dtype=torch.long, device=self._device)
+                else:
+                    real_samples_label = real_samples_label.to(self._device)
+
+                batch_size = real_feature.shape[0]
+
+                # Handle label dimensions
+                if len(real_samples_label.shape) == 2 and real_samples_label.shape[1] > 1:
+                    labels_for_model = real_samples_label
+                else:
+                    if len(real_samples_label.shape) == 1:
+                        real_samples_label = real_samples_label.unsqueeze(-1)
+                    labels_for_model = real_samples_label
+
+                # Generate synthetic samples
+                latent_space = torch.randn(batch_size, self._latent_dimension, device=self._device) * \
+                               self._latent_stander_deviation + self._latent_mean_distribution
+
+                synthetic_feature = self._generator([latent_space, labels_for_model])
+
+                # Get discriminator predictions
+                label_predicted_real = self._discriminator([real_feature, labels_for_model])
+                label_predicted_synthetic = self._discriminator([synthetic_feature, labels_for_model])
+
+                # Calculate losses
+                d_loss = self._discriminator_loss_fn(
+                    real_img=label_predicted_real,
+                    fake_img=label_predicted_synthetic
+                )
+                g_loss = self._generator_loss_fn(label_predicted_synthetic)
+
+                val_d_losses.append(d_loss.item() if isinstance(d_loss, torch.Tensor) else d_loss)
+                val_g_losses.append(g_loss.item() if isinstance(g_loss, torch.Tensor) else g_loss)
+
+                step += 1
+                if validation_steps is not None and step >= validation_steps:
+                    break
+
+        # Set models back to training mode
+        self._generator.train()
+        self._discriminator.train()
+
+        # Return average of discriminator and generator losses
+        avg_val_loss = (numpy.mean(val_d_losses) + numpy.mean(val_g_losses)) / 2
+        return avg_val_loss if val_d_losses else 0.0
     def train_step(self, batch):
         """
         Executes one training step for the GAN model.
