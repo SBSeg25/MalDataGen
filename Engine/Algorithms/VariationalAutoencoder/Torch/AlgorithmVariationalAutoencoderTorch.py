@@ -296,78 +296,247 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
         """
         self.optimizer = optimizer
 
-    def fit(self, train_data, y_data, epochs, batch_size, callbacks=None):
+    def fit(self, x=None, y=None, batch_size=32, epochs=1, verbose=1,
+            callbacks=None, validation_data=None, shuffle=True,
+            initial_epoch=0, steps_per_epoch=None, validation_steps=None,
+            validation_freq=1, optimizer=None, learning_rate=0.001, **kwargs):
         """
-        Train the VAE model.
+        Train the model with a simplified progress bar.
+
+        Args:
+            x: Input data.
+            y: Target data.
+            batch_size: Number of samples per gradient update.
+            epochs: Number of epochs to train.
+            verbose: 0 = silent, 1 = progress bar, 2 = one line per epoch.
+            callbacks: List of callbacks to apply during training.
+            validation_data: Data for validation.
+            shuffle: Whether to shuffle data before each epoch.
+            initial_epoch: Epoch at which to start training.
+            steps_per_epoch: Number of steps per epoch.
+            validation_steps: Number of validation steps.
+            validation_freq: Validation frequency.
+            optimizer: PyTorch optimizer (if None, uses already compiled optimizer).
+            learning_rate: Learning rate for optimizer (only used if optimizer is None).
+
+        Returns:
+            A History object with training metrics.
         """
         device = next(self.parameters()).device
 
-        # Definir modo de treino sem causar recursão
-        self.training = True
+        # Set optimizer if provided
+        if optimizer is not None:
+            self.optimizer = optimizer
+        elif self.optimizer is None:
+            # Create default optimizer if none exists
+            self.optimizer = torch.optim.Adam(self.parameters(), lr=learning_rate)
 
-        # Unpack training data
-        if isinstance(train_data, tuple):
-            x_train, y_labels = train_data
+        # Prepare the dataset
+        if isinstance(x, DataLoader):
+            train_dataloader = x
         else:
-            x_train = train_data
-            y_labels = None
+            if y is None:
+                y = x
 
-        # Convert to tensors
-        if isinstance(x_train, numpy.ndarray):
-            x_train = torch.from_numpy(x_train).float()
-        if isinstance(y_data, numpy.ndarray):
-            y_data = torch.from_numpy(y_data).float()
-        if y_labels is not None and isinstance(y_labels, numpy.ndarray):
-            y_labels = torch.from_numpy(y_labels).float()
+            # Convert to tensors
+            if isinstance(x, numpy.ndarray):
+                x = torch.from_numpy(x).float()
+            if isinstance(y, numpy.ndarray):
+                y = torch.from_numpy(y).float()
 
-        # Create dataset
-        if y_labels is not None:
-            dataset = TensorDataset(x_train, y_labels, y_data)
-        else:
-            dataset = TensorDataset(x_train, y_data)
+            dataset = TensorDataset(x, y)
+            train_dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
 
-        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+        # Calculate steps per epoch if not provided
+        if steps_per_epoch is None:
+            steps_per_epoch = len(train_dataloader)
+
+        # History to store metrics
+        history = {'loss': [], 'reconstruction_loss': [], 'kl_loss': []}
 
         # Training loop
-        for epoch in range(epochs):
+        for epoch in range(initial_epoch, epochs):
+            self._total_loss_tracker = 0.0
+            self._reconstruction_loss_tracker = 0.0
+            self._kl_loss_tracker = 0.0
+
+            # Trackers for epoch metrics
             epoch_losses = []
+            epoch_recon_losses = []
+            epoch_kl_losses = []
 
-            for batch_idx, batch in enumerate(dataloader):
-                if y_labels is not None:
-                    batch_x, batch_y_labels, batch_y = batch
-                else:
-                    batch_x, batch_y = batch
-                    batch_y_labels = None
+            if verbose == 1:
+                print(f'\nEpoch {epoch + 1}/{epochs}')
 
-                # Mover para dispositivo
+            # Progress tracking
+            step = 0
+            for batch_data in train_dataloader:
+                step += 1
+
+                # Perform training step
+                metrics = self.train_step(batch_data)
+                current_loss = float(metrics['loss'])
+                current_recon_loss = float(metrics['reconstruction_loss'])
+                current_kl_loss = float(metrics['kl_loss'])
+
+                # Track losses for this epoch
+                epoch_losses.append(current_loss)
+                epoch_recon_losses.append(current_recon_loss)
+                epoch_kl_losses.append(current_kl_loss)
+
+                # Simple progress bar
+                if verbose == 1:
+                    progress = int(50 * step / steps_per_epoch)
+                    bar = '=' * progress + '>' + '.' * (50 - progress - 1)
+                    print(
+                        f'\r[{bar}] {step}/{steps_per_epoch} - loss: {current_loss:.4f} - recon_loss: {current_recon_loss:.4f} - kl_loss: {current_kl_loss:.4f}',
+                        end='', flush=True)
+
+                if step >= steps_per_epoch:
+                    break
+
+            # Store epoch losses
+            epoch_loss = self._total_loss_tracker
+            epoch_recon_loss = numpy.mean(epoch_recon_losses) if epoch_recon_losses else 0.0
+            epoch_kl_loss = numpy.mean(epoch_kl_losses) if epoch_kl_losses else 0.0
+
+            history['loss'].append(epoch_loss)
+            history['reconstruction_loss'].append(epoch_recon_loss)
+            history['kl_loss'].append(epoch_kl_loss)
+
+            if verbose == 1:
+                print(f' - loss: {epoch_loss:.4f} - recon_loss: {epoch_recon_loss:.4f} - kl_loss: {epoch_kl_loss:.4f}')
+            elif verbose == 2:
+                print(
+                    f'Epoch {epoch + 1}/{epochs} - loss: {epoch_loss:.4f} - recon_loss: {epoch_recon_loss:.4f} - kl_loss: {epoch_kl_loss:.4f}')
+
+            # Validation
+            if validation_data is not None and (epoch + 1) % validation_freq == 0:
+                val_loss = self._evaluate_validation(validation_data, validation_steps)
+                if 'val_loss' not in history:
+                    history['val_loss'] = []
+                history['val_loss'].append(val_loss)
+
+                if verbose >= 1:
+                    print(f' - val_loss: {val_loss:.4f}')
+
+            # Callbacks
+            if callbacks is not None:
+                for callback in callbacks:
+                    if hasattr(callback, 'on_epoch_end'):
+                        callback.on_epoch_end(epoch, {
+                            'loss': epoch_loss,
+                            'reconstruction_loss': epoch_recon_loss,
+                            'kl_loss': epoch_kl_loss
+                        })
+
+        # Return history object
+        class History:
+            def __init__(self, history_dict):
+                self.history = history_dict
+
+        return History(history)
+
+    def _evaluate_validation(self, validation_data, validation_steps=None):
+        """
+        Evaluate the model on validation data.
+
+        Args:
+            validation_data: Validation dataset (DataLoader or tuple).
+            validation_steps: Number of validation steps.
+
+        Returns:
+            Average validation loss.
+        """
+        self.eval()
+        device = next(self.parameters()).device
+
+        val_losses = []
+        val_recon_losses = []
+        val_kl_losses = []
+        step = 0
+
+        # Prepare validation dataset
+        if isinstance(validation_data, DataLoader):
+            val_dataloader = validation_data
+        else:
+            val_x, val_y = validation_data
+            if isinstance(val_x, numpy.ndarray):
+                val_x = torch.from_numpy(val_x).float()
+            if isinstance(val_y, numpy.ndarray):
+                val_y = torch.from_numpy(val_y).float()
+            val_dataset = TensorDataset(val_x, val_y)
+            val_dataloader = DataLoader(val_dataset, batch_size=32, shuffle=False)
+
+        with torch.no_grad():
+            for batch_data in val_dataloader:
+                batch_x, batch_y = batch_data
                 batch_x = batch_x.to(device)
                 batch_y = batch_y.to(device)
-                if batch_y_labels is not None:
-                    batch_y_labels = batch_y_labels.to(device)
 
-                # Passar para train_step
-                if batch_y_labels is not None:
-                    loss_dict = self.train_step((batch_x, batch_y, batch_y_labels))
+                # Forward pass through encoder and decoder
+                encoder_output = self._encoder(batch_x)
+
+                if isinstance(encoder_output, tuple) and len(encoder_output) >= 3:
+                    latent_mean, latent_log_variation, latent, label = encoder_output[:4]
                 else:
-                    loss_dict = self.train_step((batch_x, batch_y))
+                    latent = encoder_output
+                    latent_mean = latent_log_variation = None
+                    label = torch.zeros((latent.shape[0], 2)).to(device)
 
-                epoch_losses.append(loss_dict)
+                reconstruction_data = self._decoder(latent, label)
 
-            # Calcular perdas médias para a época
-            if epoch_losses:
-                avg_loss = sum(d['loss'] for d in epoch_losses) / len(epoch_losses)
-                avg_recon = sum(d['reconstruction_loss'] for d in epoch_losses) / len(epoch_losses)
-                avg_kl = sum(d['kl_loss'] for d in epoch_losses) / len(epoch_losses)
+                # Calculate binary cross-entropy loss for reconstruction
+                reconstruction_loss = F.binary_cross_entropy(reconstruction_data, batch_y, reduction='mean')
 
-                print(f"\nEpoch {epoch + 1}/{epochs} - loss: {avg_loss:.4f} - "
-                      f"reconstruction_loss: {avg_recon:.4f} - kl_loss: {avg_kl:.4f}")
+                # Calculate KL divergence loss
+                if latent_mean is not None and latent_log_variation is not None:
+                    encoder_output_kl = (1 + latent_log_variation - torch.square(latent_mean))
+                    kl_divergence_loss = -0.5 * (encoder_output_kl - torch.exp(latent_log_variation))
+                    kl_divergence_loss = torch.mean(torch.sum(kl_divergence_loss, dim=1))
+                else:
+                    kl_divergence_loss = torch.tensor(0.0).to(device)
 
-                # Executar callbacks
-                if callbacks:
-                    for callback in callbacks:
-                        if hasattr(callback, 'on_epoch_end'):
-                            callback.on_epoch_end(epoch, {'loss': avg_loss})
+                # Total loss
+                total_loss = reconstruction_loss + kl_divergence_loss
 
+                val_losses.append(float(total_loss))
+                val_recon_losses.append(float(reconstruction_loss))
+                val_kl_losses.append(float(kl_divergence_loss))
+
+                step += 1
+                if validation_steps is not None and step >= validation_steps:
+                    break
+
+        self.train()
+        return numpy.mean(val_losses) if val_losses else 0.0
+
+    @staticmethod
+    def calculate_samples_per_class(y_labels):
+        """
+        Calculate the distribution of samples per class from labels.
+
+        Args:
+            y_labels (array-like): Labels array
+
+        Returns:
+            dict: Dictionary with 'classes' and 'number_classes' keys
+        """
+        # Convert to numpy if needed
+        if torch.is_tensor(y_labels):
+            y_labels = y_labels.cpu().numpy()
+
+        # Handle one-hot encoded labels
+        if len(y_labels.shape) == 2 and y_labels.shape[1] > 1:
+            y_labels = numpy.argmax(y_labels, axis=1)
+
+        # Count samples per class
+        unique, counts = numpy.unique(y_labels, return_counts=True)
+
+        return {
+            "classes": dict(zip(unique.tolist(), counts.tolist())),
+            "number_classes": len(unique)
+        }
     # REMOVED: The problematic property setters that interfere with module registration
     # Properties can still be used for read-only access if needed, but not for setting
     @property
