@@ -667,4 +667,3 @@ if __name__ == "__main__":
     dataGeneration = SynDataGen()
     dataGeneration.show_all_settings()
     dataGeneration.run_experiments()
-
