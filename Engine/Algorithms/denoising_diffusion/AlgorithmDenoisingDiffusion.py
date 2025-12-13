@@ -37,7 +37,7 @@ try:
 
     import logging
 
-    framework = os.getenv("ML_FRAMEWORK", "Tensorflow").lower()
+    framework = os.getenv("ML_FRAMEWORK", "tensorflow").lower()
     from Engine.Algorithms.denoising_diffusion.Tensorflow.AlgorithmDenoisingDiffusionTensorflow import \
         AlgorithmDenoisingDiffusionTensorflow
     from Engine.Algorithms.denoising_diffusion.Torch.AlgorithmDenoisingDiffusionTorch import \

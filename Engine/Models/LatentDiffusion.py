@@ -35,13 +35,12 @@ try:
     import numpy as np
 
     # Detect framework from environment
-    ML_FRAMEWORK = os.environ.get('ML_FRAMEWORK', 'Tensorflow').lower()
+    ML_FRAMEWORK = os.environ.get('ML_FRAMEWORK', 'tensorflow').lower()
 
     from Engine.Algorithms.LatentDiffusion.AlgorithmLatentDiffusion import LatentDiffusionAlgorithm
     from Engine.Algorithms.LatentDiffusion.AlgorithmVAELatentDiffusion import AlgorithmVAELatentDiffusion
     from Engine.Algorithms.LatentDiffusion.GaussianLatentDiffusion import GaussianLatentDiffusion
     from Engine.Architectures.LatentDiffusion.DiffusionModelUNetModel import DiffusionModelUNetModel
-    from Engine.Architectures.LatentDiffusion.Torch.VariationalModelDiffusionTorch import VariationalModelDiffusionTorch
     from Engine.Architectures.LatentDiffusion.VariationalModelDiffusion import VariationalModelDiffusion
 
     if ML_FRAMEWORK == 'tensorflow':
@@ -67,16 +66,16 @@ except ImportError as error:
 
 # Default values
 DEFAULT_LATENT_DIFFUSION_UNET_LAST_LAYER_ACTIVATION = 'linear'
-DEFAULT_LATENT_DIFFUSION_LATENT_DIMENSION = 64
+DEFAULT_LATENT_DIFFUSION_LATENT_DIMENSION = 16
 DEFAULT_LATENT_DIFFUSION_UNET_NUMBER_EMBEDDING_CHANNELS = 1
-DEFAULT_LATENT_DIFFUSION_UNET_CHANNELS_PER_LEVEL = [1, 2, 4]
+DEFAULT_LATENT_DIFFUSION_UNET_CHANNELS_PER_LEVEL = [1, 2]
 DEFAULT_LATENT_DIFFUSION_UNET_BATCH_SIZE = 128
 DEFAULT_LATENT_DIFFUSION_UNET_ATTENTION_MODE = [False, True, True]
 DEFAULT_LATENT_DIFFUSION_UNET_NUMBER_RESIDUAL_BLOCKS = 2
 DEFAULT_LATENT_DIFFUSION_UNET_GROUP_NORMALIZATION = 1
 DEFAULT_LATENT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION = 'swish'
 DEFAULT_LATENT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION_ALPHA = 0.05
-DEFAULT_LATENT_DIFFUSION_UNET_NUMBER_EPOCHS = 1000
+DEFAULT_LATENT_DIFFUSION_UNET_NUMBER_EPOCHS = 50
 
 DEFAULT_LATENT_DIFFUSION_GAUSSIAN_BETA_START = 1e-4
 DEFAULT_LATENT_DIFFUSION_GAUSSIAN_BETA_END = 0.02
@@ -91,7 +90,7 @@ DEFAULT_LATENT_DIFFUSION_AUTOENCODER_LAST_LAYER_ACTIVATION = 'sigmoid'
 DEFAULT_LATENT_DIFFUSION_AUTOENCODER_LATENT_DIMENSION = 64
 DEFAULT_LATENT_DIFFUSION_AUTOENCODER_BATCH_SIZE_CREATE_EMBEDDING = 128
 DEFAULT_LATENT_DIFFUSION_AUTOENCODER_BATCH_SIZE_TRAINING = 64
-DEFAULT_LATENT_DIFFUSION_AUTOENCODER_EPOCHS = 1000
+DEFAULT_LATENT_DIFFUSION_AUTOENCODER_EPOCHS = 50
 DEFAULT_LATENT_DIFFUSION_AUTOENCODER_INTERMEDIARY_ACTIVATION = 'swish'
 DEFAULT_LATENT_DIFFUSION_AUTOENCODER_INTERMEDIARY_ACTIVATION_ALPHA = 0.05
 DEFAULT_LATENT_DIFFUSION_AUTOENCODER_ACTIVATION_OUTPUT_ENCODER = 'sigmoid'
@@ -114,6 +113,9 @@ class LatentDiffusion:
     """
     Framework-agnostic Latent Denoising Probabilistic Diffusion (LDPD) model.
 
+    NOW SUPPORTS MULTI-DIMENSIONAL DATA: Automatically handles 1D, 2D, 3D, and N-D inputs
+    by flattening them during training and reshaping them during generation.
+
     This unified class implements a latent diffusion model that works with both
     TensorFlow and PyTorch backends, automatically selecting the appropriate
     implementation based on the ML_FRAMEWORK environment variable.
@@ -131,6 +133,7 @@ class LatentDiffusion:
     Attributes:
         _framework: Current framework being used ('Tensorflow' or 'pytorch')
         _device: Device for PyTorch ('cuda' or 'cpu')
+        _original_input_shape: Stores the original shape of input data for reconstruction
         _latent_variational_algorithm: VAE training orchestrator
         _latent_variation_model_diffusion: VAE encoder/decoder models
         _latent_autoencoder_diffusion: Core autoencoder for latent space
@@ -154,7 +157,7 @@ class LatentDiffusion:
                  unet_intermediary_activation: str = DEFAULT_LATENT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION,
                  unet_intermediary_activation_alpha: float = DEFAULT_LATENT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION_ALPHA,
                  unet_epochs: int = DEFAULT_LATENT_DIFFUSION_UNET_NUMBER_EPOCHS,
-
+                 number_classes: int = 3,
                  # Gaussian Diffusion Parameters
                  gaussian_beta_start: float = DEFAULT_LATENT_DIFFUSION_GAUSSIAN_BETA_START,
                  gaussian_beta_end: float = DEFAULT_LATENT_DIFFUSION_GAUSSIAN_BETA_END,
@@ -191,7 +194,7 @@ class LatentDiffusion:
                  ema: float = DEFAULT_LATENT_DIFFUSION_EMA,
                  time_steps: int = DEFAULT_LATENT_DIFFUSION_TIME_STEPS,
 
-                 # Class Information - ADDED THIS
+                 # Class Information
                  number_samples_per_class: dict = None,
 
                  # Optional pre-initialized components
@@ -224,7 +227,7 @@ class LatentDiffusion:
                 self._device = device
             logging.info(f"PyTorch device: {self._device}")
 
-        # Store class information - ADDED THIS
+        # Store class information
         if number_samples_per_class is None:
             # Provide a default if not specified
             self._number_samples_per_class = {'number_classes': 2}
@@ -318,6 +321,14 @@ class LatentDiffusion:
         self._has_external_first_unet = first_unet is not None
         self._has_external_second_unet = second_unet is not None
         self._has_external_gaussian_diffusion_util = gaussian_diffusion_util is not None
+
+        # Callback placeholders
+        self._callback_model_monitor = None
+        self._callback_early_stop = None
+        self._callback_resources_monitor = None
+
+        # Storage for original input shape (for multi-dimensional data)
+        self._original_input_shape = None
 
     # ========================================================================
     # TENSORFLOW IMPLEMENTATION
@@ -435,7 +446,7 @@ class LatentDiffusion:
             models_saved_path=self._latent_diffusion_VAE_path_output_models
         )
 
-    def fit_model_tensorflow(self, input_shape, arguments, x_real_samples, y_real_samples):
+    def fit_model_tensorflow(self, input_shape, x_real_samples, y_real_samples):
         """TensorFlow-specific training pipeline."""
         # Initialize the diffusion model
         self._get_latent_diffusion_tensorflow(input_shape)
@@ -453,9 +464,10 @@ class LatentDiffusion:
         # Compile the variational algorithm for diffusion
         self._latent_variational_algorithm.compile(loss=self._latent_diffusion_VAE_loss_function)
 
-        callbacks_list = [self._callback_model_monitor]
-
-        if arguments.use_early_stop:
+        callbacks_list = []
+        if self._callback_model_monitor:
+            callbacks_list.append(self._callback_model_monitor)
+        if self._callback_early_stop:
             callbacks_list.append(self._callback_early_stop)
 
         # Fit the diffusion model with the training data
@@ -506,9 +518,10 @@ class LatentDiffusion:
         data_embedding = numpy.array(data_embedding)
         data_embedding = tensorflow.expand_dims(data_embedding, axis=-1)
 
-        callbacks_list = [self._callback_model_monitor]
-
-        if arguments.use_early_stop:
+        callbacks_list = []
+        if self._callback_model_monitor:
+            callbacks_list.append(self._callback_model_monitor)
+        if self._callback_early_stop:
             callbacks_list.append(self._callback_early_stop)
 
         self._latent_diffusion_algorithm.fit(
@@ -545,10 +558,10 @@ class LatentDiffusion:
 
         return actual_shape
 
-    def fit_model_pytorch(self, input_shape, arguments, x_real_samples, y_real_samples):
+    def fit_model_pytorch(self, input_shape, x_real_samples, y_real_samples):
         """PyTorch-specific training pipeline."""
 
-        self._latent_variation_model_diffusion = VariationalModelDiffusionTorch(
+        self._latent_variation_model_diffusion = VariationalModelDiffusion(
             latent_dimension=self._latent_diffusion_latent_dimension,
             output_shape=input_shape,
             activation_function=self._latent_diffusion_VAE_intermediary_activation_function,
@@ -610,10 +623,9 @@ class LatentDiffusion:
             if (epoch + 1) % 10 == 0 or epoch == 0:
                 print(f"  Epoch [{epoch + 1}/{self._latent_diffusion_VAE_epochs}], Loss: {avg_loss:.4f}")
 
-            if hasattr(arguments, 'use_early_stop') and arguments.use_early_stop:
-                if hasattr(self, '_callback_early_stop') and self._callback_early_stop.should_stop(avg_loss):
-                    print(f"  Early stopping at epoch {epoch + 1}")
-                    break
+            if self._callback_early_stop and self._callback_early_stop.should_stop(avg_loss):
+                print(f"  Early stopping at epoch {epoch + 1}")
+                break
 
         self._encoder_latent_diffusion = self._latent_variational_algorithm.get_encoder_trained()
         self._decoder_latent_diffusion = self._latent_variational_algorithm.get_decoder_trained()
@@ -727,32 +739,81 @@ class LatentDiffusion:
             if (epoch + 1) % 10 == 0 or epoch == 0:
                 print(f"  Epoch [{epoch + 1}/{self._latent_diffusion_unet_epochs}], Diffusion Loss: {avg_loss:.4f}")
 
-            if hasattr(arguments, 'use_early_stop') and arguments.use_early_stop:
-                if hasattr(self, '_callback_early_stop') and self._callback_early_stop.should_stop(avg_loss):
-                    print(f"  Early stopping at epoch {epoch + 1}")
-                    break
+            if self._callback_early_stop and self._callback_early_stop.should_stop(avg_loss):
+                print(f"  Early stopping at epoch {epoch + 1}")
+                break
 
     # ========================================================================
     # UNIFIED PUBLIC API
     # ========================================================================
 
-    def fit_model(self, input_shape, arguments, x_real_samples, y_real_samples):
+    def fit_model(self, input_shape, x_real_samples, y_real_samples):
         """
-        Executes the complete training pipeline for latent diffusion.
+        Executes the complete training pipeline for latent diffusion with automatic data flattening.
 
-        Automatically selects the appropriate implementation based on the
-        ML_FRAMEWORK environment variable.
+        NOW SUPPORTS MULTI-DIMENSIONAL DATA:
+        - Automatically flattens N-D input data (1D, 2D, 3D, etc.)
+        - Stores original shape for reconstruction during generation
+        - Routes to framework-specific implementation
 
         Args:
-            input_shape (tuple): Input data shape
-            arguments (Namespace): Training configuration
-            x_real_samples (ndarray): Training samples
-            y_real_samples (ndarray): Corresponding labels
+            input_shape (tuple): Input data shape (e.g., (784,) for 1D, (28, 28, 1) for 2D, (16, 16, 16) for 3D)
+            x_real_samples (ndarray): Training samples (can be N-dimensional)
+            y_real_samples (ndarray): Corresponding labels (1D array of class indices)
         """
-        if self._framework == 'Tensorflow':
-            return self.fit_model_tensorflow(input_shape, arguments, x_real_samples, y_real_samples)
+        # Store original input shape for later reconstruction
+        self._original_input_shape = input_shape
+
+        # Calculate total flattened dimension
+        flattened_dim = int(np.prod(input_shape))
+
+        # CRITICAL: Set up number_samples_per_class from training labels
+        # This must be done before building the models
+        num_classes = int(y_real_samples.max()) + 1
+        self._number_samples_per_class = {
+            "number_classes": num_classes
+        }
+
+        # Prepare data
+        print(f"\nPreparing data for Latent Diffusion ({self._framework})...")
+        print(f"  - Original input shape: {input_shape}")
+        print(f"  - Input data shape: {x_real_samples.shape}")
+        print(f"  - Number of classes: {num_classes}")
+
+        # Flatten the input data if it has more than 2 dimensions
+        # (batch_size, ...) -> (batch_size, flattened_features)
+        if len(x_real_samples.shape) > 2:
+            x_real_samples_flat = x_real_samples.reshape(x_real_samples.shape[0], -1)
+            print(f"  - Flattened data shape: {x_real_samples_flat.shape}")
+        else:
+            x_real_samples_flat = x_real_samples
+            print(f"  - Data already flat: {x_real_samples_flat.shape}")
+
+        print(f"\nStarting training...")
+        print(f"  - VAE Epochs: {self._latent_diffusion_VAE_epochs}")
+        print(f"  - UNet Epochs: {self._latent_diffusion_unet_epochs}")
+        print(f"  - Batch size: {self._latent_diffusion_unet_batch_size}")
+        print(f"  - Time steps: {self._latent_diffusion_gaussian_time_steps}")
+
+        # Route to appropriate training method with flattened dimension
+        if self._framework == 'tensorflow':
+            self.fit_model_tensorflow(flattened_dim, x_real_samples_flat, y_real_samples)
         else:  # pytorch
-            return self.fit_model_pytorch(input_shape, arguments, x_real_samples, y_real_samples)
+            self.fit_model_pytorch(flattened_dim, x_real_samples_flat, y_real_samples)
+
+        print(f"\n✓ Training completed successfully!")
+
+    def train(self, input_shape, x_real_samples, y_real_samples):
+        """
+        Public method to train the latent diffusion model.
+        This is an alias to fit_model for convenience.
+
+        Args:
+            input_shape (tuple): Shape of input data
+            x_real_samples (ndarray): Training samples
+            y_real_samples (ndarray): Training labels
+        """
+        self.fit_model(input_shape, x_real_samples, y_real_samples)
 
     # ========================================================================
     # PROPERTIES (Framework-agnostic)
