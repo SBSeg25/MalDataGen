@@ -672,7 +672,7 @@ class WassersteinAlgorithmTorch:
                     # Store generated samples for this class
                     generated_samples_dict[class_idx] = generated.cpu().numpy()
 
-            self.generator.fit()
+            self.generator.train()
             return generated_samples_dict
 
         # Handle integer input (original behavior)
@@ -698,5 +698,5 @@ class WassersteinAlgorithmTorch:
                 generated = self.generator(self._sample_latent(total_samples), labels)
                 generated_samples_dict = {0: generated.cpu().numpy()}
 
-        self.generator.fit()
+        self.generator.train()
         return generated_samples_dict
