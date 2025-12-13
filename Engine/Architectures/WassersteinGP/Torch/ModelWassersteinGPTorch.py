@@ -64,11 +64,11 @@ DEFAULT_WASSERSTEIN_GP_GAN_INITIALIZER_DEVIATION = 0.125
 
 class WassersteinGPModelTorch(VanillaDiscriminatorTorch, VanillaGeneratorTorch):
     """
-    wassersteingp Generative adversarial Network (WGAN) with Gradient Penalty.
+    wasserstein_gp Generative adversarial Network (WGAN) with Gradient Penalty.
 
-    This class implements a wassersteingp GAN, a type of Generative adversarial
+    This class implements a wasserstein_gp GAN, a type of Generative adversarial
     Network designed to improve training stability and provide a more meaningful
-    loss metric by approximating the Earth Mover's Distance (wassersteingp-1 Distance)
+    loss metric by approximating the Earth Mover's Distance (wasserstein_gp-1 Distance)
     between real and generated data distributions.
 
     The model integrates both the **generator** (which synthesizes new data samples)
@@ -77,7 +77,7 @@ class WassersteinGPModelTorch(VanillaDiscriminatorTorch, VanillaGeneratorTorch):
 
     Unlike traditional GANs, the discriminator (referred to as "critic" in WGANs)
     does not classify inputs as "real" or "fake." Instead, it assigns a scalar score,
-    which is optimized to approximate the wassersteingp distance between the true data
+    which is optimized to approximate the wasserstein_gp distance between the true data
     distribution and the distribution induced by the generator.
 
     To enforce the Lipschitz continuity condition required by the WGAN framework,
@@ -87,11 +87,11 @@ class WassersteinGPModelTorch(VanillaDiscriminatorTorch, VanillaGeneratorTorch):
 
     References:
         - Arjovsky, M., Chintala, S., & Bottou, L. (2017).
-          wassersteingp GAN. arXiv preprint arXiv:1701.07875.
+          wasserstein_gp GAN. arXiv preprint arXiv:1701.07875.
           Available at: https://arxiv.org/abs/1701.07875
 
         - Gulrajani, I., Ahmed, F., Arjovsky, M., Dumoulin, V., & Courville, A. (2017).
-          Improved Training of wassersteingp GANs. arXiv preprint arXiv:1704.00028.
+          Improved Training of wasserstein_gp GANs. arXiv preprint arXiv:1704.00028.
           Available at: https://arxiv.org/abs/1704.00028
 
     Attributes:

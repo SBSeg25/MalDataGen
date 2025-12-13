@@ -9,7 +9,7 @@ __last_update__ = '2025/12/13'
 __credits__ = ['Synthetic Ocean AI']
 
 from Engine.Architectures.WassersteinGP.WassersteinGPModel import WassersteinGPModel
-from Engine.Algorithms.wassersteingp.WassersteinGPAlgorithm import WassersteinGPAlgorithm
+from Engine.Algorithms.wasserstein_gp.WassersteinGPAlgorithm import WassersteinGPAlgorithm
 
 # MIT License
 #
@@ -190,7 +190,7 @@ class WassersteinGP:
         self._wasserstein_gp_algorithm: WassersteinGPAlgorithm | None = algorithm
         self._wasserstein_gp_model: WassersteinGPModel | None = model
 
-        # ** wassersteingp GAN with Gradient Penalty (WGAN-GP) Configuration Parameters **
+        # ** wasserstein_gp GAN with Gradient Penalty (WGAN-GP) Configuration Parameters **
         self._wasserstein_gp_latent_dimension: int = latent_dimension
         self._wasserstein_gp_training_algorithm: str = training_algorithm
         self._wasserstein_gp_activation_function: str = activation_function
@@ -258,9 +258,9 @@ class WassersteinGP:
 
     def _get_wasserstein_gp(self, input_shape: tuple[int, ...], number_samples_per_class: dict) -> None:
         """
-        Initialize and configure the wassersteingp GAN model, including generator and critic components.
+        Initialize and configure the wasserstein_gp GAN model, including generator and critic components.
 
-        This method sets up a wassersteingp Generative adversarial Network (WGAN) by configuring the generator and critic
+        This method sets up a wasserstein_gp Generative adversarial Network (WGAN) by configuring the generator and critic
         models using the `WassersteinGPModel` class and links them with the `WassersteinGPAlgorithm` class. The models
         are initialized with specified configurations such as latent dimension, activation functions, dropout rates,
         and layer sizes for both the generator and critic.
@@ -281,7 +281,7 @@ class WassersteinGP:
         """
         # Only create new model if none was provided
         if not self._has_external_model:
-            # wassersteingp Model setup for the Generator and Discriminator
+            # wasserstein_gp Model setup for the Generator and Discriminator
             # Pass number_samples_per_class during initialization
             self._wasserstein_gp_model = WassersteinGPModel(
                 latent_dimension=self._wasserstein_gp_latent_dimension,
@@ -304,7 +304,7 @@ class WassersteinGP:
             if self._wasserstein_gp_model is None:
                 raise ValueError("WassersteinGPModel instance is required but was not provided.")
 
-            # wassersteingp Algorithm setup for training and model operations
+            # wasserstein_gp Algorithm setup for training and model operations
             self._wasserstein_gp_algorithm = WassersteinGPAlgorithm(
                 generator_model=self._wasserstein_gp_model.get_generator(),
                 discriminator_model=self._wasserstein_gp_model.get_discriminator(),
@@ -374,7 +374,7 @@ class WassersteinGP:
         number_samples_per_class = self._calculate_samples_per_class(y_real_samples)
         print(f"\nAuto-calculated class distribution: {number_samples_per_class}")
 
-        # Initialize the wassersteingp model (or use provided) - NOW passing number_samples_per_class
+        # Initialize the wasserstein_gp model (or use provided) - NOW passing number_samples_per_class
         self._get_wasserstein_gp(input_shape, number_samples_per_class)
 
         # Print the model summaries for the generator and discriminator if available
@@ -405,7 +405,7 @@ class WassersteinGP:
             beta_1=self._wasserstein_gp_optimizer_discriminator_beta
         )
 
-        # Compile the wassersteingp GAN algorithm
+        # Compile the wasserstein_gp GAN algorithm
         self._wasserstein_gp_algorithm.compile(
             generator_optimizer,
             discriminator_optimizer,
@@ -425,7 +425,7 @@ class WassersteinGP:
             if hasattr(self, '_callback_early_stop'):
                 callbacks_list.append(self._callback_early_stop)
 
-        # Fit the wassersteingp GAN model
+        # Fit the wasserstein_gp GAN model
         self._wasserstein_gp_algorithm.fit(
             x_real_samples,
             to_categorical(y_real_samples, num_classes=number_samples_per_class["number_classes"]),
@@ -437,12 +437,12 @@ class WassersteinGP:
     # Additional getters for the algorithm and model
     @property
     def wasserstein_gp_algorithm(self) -> WassersteinGPAlgorithm | None:
-        """Get the wassersteingp algorithm instance."""
+        """Get the wasserstein_gp algorithm instance."""
         return self._wasserstein_gp_algorithm
 
     @property
     def wasserstein_gp_model(self) -> WassersteinGPModel | None:
-        """Get the wassersteingp model instance."""
+        """Get the wasserstein_gp model instance."""
         return self._wasserstein_gp_model
 
     # Property getters and setters

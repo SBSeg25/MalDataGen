@@ -343,7 +343,7 @@ number_samples_per_class = {
 }
 input_shape = (1200,)
 
-# wassersteingp Model setup for training and model operations
+# wasserstein_gp Model setup for training and model operations
 wasserstein_model = WassersteinModel(
     latent_dimension=128,
     output_shape=input_shape,
@@ -359,7 +359,7 @@ wasserstein_model = WassersteinModel(
     number_samples_per_class=number_samples_per_class
 )
 
-# wassersteingp Algorithm setup for training and model operations
+# wasserstein_gp Algorithm setup for training and model operations
 wasserstein_algorithm = WassersteinAlgorithm(
     generator_model=wasserstein_model.get_generator(),
     discriminator_model=wasserstein_model.get_discriminator(),
@@ -394,13 +394,13 @@ def generator_loss(fake_img):
     return -tensorflow.reduce_mean(fake_img)
 
 
-# Compile the wassersteingp GAN algorithm
+# Compile the wasserstein_gp GAN algorithm
 wasserstein_algorithm.compile(generator_optimizer,
                               discriminator_optimizer,
                               generator_loss,
                               discriminator_loss)
 
-# Fit the wassersteingp GAN model
+# Fit the wasserstein_gp GAN model
 wasserstein_algorithm.fit(x_real_samples,
                           to_categorical(y_real_samples, num_classes=number_samples_per_class["number_classes"]),
                           epochs=1000, batch_size=32)

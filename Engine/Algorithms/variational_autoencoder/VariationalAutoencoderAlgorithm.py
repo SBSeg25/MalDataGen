@@ -36,9 +36,9 @@ try:
     import sys
     import logging
 
-    from Engine.Algorithms.VariationalAutoencoder.Tensorflow.AlgorithmVariationalAutoencoderTensorflow import \
+    from Engine.Algorithms.variational_autoencoder.Tensorflow.AlgorithmVariationalAutoencoderTensorflow import \
         VariationalAutoencoderAlgorithmTensorflow
-    from Engine.Algorithms.VariationalAutoencoder.Torch.AlgorithmVariationalAutoencoderTorch import \
+    from Engine.Algorithms.variational_autoencoder.Torch.AlgorithmVariationalAutoencoderTorch import \
         VariationalAutoencoderAlgorithmTorch
 
     framework = os.getenv("ML_FRAMEWORK", "Tensorflow").lower()

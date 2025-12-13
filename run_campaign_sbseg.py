@@ -31,7 +31,7 @@ digital security and malware analysis applications.
 
 Supported campaigns include:
 - Generative Architectures: Autoencoders, Variational Autoencoders,
-  wassersteingp GANs, LatentDiffusion Architectures, CTGAN, TVAE, Copula GANs.
+  wasserstein_gp GANs, LatentDiffusion Architectures, CTGAN, TVAE, Copula GANs.
 - Classifiers: Random Forest, SVM, KNN, etc.
 
 This script sets up the campaign parameters, composes the execution commands,

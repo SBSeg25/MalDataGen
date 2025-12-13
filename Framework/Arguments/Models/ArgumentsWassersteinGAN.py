@@ -154,7 +154,7 @@ def add_argument_wasserstein_gan(parser):
 
     parser.add_argument("--wasserstein_smoothing_rate", type=float,
                         default=DEFAULT_WASSERSTEIN_GAN_SMOOTHING_RATE,
-                        help="Smoothing rate for the wassersteingp GAN.")
+                        help="Smoothing rate for the wasserstein_gp GAN.")
 
     parser.add_argument("--wasserstein_latent_mean_distribution", type=float,
                         default=DEFAULT_WASSERSTEIN_GAN_LATENT_MEAN_DISTRIBUTION,
