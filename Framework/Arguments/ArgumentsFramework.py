@@ -112,7 +112,7 @@ def add_argument_framework():
                         help='Number of folds for cross-validation.')
 
     parser.add_argument('--use_gpu', action='store_true',
-                        default=False,
+                        default=True,
                         help='Enable GPU processing if available.')
 
     parser.add_argument("--verbosity", type=int,

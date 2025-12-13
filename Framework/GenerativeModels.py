@@ -322,7 +322,7 @@ class GenerativeModels:
 
         # Delegate to appropriate model
         if arguments.model_type == 'adversarial':
-            self._adversarial_algorithm.fit(input_shape, arguments, x_real_samples, y_real_samples)
+            self._adversarial_algorithm.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
 
         elif arguments.model_type == 'autoencoder':
             self._autoencoder_algorithm.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
