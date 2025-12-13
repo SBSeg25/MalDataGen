@@ -479,7 +479,7 @@ class LatentDiffusion:
                 monitor='loss',
                 save_best_only=True,
                 mode='min',
-                verbose=1,
+                verbose=0,
                 save_weights_only=False
             )
         ]
@@ -490,7 +490,7 @@ class LatentDiffusion:
                     monitor='loss',
                     patience=50,
                     mode='min',
-                    verbose=1,
+                    verbose=0,
                     restore_best_weights=True
                 )
             )
@@ -561,7 +561,7 @@ class LatentDiffusion:
                 monitor='loss',
                 save_best_only=True,
                 mode='min',
-                verbose=1,
+                verbose=0,
                 save_weights_only=False
             )
         ]
@@ -583,9 +583,7 @@ class LatentDiffusion:
                            num_classes=self._number_samples_per_class["number_classes"]),
             epochs=self._latent_diffusion_unet_epochs,
             batch_size=self._latent_diffusion_unet_batch_size,
-            callbacks=callbacks_list,
-            verbose=2
-        )
+            callbacks=callbacks_list)
 
     # ========================================================================
     # PYTORCH IMPLEMENTATION (Now using AlgorithmLatentDiffusionPyTorch)

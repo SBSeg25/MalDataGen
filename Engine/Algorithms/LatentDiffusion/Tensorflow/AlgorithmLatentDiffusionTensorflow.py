@@ -276,32 +276,13 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
             validation_freq=1, optimizer=None, learning_rate=0.001, **kwargs):
         """
         Train the model with a simplified progress bar.
-
-        Args:
-            x: Input data.
-            y: Target data.
-            batch_size: Number of samples per gradient update.
-            epochs: Number of epochs to train.
-            verbose: 0 = silent, 1 = progress bar, 2 = one line per epoch.
-            callbacks: List of callbacks to apply during training.
-            validation_data: Data for validation.
-            shuffle: Whether to shuffle data before each epoch.
-            initial_epoch: Epoch at which to start training.
-            steps_per_epoch: Number of steps per epoch.
-            validation_steps: Number of validation steps.
-            validation_freq: Validation frequency.
-            optimizer: TensorFlow optimizer (if None, uses already compiled optimizer).
-            learning_rate: Learning rate for optimizer (only used if optimizer is None).
-
-        Returns:
-            A History object with training metrics.
         """
+        import sys
 
         # Set optimizer if provided
         if optimizer is not None:
             self.optimizer = optimizer
         elif not hasattr(self, 'optimizer') or self.optimizer is None:
-            # Create default optimizer if none exists
             self.optimizer = tensorflow.keras.optimizers.Adam(learning_rate=learning_rate)
 
         # Prepare the dataset
@@ -317,7 +298,12 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
 
         # Calculate steps per epoch if not provided
         if steps_per_epoch is None:
-            steps_per_epoch = len(train_dataset)
+            try:
+                steps_per_epoch = len(train_dataset)
+            except:
+                steps_per_epoch = tensorflow.data.experimental.cardinality(train_dataset).numpy()
+                if steps_per_epoch < 0:  # Unknown cardinality
+                    steps_per_epoch = 100  # Default fallback
 
         # History to store metrics
         history = {'loss': [], 'Diffusion_loss': []}
@@ -326,8 +312,9 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
         for epoch in range(initial_epoch, epochs):
             self._total_loss_tracker.reset_state()
 
-            if verbose == 1:
+            if verbose >= 1:
                 print(f'\nEpoch {epoch + 1}/{epochs}')
+                sys.stdout.flush()
 
             # Progress tracking
             step = 0
@@ -341,12 +328,22 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
                 current_loss = float(metrics.get('loss', 0))
                 epoch_losses.append(current_loss)
 
-                # Simple progress bar
+                # Simple progress bar (verbose == 1)
                 if verbose == 1:
-                    progress = int(50 * step / steps_per_epoch)
-                    bar = '=' * progress + '>' + '.' * (50 - progress - 1)
-                    print(f'\r[{bar}] {step}/{steps_per_epoch} - loss: {current_loss:.4f}',
-                          end='', flush=True)
+                    # Calculate progress (0 to 50 characters)
+                    progress = min(int(50 * step / steps_per_epoch), 50)
+                    remaining = max(50 - progress, 0)
+
+                    # Build progress bar
+                    if progress > 0:
+                        bar = '=' * (progress - 1) + '>' + '.' * remaining
+                    else:
+                        bar = '.' * 50
+
+                    # Print with carriage return
+                    msg = f'\r[{bar}] {step}/{steps_per_epoch} - loss: {current_loss:.4f}'
+                    print(msg, end='', flush=True)
+                    sys.stdout.flush()
 
                 if step >= steps_per_epoch:
                     break
@@ -360,9 +357,11 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
             history['Diffusion_loss'].append(epoch_loss)
 
             if verbose == 1:
-                print(f' - loss: {epoch_loss:.4f}')
+                print(f'\n - Epoch loss: {epoch_loss:.4f}')
+                sys.stdout.flush()
             elif verbose == 2:
                 print(f'Epoch {epoch + 1}/{epochs} - loss: {epoch_loss:.4f}')
+                sys.stdout.flush()
 
             # Validation
             if validation_data is not None and (epoch + 1) % validation_freq == 0:
@@ -373,12 +372,20 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
 
                 if verbose >= 1:
                     print(f' - val_loss: {val_loss:.4f}')
+                    sys.stdout.flush()
 
             # Callbacks
             if callbacks is not None:
                 for callback in callbacks:
-                    if hasattr(callback, 'on_epoch_end'):
-                        callback.on_epoch_end(epoch, {'loss': epoch_loss})
+                    callback.set_model(self)
+                    callback.set_params({
+                        'epochs': epochs,
+                        'steps': steps_per_epoch,
+                        'verbose': verbose,
+                        'batch_size': batch_size
+                    })
+                for callback in callbacks:
+                    callback.on_train_begin()
 
         # Return history object
         class History:
