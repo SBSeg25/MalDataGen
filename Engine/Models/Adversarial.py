@@ -51,18 +51,18 @@ except ImportError as error:
     sys.exit(-1)
 
 # Default values from your constants file
-DEFAULT_ADVERSARIAL_NUMBER_EPOCHS = 1028
+DEFAULT_ADVERSARIAL_NUMBER_EPOCHS = 512
 DEFAULT_ADVERSARIAL_LATENT_DIMENSION = 32
 DEFAULT_ADVERSARIAL_TRAINING_ALGORITHM = "Adam"
 DEFAULT_ADVERSARIAL_INTERMEDIARY_ACTIVATION = "LeakyReLU"
 DEFAULT_ADVERSARIAL_LAST_ACTIVATION_LAYER = "Sigmoid"
 DEFAULT_ADVERSARIAL_DROPOUT_DECAY_RATE_G = 0.2
-DEFAULT_ADVERSARIAL_DROPOUT_DECAY_RATE_D = 0.4
+DEFAULT_ADVERSARIAL_DROPOUT_DECAY_RATE_D = 0.6
 DEFAULT_ADVERSARIAL_INITIALIZER_MEAN = 0.0
 DEFAULT_ADVERSARIAL_INITIALIZER_DEVIATION = 0.250
 DEFAULT_ADVERSARIAL_BATCH_SIZE = 64
-DEFAULT_ADVERSARIAL_DENSE_LAYERS_SETTINGS_G = [128]
-DEFAULT_ADVERSARIAL_DENSE_LAYERS_SETTINGS_D = [128]
+DEFAULT_ADVERSARIAL_DENSE_LAYERS_SETTINGS_G = [2048]
+DEFAULT_ADVERSARIAL_DENSE_LAYERS_SETTINGS_D = [32]
 DEFAULT_ADVERSARIAL_RANDOM_LATENT_STANDER_DEVIATION = 0.250
 DEFAULT_ADVERSARIAL_LOSS_GENERATOR = 'binary_crossentropy'
 DEFAULT_ADVERSARIAL_LOSS_DISCRIMINATOR = 'binary_crossentropy'
@@ -400,7 +400,7 @@ class Adversarial:
             raise ValueError("AdversarialAlgorithm instance is required but was not provided or created.")
 
         # Set up optimizers for the generator and discriminator
-        generator_optimizer = tf.keras.optimizers.Adam(learning_rate=0.001, beta_1=0.5, beta_2=0.9)
+        generator_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0005, beta_1=0.5, beta_2=0.9)
         discriminator_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001, beta_1=0.5, beta_2=0.9)
 
         # Compile the adversarial algorithm with binary cross-entropy loss

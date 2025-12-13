@@ -11,11 +11,11 @@ import numpy as np
 from Engine.Models.Adversarial import Adversarial
 from Engine.Models.Autoencoder import Autoencoder
 import os
-
-from Engine.Models.VariationalAutoencoder import VariationalAutoencoder
+os.environ["ML_FRAMEWORK"] = "tensorflow"
+from Engine.Models.DenoisingDiffusion import DenoisingDiffusion
 from Engine.Models.Wasserstein import Wasserstein
 
-os.environ["ML_FRAMEWORK"] = "pytorch"
+
 
 # ========================================================================
 # FUNÇÕES PARA GERAR FORMAS GEOMÉTRICAS 3D
@@ -204,7 +204,7 @@ print("=" * 70)
 input_shape = (DEPTH, HEIGHT, WIDTH)
 
 print("\nInicializando autoencoder...")
-autoencoder = VariationalAutoencoder(number_classes=3)
+autoencoder = DenoisingDiffusion(number_classes=3)
 
 print("\n🚀 Treinando modelo com dados geométricos...")
 print("   (Isso pode levar alguns minutos...)")

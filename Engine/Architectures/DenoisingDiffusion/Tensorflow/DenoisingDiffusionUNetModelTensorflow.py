@@ -208,8 +208,6 @@ class DenoisingDiffusionUNetModelTensorflow(Activations):
         if not isinstance(last_layer_activation, str):
             raise ValueError("last_layer_activation must be a string.")
 
-        if not isinstance(number_samples_per_class, dict) or "number_classes" not in number_samples_per_class:
-            raise ValueError("number_samples_per_class must be a dictionary containing the key 'number_classes'.")
 
 
         self._embedding_channels = embedding_channels

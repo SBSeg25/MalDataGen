@@ -8,6 +8,9 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/12/13'
 __credits__ = ['Synthetic Ocean AI']
 
+from Engine.Algorithms.denoising_diffusion.AlgorithmDenoisingDiffusion import AlgorithmDenoisingDiffusion
+from Engine.Architectures.DenoisingDiffusion.DenoisingDiffusionUnetModel import DenoisingDiffusionUNetModel
+
 try:
     import sys
     import os
@@ -15,12 +18,6 @@ try:
     import numpy as np
     import torch
     from torch.utils.data import DataLoader, TensorDataset
-    from Engine.Architectures.DenoisingDiffusion.Torch.DenoisingDiffusionUnetModelTorch import \
-        DenoisingDiffusionUNetModelTorch
-    from Engine.Algorithms.denoising_diffusion.Torch.GaussianDenoisingDiffusionTorch import \
-        GaussianDiffusionTorch
-    from Engine.Algorithms.denoising_diffusion.Torch.AlgorithmDenoisingDiffusionTorch import \
-        AlgorithmDenoisingDiffusionTorch
     from Engine.Algorithms.denoising_diffusion.GaussianDenoisingDiffusion import GaussianDenoisingDiffusion
 
 except ImportError as error:
@@ -29,10 +26,10 @@ except ImportError as error:
 
 # Default values
 DEFAULT_DIFFUSION_UNET_LAST_LAYER_ACTIVATION = 'linear'
-DEFAULT_DIFFUSION_LATENT_DIMENSION = 64
+DEFAULT_DIFFUSION_LATENT_DIMENSION = 16
 DEFAULT_DIFFUSION_UNET_NUMBER_EMBEDDING_CHANNELS = 1
-DEFAULT_DIFFUSION_UNET_CHANNELS_PER_LEVEL = [1, 2, 4]
-DEFAULT_DIFFUSION_UNET_BATCH_SIZE = 128
+DEFAULT_DIFFUSION_UNET_CHANNELS_PER_LEVEL = [1, 1, 1]
+DEFAULT_DIFFUSION_UNET_BATCH_SIZE = 16
 DEFAULT_DIFFUSION_UNET_ATTENTION_MODE = [False, True, True]
 DEFAULT_DIFFUSION_UNET_NUMBER_RESIDUAL_BLOCKS = 2
 DEFAULT_DIFFUSION_UNET_GROUP_NORMALIZATION = 1
@@ -53,6 +50,9 @@ class DenoisingDiffusion:
     """
     Framework-agnostic Denoising Diffusion Probabilistic Model (DDPM) implementation.
 
+    NOW SUPPORTS MULTI-DIMENSIONAL DATA: Automatically handles 1D, 2D, 3D, and N-D inputs
+    by flattening them during training and reshaping them during generation.
+
     This class contains BOTH TensorFlow and PyTorch implementations in a single class.
     The framework is selected based on the ML_FRAMEWORK environment variable.
 
@@ -62,6 +62,9 @@ class DenoisingDiffusion:
 
     Set the framework by: os.environ['ML_FRAMEWORK'] = 'pytorch' or 'Tensorflow'
     Default framework is TensorFlow if ML_FRAMEWORK is not set.
+
+    Attributes:
+        _original_input_shape (tuple): Stores the original shape of input data for reconstruction
     """
 
     def __init__(
@@ -72,6 +75,7 @@ class DenoisingDiffusion:
             unet_channels_per_level: list[int] = None,
             unet_batch_size: int = DEFAULT_DIFFUSION_UNET_BATCH_SIZE,
             unet_attention_mode: list[bool] = None,
+            number_classes: int = 3,
             unet_num_residual_blocks: int = DEFAULT_DIFFUSION_UNET_NUMBER_RESIDUAL_BLOCKS,
             unet_group_normalization: int = DEFAULT_DIFFUSION_UNET_GROUP_NORMALIZATION,
             unet_intermediary_activation: str = DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION,
@@ -199,6 +203,9 @@ class DenoisingDiffusion:
         # Number of samples per class (set during training)
         self._number_samples_per_class = None
 
+        # Storage for original input shape (for multi-dimensional data)
+        self._original_input_shape = None
+
     def _get_denoising_diffusion_pytorch(self, input_shape: tuple[int, ...]) -> None:
         """
         PyTorch implementation: Initializes and configures the diffusion model using UNet architecture.
@@ -206,7 +213,7 @@ class DenoisingDiffusion:
 
         # Only create new UNet models if none were provided
         if not self._has_external_first_unet:
-            self._denoising_first_instance_unet = DenoisingDiffusionUNetModelTorch(
+            self._denoising_first_instance_unet = DenoisingDiffusionUNetModel(
                 output_shape=input_shape,
                 embedding_channels=self._denoising_diffusion_unet_num_embedding_channels,
                 list_neurons_per_level=self._denoising_diffusion_unet_channels_per_level,
@@ -223,7 +230,7 @@ class DenoisingDiffusion:
             self._denoising_first_unet_model = self._denoising_first_unet_model.to(self._device)
 
         if not self._has_external_second_unet:
-            self._denoising_second_instance_unet = DenoisingDiffusionUNetModelTorch(
+            self._denoising_second_instance_unet = DenoisingDiffusionUNetModel(
                 output_shape=input_shape,
                 embedding_channels=self._denoising_diffusion_unet_num_embedding_channels,
                 list_neurons_per_level=self._denoising_diffusion_unet_channels_per_level,
@@ -247,7 +254,7 @@ class DenoisingDiffusion:
 
         # Only create new GaussianDiffusion utility if none was provided
         if not self._has_external_diffusion_util:
-            self._denoising_gaussian_diffusion_util = GaussianDiffusionTorch(
+            self._denoising_gaussian_diffusion_util = GaussianDenoisingDiffusion(
                 beta_start=self._denoising_diffusion_gaussian_beta_start,
                 beta_end=self._denoising_diffusion_gaussian_beta_end,
                 time_steps=self._denoising_diffusion_gaussian_time_steps,
@@ -274,7 +281,7 @@ class DenoisingDiffusion:
                 lr=0.0001
             )
 
-            self._denoising_diffusion_algorithm = AlgorithmDenoisingDiffusionTorch(
+            self._denoising_diffusion_algorithm = AlgorithmDenoisingDiffusion(
                 output_shape=input_shape,
                 first_unet_model=self._denoising_first_unet_model,
                 second_unet_model=self._denoising_second_unet_model,
@@ -372,7 +379,6 @@ class DenoisingDiffusion:
     def _training_denoising_diffusion_model_pytorch(
             self,
             input_shape: tuple[int, ...],
-            arguments,
             x_real_samples: np.ndarray,
             y_real_samples: np.ndarray
     ) -> None:
@@ -396,9 +402,9 @@ class DenoisingDiffusion:
         epochs = self._denoising_diffusion_unet_epochs
 
         # Extract callbacks
-        callback_model_monitor = getattr(arguments, 'callback_model_monitor', None) or self._callback_model_monitor
-        callback_early_stop = getattr(arguments, 'callback_early_stop', None) or self._callback_early_stop
-        use_early_stop = getattr(arguments, 'use_early_stop', False)
+        callback_model_monitor =  self._callback_model_monitor
+        callback_early_stop = self._callback_early_stop
+        use_early_stop = False
 
         # Delegate training to the algorithm's fit method
         history = self._denoising_diffusion_algorithm.fit(
@@ -418,7 +424,6 @@ class DenoisingDiffusion:
     def _training_denoising_diffusion_model_tensorflow(
             self,
             input_shape: tuple[int, ...],
-            arguments,
             x_real_samples: np.ndarray,
             y_real_samples: np.ndarray
     ) -> None:
@@ -463,9 +468,8 @@ class DenoisingDiffusion:
         # Setup callbacks
         callbacks_list = [self._callback_model_monitor] if self._callback_model_monitor else []
 
-        if hasattr(arguments, 'use_early_stop') and arguments.use_early_stop:
-            if self._callback_early_stop:
-                callbacks_list.append(self._callback_early_stop)
+        if self._callback_early_stop:
+            callbacks_list.append(self._callback_early_stop)
 
         # Initialize the diffusion algorithm
         self._denoising_diffusion_algorithm = AlgorithmDenoisingDiffusion(
@@ -509,46 +513,70 @@ class DenoisingDiffusion:
     def fit_model(
             self,
             input_shape: tuple,
-            arguments,
             x_real_samples: np.ndarray,
             y_real_samples: np.ndarray
     ) -> None:
         """
-        Train the denoising diffusion model using the appropriate framework.
-        This method routes to the framework-specific implementation.
+        Train the denoising diffusion model using the appropriate framework with automatic data flattening.
+
+        NOW SUPPORTS MULTI-DIMENSIONAL DATA:
+        - Automatically flattens N-D input data (1D, 2D, 3D, etc.)
+        - Stores original shape for reconstruction during generation
+        - Routes to framework-specific implementation
 
         Args:
-            input_shape: Shape of input data
+            input_shape: Shape of input data samples (e.g., (784,) for 1D, (28, 28, 1) for 2D, (16, 16, 16) for 3D)
             arguments: Training arguments/configuration
-            x_real_samples: Training samples
-            y_real_samples: Training labels
+            x_real_samples: Training samples (can be N-dimensional)
+            y_real_samples: Training labels (1D array of class indices)
         """
-        # Set number_samples_per_class if provided
-        if hasattr(arguments, 'number_samples_per_class'):
-            self._number_samples_per_class = arguments.number_samples_per_class
+        # Store original input shape for later reconstruction
+        self._original_input_shape = input_shape
 
-        # Set callbacks if they exist
-        if hasattr(arguments, 'callback_model_monitor'):
-            self._callback_model_monitor = arguments.callback_model_monitor
-        if hasattr(arguments, 'callback_early_stop'):
-            self._callback_early_stop = arguments.callback_early_stop
-        if hasattr(arguments, 'callback_resources_monitor'):
-            self._callback_resources_monitor = arguments.callback_resources_monitor
+        # Calculate total flattened dimension
+        flattened_dim = int(np.prod(input_shape))
 
-        # Route to appropriate training method
+        # CRITICAL: Set up number_samples_per_class from training labels
+        # This must be done before building the models
+        num_classes = int(y_real_samples.max()) + 1
+        self._number_samples_per_class = {
+            "number_classes": num_classes
+        }
+
+        # Prepare data
+        print(f"\nPreparing data for Denoising Diffusion ({self._framework})...")
+        print(f"  - Original input shape: {input_shape}")
+        print(f"  - Input data shape: {x_real_samples.shape}")
+        print(f"  - Number of classes: {num_classes}")
+
+        # Flatten the input data if it has more than 2 dimensions
+        # (batch_size, ...) -> (batch_size, flattened_features)
+        if len(x_real_samples.shape) > 2:
+            x_real_samples_flat = x_real_samples.reshape(x_real_samples.shape[0], -1)
+            print(f"  - Flattened data shape: {x_real_samples_flat.shape}")
+        else:
+            x_real_samples_flat = x_real_samples
+            print(f"  - Data already flat: {x_real_samples_flat.shape}")
+
+        print(f"\nStarting training...")
+        print(f"  - Epochs: {self._denoising_diffusion_unet_epochs}")
+        print(f"  - Batch size: {self._denoising_diffusion_unet_batch_size}")
+        print(f"  - Time steps: {self._denoising_diffusion_gaussian_time_steps}")
+
+        # Route to appropriate training method with flattened dimension
         if self._framework == 'pytorch':
             self._training_denoising_diffusion_model_pytorch(
-                input_shape, arguments, x_real_samples, y_real_samples
+                flattened_dim, x_real_samples_flat, y_real_samples
             )
         elif self._framework == 'tensorflow':
             self._training_denoising_diffusion_model_tensorflow(
-                input_shape, arguments, x_real_samples, y_real_samples
+                flattened_dim, x_real_samples_flat, y_real_samples
             )
 
+        print(f"\n✓ Training completed successfully!")
     def train(
             self,
             input_shape: tuple,
-            arguments,
             x_real_samples: np.ndarray,
             y_real_samples: np.ndarray
     ) -> None:
@@ -563,18 +591,26 @@ class DenoisingDiffusion:
             y_real_samples: Training labels
         """
         self.fit_model(
-            input_shape, arguments, x_real_samples, y_real_samples
+            input_shape, x_real_samples, y_real_samples
         )
 
     def get_samples(self, number_samples_per_class):
         """
-        Generate samples using the trained model.
+        Generate samples using the trained model and reshape them to original input shape.
+
+        NOW SUPPORTS MULTI-DIMENSIONAL OUTPUT:
+        - Automatically reshapes generated samples to original input dimensions
+        - Works with 1D, 2D, 3D, and N-D data
 
         Args:
-            number_samples_per_class: Dictionary with class information
+            number_samples_per_class: Dictionary specifying number of samples per class
+                Format 1: {"number_classes": N, "classes": {0: n0, 1: n1, ...}}
+                Format 2 (simplified): {"number_classes": N, 0: n0, 1: n1, ...}
 
         Returns:
-            Generated samples
+            np.ndarray: Generated samples reshaped to original input dimensions
+                - Shape: (total_samples, *original_input_shape)
+                - Example: For 3D input (16, 16, 16) with 100 total samples -> (100, 16, 16, 16)
 
         Raises:
             RuntimeError: If algorithm is not initialized
@@ -585,7 +621,36 @@ class DenoisingDiffusion:
                 "Please train the model first using fit_model() or train()."
             )
 
-        return self._denoising_diffusion_algorithm.get_samples(number_samples_per_class)
+        # Generate flattened samples from algorithm
+        generated_data = self._denoising_diffusion_algorithm.get_samples(number_samples_per_class)
+
+        # Check if we have stored original input shape
+        if not hasattr(self, '_original_input_shape') or self._original_input_shape is None:
+            # If no original shape stored, return flattened data
+            # Convert dict to array if needed
+            if isinstance(generated_data, dict):
+                all_samples = []
+                for label in sorted(generated_data.keys()):
+                    all_samples.append(generated_data[label])
+                return np.concatenate(all_samples, axis=0)
+            return generated_data
+
+        # Reshape generated samples to original input shape
+        reshaped_samples = []
+
+        if isinstance(generated_data, dict):
+            # If returned as dict, reshape each class
+            for label in sorted(generated_data.keys()):
+                samples = generated_data[label]
+                # Reshape from (n_samples, flattened_features) to (n_samples, *original_shape)
+                reshaped = samples.reshape(-1, *self._original_input_shape)
+                reshaped_samples.append(reshaped)
+
+            # Concatenate all classes
+            return np.concatenate(reshaped_samples, axis=0)
+        else:
+            # If returned as array, reshape directly
+            return generated_data.reshape(-1, *self._original_input_shape)
 
     def get_training_history(self) -> dict:
         """
@@ -601,6 +666,11 @@ class DenoisingDiffusion:
     def framework(self) -> str:
         """Get the current framework being used."""
         return self._framework
+
+    @property
+    def original_input_shape(self) -> tuple:
+        """Get the original input shape (before flattening)."""
+        return self._original_input_shape
 
     @property
     def denoising_first_unet_model(self):

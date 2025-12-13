@@ -34,14 +34,6 @@ try:
     import numpy
     import numpy as np
 
-    # Configure logging if not already configured
-    if not logging.getLogger().hasHandlers():
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s\t***\t%(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
-        )
-
     # Detect framework from environment
     ML_FRAMEWORK = os.environ.get('ML_FRAMEWORK', 'Tensorflow').lower()
 
@@ -49,10 +41,11 @@ try:
     from Engine.Algorithms.LatentDiffusion.AlgorithmVAELatentDiffusion import AlgorithmVAELatentDiffusion
     from Engine.Algorithms.LatentDiffusion.GaussianLatentDiffusion import GaussianLatentDiffusion
     from Engine.Architectures.LatentDiffusion.DiffusionModelUNetModel import DiffusionModelUNetModel
+    from Engine.Architectures.LatentDiffusion.Torch.VariationalModelDiffusionTorch import VariationalModelDiffusionTorch
     from Engine.Architectures.LatentDiffusion.VariationalModelDiffusion import VariationalModelDiffusion
 
     if ML_FRAMEWORK == 'tensorflow':
-
+        import keras
         import tensorflow as tf
         import tensorflow
         from tensorflow.keras.optimizers import Adam
@@ -198,7 +191,7 @@ class LatentDiffusion:
                  ema: float = DEFAULT_LATENT_DIFFUSION_EMA,
                  time_steps: int = DEFAULT_LATENT_DIFFUSION_TIME_STEPS,
 
-                 # Class Information
+                 # Class Information - ADDED THIS
                  number_samples_per_class: dict = None,
 
                  # Optional pre-initialized components
@@ -231,8 +224,9 @@ class LatentDiffusion:
                 self._device = device
             logging.info(f"PyTorch device: {self._device}")
 
-        # Store class information
+        # Store class information - ADDED THIS
         if number_samples_per_class is None:
+            # Provide a default if not specified
             self._number_samples_per_class = {'number_classes': 2}
             logging.warning("number_samples_per_class not provided, using default: {'number_classes': 2}")
         else:
@@ -248,6 +242,7 @@ class LatentDiffusion:
         self._latent_first_unet_model = None
         self._latent_second_unet_model = None
         self._latent_autoencoder_diffusion = None
+
 
         # Store all configuration parameters
         self._latent_diffusion_unet_last_layer_activation = unet_last_layer_activation
@@ -442,8 +437,6 @@ class LatentDiffusion:
 
     def fit_model_tensorflow(self, input_shape, arguments, x_real_samples, y_real_samples):
         """TensorFlow-specific training pipeline."""
-        from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
-
         # Initialize the diffusion model
         self._get_latent_diffusion_tensorflow(input_shape)
 
@@ -460,42 +453,12 @@ class LatentDiffusion:
         # Compile the variational algorithm for diffusion
         self._latent_variational_algorithm.compile(loss=self._latent_diffusion_VAE_loss_function)
 
-        # Ensure output directory exists and clean old files
-        os.makedirs(self._latent_diffusion_VAE_path_output_models, exist_ok=True)
-        vae_model_path = os.path.join(self._latent_diffusion_VAE_path_output_models, 'vae_best_model.keras')
+        callbacks_list = [self._callback_model_monitor]
 
-        # Remove old model file if exists
-        if os.path.exists(vae_model_path):
-            try:
-                os.remove(vae_model_path)
-                logging.info(f"Removed existing model file: {vae_model_path}")
-            except Exception as e:
-                logging.warning(f"Could not remove old model file: {e}")
+        if arguments.use_early_stop:
+            callbacks_list.append(self._callback_early_stop)
 
-        # Create callbacks for VAE training
-        callbacks_list = [
-            ModelCheckpoint(
-                filepath=vae_model_path,
-                monitor='loss',
-                save_best_only=True,
-                mode='min',
-                verbose=0,
-                save_weights_only=False
-            )
-        ]
-
-        if hasattr(arguments, 'use_early_stop') and arguments.use_early_stop:
-            callbacks_list.append(
-                EarlyStopping(
-                    monitor='loss',
-                    patience=50,
-                    mode='min',
-                    verbose=0,
-                    restore_best_weights=True
-                )
-            )
-
-        # Fit the VAE model with the training data
+        # Fit the diffusion model with the training data
         self._latent_variational_algorithm.fit(
             (x_real_samples, to_categorical(y_real_samples,
                                             num_classes=self._number_samples_per_class["number_classes"])),
@@ -512,7 +475,7 @@ class LatentDiffusion:
         self._encoder_latent_diffusion.summary()
         self._decoder_latent_diffusion.summary()
 
-        # Initialize the final diffusion algorithm using the TensorFlow class
+        # Initialize the final diffusion algorithm
         self._latent_diffusion_algorithm = LatentDiffusionAlgorithm(
             first_unet_model=self._latent_first_unet_model,
             second_unet_model=self._latent_second_unet_model,
@@ -543,39 +506,10 @@ class LatentDiffusion:
         data_embedding = numpy.array(data_embedding)
         data_embedding = tensorflow.expand_dims(data_embedding, axis=-1)
 
-        # Ensure output directory exists and clean old files
-        diffusion_model_path = os.path.join(self._latent_diffusion_VAE_path_output_models, 'diffusion_best_model.keras')
+        callbacks_list = [self._callback_model_monitor]
 
-        # Remove old model file if exists
-        if os.path.exists(diffusion_model_path):
-            try:
-                os.remove(diffusion_model_path)
-                logging.info(f"Removed existing model file: {diffusion_model_path}")
-            except Exception as e:
-                logging.warning(f"Could not remove old model file: {e}")
-
-        # Create callbacks for diffusion training
-        callbacks_list = [
-            ModelCheckpoint(
-                filepath=diffusion_model_path,
-                monitor='loss',
-                save_best_only=True,
-                mode='min',
-                verbose=0,
-                save_weights_only=False
-            )
-        ]
-
-        if hasattr(arguments, 'use_early_stop') and arguments.use_early_stop:
-            callbacks_list.append(
-                EarlyStopping(
-                    monitor='loss',
-                    patience=50,
-                    mode='min',
-                    verbose=1,
-                    restore_best_weights=True
-                )
-            )
+        if arguments.use_early_stop:
+            callbacks_list.append(self._callback_early_stop)
 
         self._latent_diffusion_algorithm.fit(
             data_embedding,
@@ -583,7 +517,13 @@ class LatentDiffusion:
                            num_classes=self._number_samples_per_class["number_classes"]),
             epochs=self._latent_diffusion_unet_epochs,
             batch_size=self._latent_diffusion_unet_batch_size,
-            callbacks=callbacks_list)
+            callbacks=callbacks_list,
+            verbose=2
+        )
+
+    # ========================================================================
+    # PYTORCH IMPLEMENTATION
+    # ========================================================================
 
     def _detect_embedding_shape_pytorch(self, x_real_samples):
         """PyTorch-specific helper to detect embedding shape."""
@@ -606,9 +546,9 @@ class LatentDiffusion:
         return actual_shape
 
     def fit_model_pytorch(self, input_shape, arguments, x_real_samples, y_real_samples):
-        """PyTorch-specific training pipeline using AlgorithmLatentDiffusionPyTorch."""
+        """PyTorch-specific training pipeline."""
 
-        self._latent_variation_model_diffusion = VariationalModelDiffusion(
+        self._latent_variation_model_diffusion = VariationalModelDiffusionTorch(
             latent_dimension=self._latent_diffusion_latent_dimension,
             output_shape=input_shape,
             activation_function=self._latent_diffusion_VAE_intermediary_activation_function,
@@ -645,7 +585,6 @@ class LatentDiffusion:
         ).float()
 
         # Train VAE
-        print("Training VAE...")
         vae_optimizer = Adam(
             list(self._latent_variation_model_diffusion.get_encoder().parameters()) +
             list(self._latent_variation_model_diffusion.get_decoder().parameters()),
@@ -679,8 +618,14 @@ class LatentDiffusion:
         self._encoder_latent_diffusion = self._latent_variational_algorithm.get_encoder_trained()
         self._decoder_latent_diffusion = self._latent_variational_algorithm.get_decoder_trained()
 
+        # ========================================================================
+        # PHASE 2: Detect Actual Embedding Shape
+        # ========================================================================
         actual_embedding_shape = self._detect_embedding_shape_pytorch(x_real_samples)
 
+        # ========================================================================
+        # PHASE 3: Create Full Embeddings
+        # ========================================================================
         data_embedding = self._latent_variational_algorithm.create_embedding(
             x_real_samples,
             batch_size=self._latent_diffusion_VAE_batch_size_create_embedding
@@ -690,6 +635,9 @@ class LatentDiffusion:
         if len(data_embedding.shape) == 2:
             data_embedding = data_embedding.unsqueeze(-1)
 
+        # ========================================================================
+        # PHASE 4: Initialize UNets with Correct Dimensions
+        # ========================================================================
 
         embedding_seq_len, embedding_channels = actual_embedding_shape
 
@@ -732,6 +680,9 @@ class LatentDiffusion:
             clip_max=self._latent_diffusion_gaussian_clip_max
         ).to(self._device)
 
+        # ========================================================================
+        # PHASE 5: Initialize Diffusion Algorithm
+        # ========================================================================
 
         self._latent_diffusion_algorithm = LatentDiffusionAlgorithm(
             first_unet_model=self._latent_first_unet_model,
@@ -748,9 +699,12 @@ class LatentDiffusion:
             time_steps=self._latent_diffusion_gaussian_time_steps,
             ema=self._latent_diffusion_ema,
             margin=self._latent_diffusion_margin,
-            embedding_dimension=embedding_seq_len,
-            device=self._device
+            embedding_dimension=embedding_seq_len
         )
+
+        # ========================================================================
+        # PHASE 6: Train Diffusion Model
+        # ========================================================================
 
         num_batches = len(data_embedding) // self._latent_diffusion_unet_batch_size
 
@@ -778,7 +732,9 @@ class LatentDiffusion:
                     print(f"  Early stopping at epoch {epoch + 1}")
                     break
 
-        print("\nTraining completed!")
+    # ========================================================================
+    # UNIFIED PUBLIC API
+    # ========================================================================
 
     def fit_model(self, input_shape, arguments, x_real_samples, y_real_samples):
         """
@@ -793,10 +749,14 @@ class LatentDiffusion:
             x_real_samples (ndarray): Training samples
             y_real_samples (ndarray): Corresponding labels
         """
-        if self._framework == 'tensorflow':
+        if self._framework == 'Tensorflow':
             return self.fit_model_tensorflow(input_shape, arguments, x_real_samples, y_real_samples)
         else:  # pytorch
             return self.fit_model_pytorch(input_shape, arguments, x_real_samples, y_real_samples)
+
+    # ========================================================================
+    # PROPERTIES (Framework-agnostic)
+    # ========================================================================
 
     @property
     def framework(self):
@@ -816,12 +776,326 @@ class LatentDiffusion:
         if self._framework == 'pytorch':
             self._device = value
 
-    # [All other properties remain the same...]
-    # (Properties omitted for brevity - they remain unchanged)
+    # UNet Properties
+    @property
+    def latent_diffusion_unet_last_layer_activation(self):
+        return self._latent_diffusion_unet_last_layer_activation
+
+    @latent_diffusion_unet_last_layer_activation.setter
+    def latent_diffusion_unet_last_layer_activation(self, value):
+        self._latent_diffusion_unet_last_layer_activation = value
+
+    @property
+    def latent_diffusion_latent_dimension(self):
+        return self._latent_diffusion_latent_dimension
+
+    @latent_diffusion_latent_dimension.setter
+    def latent_diffusion_latent_dimension(self, value):
+        self._latent_diffusion_latent_dimension = value
+
+    @property
+    def latent_diffusion_unet_num_embedding_channels(self):
+        return self._latent_diffusion_unet_num_embedding_channels
+
+    @latent_diffusion_unet_num_embedding_channels.setter
+    def latent_diffusion_unet_num_embedding_channels(self, value):
+        self._latent_diffusion_unet_num_embedding_channels = value
+
+    @property
+    def latent_diffusion_unet_channels_per_level(self):
+        return self._latent_diffusion_unet_channels_per_level
+
+    @latent_diffusion_unet_channels_per_level.setter
+    def latent_diffusion_unet_channels_per_level(self, value):
+        self._latent_diffusion_unet_channels_per_level = value
+
+    @property
+    def latent_diffusion_unet_batch_size(self):
+        return self._latent_diffusion_unet_batch_size
+
+    @latent_diffusion_unet_batch_size.setter
+    def latent_diffusion_unet_batch_size(self, value):
+        self._latent_diffusion_unet_batch_size = value
+
+    @property
+    def latent_diffusion_unet_attention_mode(self):
+        return self._latent_diffusion_unet_attention_mode
+
+    @latent_diffusion_unet_attention_mode.setter
+    def latent_diffusion_unet_attention_mode(self, value):
+        self._latent_diffusion_unet_attention_mode = value
+
+    @property
+    def latent_diffusion_unet_num_residual_blocks(self):
+        return self._latent_diffusion_unet_num_residual_blocks
+
+    @latent_diffusion_unet_num_residual_blocks.setter
+    def latent_diffusion_unet_num_residual_blocks(self, value):
+        self._latent_diffusion_unet_num_residual_blocks = value
+
+    @property
+    def latent_diffusion_unet_group_normalization(self):
+        return self._latent_diffusion_unet_group_normalization
+
+    @latent_diffusion_unet_group_normalization.setter
+    def latent_diffusion_unet_group_normalization(self, value):
+        self._latent_diffusion_unet_group_normalization = value
+
+    @property
+    def latent_diffusion_unet_intermediary_activation(self):
+        return self._latent_diffusion_unet_intermediary_activation
+
+    @latent_diffusion_unet_intermediary_activation.setter
+    def latent_diffusion_unet_intermediary_activation(self, value):
+        self._latent_diffusion_unet_intermediary_activation = value
+
+    @property
+    def latent_diffusion_unet_intermediary_activation_alpha(self):
+        return self._latent_diffusion_unet_intermediary_activation_alpha
+
+    @latent_diffusion_unet_intermediary_activation_alpha.setter
+    def latent_diffusion_unet_intermediary_activation_alpha(self, value):
+        self._latent_diffusion_unet_intermediary_activation_alpha = value
+
+    @property
+    def latent_diffusion_unet_epochs(self):
+        return self._latent_diffusion_unet_epochs
+
+    @latent_diffusion_unet_epochs.setter
+    def latent_diffusion_unet_epochs(self, value):
+        self._latent_diffusion_unet_epochs = value
+
+    # VAE Properties
+    @property
+    def latent_diffusion_VAE_mean_distribution(self):
+        return self._latent_diffusion_VAE_mean_distribution
+
+    @latent_diffusion_VAE_mean_distribution.setter
+    def latent_diffusion_VAE_mean_distribution(self, value):
+        self._latent_diffusion_VAE_mean_distribution = value
+
+    @property
+    def latent_diffusion_VAE_stander_deviation(self):
+        return self._latent_diffusion_VAE_stander_deviation
+
+    @latent_diffusion_VAE_stander_deviation.setter
+    def latent_diffusion_VAE_stander_deviation(self, value):
+        self._latent_diffusion_VAE_stander_deviation = value
+
+    @property
+    def latent_diffusion_VAE_file_name_encoder(self):
+        return self._latent_diffusion_VAE_file_name_encoder
+
+    @latent_diffusion_VAE_file_name_encoder.setter
+    def latent_diffusion_VAE_file_name_encoder(self, value):
+        self._latent_diffusion_VAE_file_name_encoder = value
+
+    @property
+    def latent_diffusion_VAE_file_name_decoder(self):
+        return self._latent_diffusion_VAE_file_name_decoder
+
+    @latent_diffusion_VAE_file_name_decoder.setter
+    def latent_diffusion_VAE_file_name_decoder(self, value):
+        self._latent_diffusion_VAE_file_name_decoder = value
+
+    @property
+    def latent_diffusion_VAE_path_output_models(self):
+        return self._latent_diffusion_VAE_path_output_models
+
+    @latent_diffusion_VAE_path_output_models.setter
+    def latent_diffusion_VAE_path_output_models(self, value):
+        self._latent_diffusion_VAE_path_output_models = value
+
+    # Gaussian Diffusion Properties
+    @property
+    def latent_diffusion_gaussian_beta_start(self):
+        return self._latent_diffusion_gaussian_beta_start
+
+    @latent_diffusion_gaussian_beta_start.setter
+    def latent_diffusion_gaussian_beta_start(self, value):
+        self._latent_diffusion_gaussian_beta_start = value
+
+    @property
+    def latent_diffusion_gaussian_beta_end(self):
+        return self._latent_diffusion_gaussian_beta_end
+
+    @latent_diffusion_gaussian_beta_end.setter
+    def latent_diffusion_gaussian_beta_end(self, value):
+        self._latent_diffusion_gaussian_beta_end = value
+
+    @property
+    def latent_diffusion_gaussian_time_steps(self):
+        return self._latent_diffusion_gaussian_time_steps
+
+    @latent_diffusion_gaussian_time_steps.setter
+    def latent_diffusion_gaussian_time_steps(self, value):
+        self._latent_diffusion_gaussian_time_steps = value
+
+    @property
+    def latent_diffusion_gaussian_clip_min(self):
+        return self._latent_diffusion_gaussian_clip_min
+
+    @latent_diffusion_gaussian_clip_min.setter
+    def latent_diffusion_gaussian_clip_min(self, value):
+        self._latent_diffusion_gaussian_clip_min = value
+
+    @property
+    def latent_diffusion_gaussian_clip_max(self):
+        return self._latent_diffusion_gaussian_clip_max
+
+    @latent_diffusion_gaussian_clip_max.setter
+    def latent_diffusion_gaussian_clip_max(self, value):
+        self._latent_diffusion_gaussian_clip_max = value
+
+    # More VAE Properties
+    @property
+    def latent_diffusion_VAE_loss_function(self):
+        return self._latent_diffusion_VAE_loss_function
+
+    @latent_diffusion_VAE_loss_function.setter
+    def latent_diffusion_VAE_loss_function(self, value):
+        self._latent_diffusion_VAE_loss_function = value
+
+    @property
+    def latent_diffusion_VAE_encoder_filters(self):
+        return self._latent_diffusion_VAE_encoder_filters
+
+    @latent_diffusion_VAE_encoder_filters.setter
+    def latent_diffusion_VAE_encoder_filters(self, value):
+        self._latent_diffusion_VAE_encoder_filters = value
+
+    @property
+    def latent_diffusion_VAE_decoder_filters(self):
+        return self._latent_diffusion_VAE_decoder_filters
+
+    @latent_diffusion_VAE_decoder_filters.setter
+    def latent_diffusion_VAE_decoder_filters(self, value):
+        self._latent_diffusion_VAE_decoder_filters = value
+
+    @property
+    def latent_diffusion_VAE_last_layer_activation(self):
+        return self._latent_diffusion_VAE_last_layer_activation
+
+    @latent_diffusion_VAE_last_layer_activation.setter
+    def latent_diffusion_VAE_last_layer_activation(self, value):
+        self._latent_diffusion_VAE_last_layer_activation = value
+
+    @property
+    def latent_diffusion_VAE_latent_dimension(self):
+        return self._latent_diffusion_VAE_latent_dimension
+
+    @latent_diffusion_VAE_latent_dimension.setter
+    def latent_diffusion_VAE_latent_dimension(self, value):
+        self._latent_diffusion_VAE_latent_dimension = value
+
+    @property
+    def latent_diffusion_VAE_batch_size_create_embedding(self):
+        return self._latent_diffusion_VAE_batch_size_create_embedding
+
+    @latent_diffusion_VAE_batch_size_create_embedding.setter
+    def latent_diffusion_VAE_batch_size_create_embedding(self, value):
+        self._latent_diffusion_VAE_batch_size_create_embedding = value
+
+    @property
+    def latent_diffusion_VAE_batch_size_training(self):
+        return self._latent_diffusion_VAE_batch_size_training
+
+    @latent_diffusion_VAE_batch_size_training.setter
+    def latent_diffusion_VAE_batch_size_training(self, value):
+        self._latent_diffusion_VAE_batch_size_training = value
+
+    @property
+    def latent_diffusion_VAE_epochs(self):
+        return self._latent_diffusion_VAE_epochs
+
+    @latent_diffusion_VAE_epochs.setter
+    def latent_diffusion_VAE_epochs(self, value):
+        self._latent_diffusion_VAE_epochs = value
+
+    @property
+    def latent_diffusion_VAE_intermediary_activation_function(self):
+        return self._latent_diffusion_VAE_intermediary_activation_function
+
+    @latent_diffusion_VAE_intermediary_activation_function.setter
+    def latent_diffusion_VAE_intermediary_activation_function(self, value):
+        self._latent_diffusion_VAE_intermediary_activation_function = value
+
+    @property
+    def latent_diffusion_VAE_intermediary_activation_alpha(self):
+        return self._latent_diffusion_VAE_intermediary_activation_alpha
+
+    @latent_diffusion_VAE_intermediary_activation_alpha.setter
+    def latent_diffusion_VAE_intermediary_activation_alpha(self, value):
+        self._latent_diffusion_VAE_intermediary_activation_alpha = value
+
+    @property
+    def latent_diffusion_VAE_activation_output_encoder(self):
+        return self._latent_diffusion_VAE_activation_output_encoder
+
+    @latent_diffusion_VAE_activation_output_encoder.setter
+    def latent_diffusion_VAE_activation_output_encoder(self, value):
+        self._latent_diffusion_VAE_activation_output_encoder = value
+
+    @property
+    def latent_diffusion_margin(self):
+        return self._latent_diffusion_margin
+
+    @latent_diffusion_margin.setter
+    def latent_diffusion_margin(self, value):
+        self._latent_diffusion_margin = value
+
+    @property
+    def latent_diffusion_ema(self):
+        return self._latent_diffusion_ema
+
+    @latent_diffusion_ema.setter
+    def latent_diffusion_ema(self, value):
+        self._latent_diffusion_ema = value
+
+    @property
+    def latent_diffusion_time_steps(self):
+        return self._latent_diffusion_time_steps
+
+    @latent_diffusion_time_steps.setter
+    def latent_diffusion_time_steps(self, value):
+        self._latent_diffusion_time_steps = value
+
+    @property
+    def latent_diffusion_VAE_initializer_mean(self):
+        return self._latent_diffusion_VAE_initializer_mean
+
+    @latent_diffusion_VAE_initializer_mean.setter
+    def latent_diffusion_VAE_initializer_mean(self, value):
+        self._latent_diffusion_VAE_initializer_mean = value
+
+    @property
+    def latent_diffusion_VAE_initializer_deviation(self):
+        return self._latent_diffusion_VAE_initializer_deviation
+
+    @latent_diffusion_VAE_initializer_deviation.setter
+    def latent_diffusion_VAE_initializer_deviation(self, value):
+        self._latent_diffusion_VAE_initializer_deviation = value
+
+    @property
+    def latent_diffusion_VAE_dropout_decay_rate_encoder(self):
+        return self._latent_diffusion_VAE_dropout_decay_rate_encoder
+
+    @latent_diffusion_VAE_dropout_decay_rate_encoder.setter
+    def latent_diffusion_VAE_dropout_decay_rate_encoder(self, value):
+        self._latent_diffusion_VAE_dropout_decay_rate_encoder = value
+
+    @property
+    def latent_diffusion_VAE_dropout_decay_rate_decoder(self):
+        return self._latent_diffusion_VAE_dropout_decay_rate_decoder
+
+    @latent_diffusion_VAE_dropout_decay_rate_decoder.setter
+    def latent_diffusion_VAE_dropout_decay_rate_decoder(self, value):
+        self._latent_diffusion_VAE_dropout_decay_rate_decoder = value
 
     def __repr__(self):
         """String representation showing the active framework."""
         return f"LatentDiffusion(framework='{self._framework}')"
 
     def get_samples(self, number_samples_per_class):
+
         return self._latent_diffusion_algorithm.get_samples(number_samples_per_class)
