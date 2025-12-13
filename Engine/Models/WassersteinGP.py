@@ -5,7 +5,7 @@ __author__ = 'Synthetic Ocean AI - Team'
 __email__ = 'syntheticoceanai@gmail.com'
 __version__ = '{1}.{0}.{1}'
 __initial_data__ = '2022/06/01'
-__last_update__ = '2025/03/29'
+__last_update__ = '2025/12/13'
 __credits__ = ['Synthetic Ocean AI']
 
 from Engine.Architectures.WassersteinGP.WassersteinGPModel import WassersteinGPModel
@@ -150,8 +150,7 @@ class WassersteinGP:
             file_name_generator: str = DEFAULT_WASSERSTEIN_GAN_GP_FILE_NAME_GENERATOR,
             path_output_models: str = DEFAULT_WASSERSTEIN_GAN_GP_PATH_OUTPUT_MODELS,
             algorithm: WassersteinGPAlgorithm | None = None,
-            model: WassersteinGPModel | None = None,
-            number_samples_per_class: dict | None = None
+            model: WassersteinGPModel | None = None
     ) -> None:
         """
         Initializes the WGAN-GP instance with configuration parameters.
@@ -186,14 +185,10 @@ class WassersteinGP:
             path_output_models: Output models path (default: "models_saved/")
             algorithm: Optional pre-initialized WassersteinGPAlgorithm (default: None)
             model: Optional pre-initialized WassersteinGPModel (default: None)
-            number_samples_per_class: Optional class distribution information (default: None)
         """
         # Store pre-initialized instances if provided
         self._wasserstein_gp_algorithm: WassersteinGPAlgorithm | None = algorithm
         self._wasserstein_gp_model: WassersteinGPModel | None = model
-
-        # Store class distribution information
-        self._number_samples_per_class: dict | None = number_samples_per_class
 
         # ** WassersteinGP GAN with Gradient Penalty (WGAN-GP) Configuration Parameters **
         self._wasserstein_gp_latent_dimension: int = latent_dimension
@@ -239,7 +234,29 @@ class WassersteinGP:
         self._has_external_algorithm: bool = algorithm is not None
         self._has_external_model: bool = model is not None
 
-    def _get_wasserstein_gp(self, input_shape: tuple[int, ...]) -> None:
+    def _calculate_samples_per_class(self, y_labels: np.ndarray) -> dict:
+        """
+        Calculate the distribution of samples per class from labels.
+
+        Args:
+            y_labels: Labels array
+
+        Returns:
+            dict: Dictionary with 'classes' and 'number_classes' keys
+        """
+        # Handle one-hot encoded labels
+        if len(y_labels.shape) == 2 and y_labels.shape[1] > 1:
+            y_labels = np.argmax(y_labels, axis=1)
+
+        # Count samples per class
+        unique, counts = np.unique(y_labels, return_counts=True)
+
+        return {
+            "classes": dict(zip(unique.tolist(), counts.tolist())),
+            "number_classes": len(unique)
+        }
+
+    def _get_wasserstein_gp(self, input_shape: tuple[int, ...], number_samples_per_class: dict) -> None:
         """
         Initialize and configure the WassersteinGP GAN model, including generator and critic components.
 
@@ -252,6 +269,7 @@ class WassersteinGP:
 
         Args:
             input_shape: The shape of the input data, which determines the output shape for the models.
+            number_samples_per_class: Dictionary containing class distribution information
 
         Initializes:
             self._wasserstein_gp_model:
@@ -263,10 +281,8 @@ class WassersteinGP:
         """
         # Only create new model if none was provided
         if not self._has_external_model:
-            if self._number_samples_per_class is None:
-                raise ValueError("number_samples_per_class is required when creating a new WassersteinGPModel.")
-
             # WassersteinGP Model setup for the Generator and Discriminator
+            # Pass number_samples_per_class during initialization
             self._wasserstein_gp_model = WassersteinGPModel(
                 latent_dimension=self._wasserstein_gp_latent_dimension,
                 output_shape=input_shape,
@@ -279,7 +295,7 @@ class WassersteinGP:
                 dense_layer_sizes_g=self._wasserstein_gp_dense_layer_sizes_generator,
                 dense_layer_sizes_d=self._wasserstein_gp_dense_layer_sizes_discriminator,
                 dataset_type=np.float32,
-                number_samples_per_class=self._number_samples_per_class
+                number_samples_per_class=number_samples_per_class  # ADD THIS PARAMETER
             )
 
         # Only create new algorithm if none was provided
@@ -346,15 +362,20 @@ class WassersteinGP:
             y_real_samples: Corresponding sample labels
 
         Process:
-            1. Initializes model architecture (or uses provided)
-            2. Configures optimizers and loss functions
-            3. Sets up training callbacks
-            4. Alternates between critic and generator updates
-            5. Applies gradient penalty during critic training
-            6. Manages model saving and monitoring
+            1. Calculates class distribution automatically from labels
+            2. Initializes model architecture (or uses provided)
+            3. Configures optimizers and loss functions
+            4. Sets up training callbacks
+            5. Alternates between critic and generator updates
+            6. Applies gradient penalty during critic training
+            7. Manages model saving and monitoring
         """
-        # Initialize the WassersteinGP model (or use provided)
-        self._get_wasserstein_gp(input_shape)
+        # Calculate number_samples_per_class automatically from labels
+        number_samples_per_class = self._calculate_samples_per_class(y_real_samples)
+        print(f"\nAuto-calculated class distribution: {number_samples_per_class}")
+
+        # Initialize the WassersteinGP model (or use provided) - NOW passing number_samples_per_class
+        self._get_wasserstein_gp(input_shape, number_samples_per_class)
 
         # Print the model summaries for the generator and discriminator if available
         if self._wasserstein_gp_model is not None:
@@ -392,18 +413,25 @@ class WassersteinGP:
             discriminator_loss
         )
 
-        callbacks_list = [self._callback_model_monitor]
+        # Setup callbacks
+        callbacks_list = []
 
-        if arguments.use_early_stop:
-            callbacks_list.append(self._callback_early_stop)
+        # Add model monitor callback if it exists
+        if hasattr(self, '_callback_model_monitor'):
+            callbacks_list.append(self._callback_model_monitor)
+
+        # Add early stop callback if requested
+        if hasattr(arguments, 'use_early_stop') and arguments.use_early_stop:
+            if hasattr(self, '_callback_early_stop'):
+                callbacks_list.append(self._callback_early_stop)
 
         # Fit the WassersteinGP GAN model
         self._wasserstein_gp_algorithm.fit(
             x_real_samples,
-            to_categorical(y_real_samples, num_classes=self._number_samples_per_class["number_classes"]),
+            to_categorical(y_real_samples, num_classes=number_samples_per_class["number_classes"]),
             epochs=self._wasserstein_gp_number_epochs,
             batch_size=self._wasserstein_gp_batch_size,
-            callbacks=callbacks_list
+            callbacks=callbacks_list if callbacks_list else None
         )
 
     # Additional getters for the algorithm and model
@@ -416,16 +444,6 @@ class WassersteinGP:
     def wasserstein_gp_model(self) -> WassersteinGPModel | None:
         """Get the WassersteinGP model instance."""
         return self._wasserstein_gp_model
-
-    @property
-    def number_samples_per_class(self) -> dict | None:
-        """Get the number samples per class information."""
-        return self._number_samples_per_class
-
-    @number_samples_per_class.setter
-    def number_samples_per_class(self, value: dict) -> None:
-        """Set the number samples per class information."""
-        self._number_samples_per_class = value
 
     # Property getters and setters
     @property

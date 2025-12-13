@@ -129,6 +129,7 @@ class WassersteinGPAlgorithmTorch(nn.Module):
         ...     gradient_penalty_weight=10.0,
         ...     discriminator_steps=5
         ... )
+        >>> # number_samples_per_class is calculated automatically during fit()
         >>> wgan.fit(x_train, y_train, batch_size=64, epochs=10)
     """
 
@@ -312,6 +313,32 @@ class WassersteinGPAlgorithmTorch(nn.Module):
         gradient_penalty_final = torch.mean((gradient_normalized - 1.0) ** 2)
 
         return gradient_penalty_final
+
+    def calculate_samples_per_class(self, y_labels):
+        """
+        Calculate the distribution of samples per class from labels.
+
+        Args:
+            y_labels (array-like): Labels array
+
+        Returns:
+            dict: Dictionary with 'classes' and 'number_classes' keys
+        """
+        # Convert to numpy if needed
+        if isinstance(y_labels, torch.Tensor):
+            y_labels = y_labels.cpu().numpy()
+
+        # Handle one-hot encoded labels
+        if len(y_labels.shape) == 2 and y_labels.shape[1] > 1:
+            y_labels = numpy.argmax(y_labels, axis=1)
+
+        # Count samples per class
+        unique, counts = numpy.unique(y_labels, return_counts=True)
+
+        return {
+            "classes": dict(zip(unique.tolist(), counts.tolist())),
+            "number_classes": len(unique)
+        }
 
     def fit(self, x=None, y=None, batch_size=32, epochs=1, verbose=1, callbacks=None, **kwargs):
         """
@@ -514,7 +541,12 @@ class WassersteinGPAlgorithmTorch(nn.Module):
 
         Returns:
             dict: A dictionary where each key is a class label and the value is an array of generated samples.
+
+        Raises:
+            ValueError: If number_samples_per_class is not provided.
         """
+        if number_samples_per_class is None:
+            raise ValueError("number_samples_per_class is required for generating samples")
 
         # Dictionary to store generated samples for each class.
         generated_data = {}
@@ -546,7 +578,7 @@ class WassersteinGPAlgorithmTorch(nn.Module):
                 generated_data[label_class] = generated_samples
 
         # Set generator back to training mode
-        self._generator.fit()
+        self._generator.train()
 
         # Return the dictionary containing generated samples for all requested classes.
         return generated_data

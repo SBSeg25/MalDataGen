@@ -8,7 +8,6 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Kayuã Oleques']
 
-
 # MIT License
 #
 # Copyright (c) 2025 Synthetic Ocean AI
@@ -126,6 +125,7 @@ class WassersteinGPAlgorithmTensorflow(Model):
         ...     gradient_penalty_weight=10.0,
         ...     discriminator_steps=5
         ... )
+        >>> # number_samples_per_class is calculated automatically during fit()
         >>> wgan.train_step(real_data, batch_size=64)
     """
 
@@ -235,6 +235,229 @@ class WassersteinGPAlgorithmTensorflow(Model):
 
         return gradient_penalty_final
 
+    def calculate_samples_per_class(self, y_labels):
+        """
+        Calculate the distribution of samples per class from labels.
+
+        Args:
+            y_labels (array-like): Labels array
+
+        Returns:
+            dict: Dictionary with 'classes' and 'number_classes' keys
+        """
+        # Convert to numpy if needed
+        if tensorflow.is_tensor(y_labels):
+            y_labels = y_labels.numpy()
+
+        # Handle one-hot encoded labels
+        if len(y_labels.shape) == 2 and y_labels.shape[1] > 1:
+            y_labels = numpy.argmax(y_labels, axis=1)
+
+        # Count samples per class
+        unique, counts = numpy.unique(y_labels, return_counts=True)
+
+        return {
+            "classes": dict(zip(unique.tolist(), counts.tolist())),
+            "number_classes": len(unique)
+        }
+
+    def fit(self, x=None, y=None, batch_size=32, epochs=1, verbose=1,
+            callbacks=None, validation_data=None, shuffle=True,
+            initial_epoch=0, steps_per_epoch=None, validation_steps=None,
+            validation_freq=1, optimizer=None, learning_rate=0.001, **kwargs):
+        """
+        Train the model for a fixed number of epochs with a simplified progress bar.
+
+        This method mimics Keras's fit() API for compatibility.
+
+        Args:
+            x: Input data (array-like or tf.data.Dataset).
+            y: Target data (labels). Not needed if x is a Dataset.
+            batch_size: Number of samples per gradient update.
+            epochs: Number of epochs to train.
+            verbose: 0 = silent, 1 = progress bar, 2 = one line per epoch.
+            callbacks: List of callbacks to apply during training.
+            validation_data: Data for validation.
+            shuffle: Whether to shuffle data before each epoch.
+            initial_epoch: Epoch at which to start training.
+            steps_per_epoch: Number of steps per epoch.
+            validation_steps: Number of validation steps.
+            validation_freq: Validation frequency.
+            optimizer: Optimizer (dict with 'generator' and 'discriminator' keys).
+            learning_rate: Learning rate for optimizers (if optimizer is None).
+            **kwargs: Additional arguments for compatibility.
+
+        Returns:
+            History object containing training loss history.
+        """
+
+        # Set optimizers if provided
+        if optimizer is not None:
+            if isinstance(optimizer, dict):
+                self._generator_optimizer = optimizer.get('generator')
+                self._discriminator_optimizer = optimizer.get('discriminator')
+            else:
+                self._generator_optimizer = optimizer
+                self._discriminator_optimizer = optimizer
+        elif not hasattr(self, '_generator_optimizer') or self._generator_optimizer is None:
+            # Create default optimizers if none exist
+            self._generator_optimizer = tensorflow.keras.optimizers.Adam(learning_rate=learning_rate)
+            self._discriminator_optimizer = tensorflow.keras.optimizers.Adam(learning_rate=learning_rate)
+
+        # Prepare the dataset
+        if isinstance(x, tensorflow.data.Dataset):
+            train_dataset = x
+        else:
+            if y is None:
+                y = x
+            train_dataset = tensorflow.data.Dataset.from_tensor_slices((x, y))
+            if shuffle:
+                train_dataset = train_dataset.shuffle(buffer_size=len(x))
+            train_dataset = train_dataset.batch(batch_size)
+
+        # Calculate steps per epoch if not provided
+        if steps_per_epoch is None:
+            try:
+                steps_per_epoch = len(train_dataset)
+            except:
+                steps_per_epoch = int(numpy.ceil(len(x) / batch_size))
+
+        # History to store metrics
+        history = {'d_loss': [], 'g_loss': []}
+
+        # Training loop
+        for epoch in range(initial_epoch, epochs):
+            # Trackers for epoch metrics
+            epoch_d_losses = []
+            epoch_g_losses = []
+
+            if verbose == 1:
+                print(f'\nEpoch {epoch + 1}/{epochs}')
+
+            # Progress tracking
+            step = 0
+            for batch_data in train_dataset:
+                step += 1
+
+                # Perform training step
+                losses = self.train_step(batch_data)
+                current_d_loss = float(losses['d_loss'])
+                current_g_loss = float(losses['g_loss'])
+
+                # Track losses for this epoch
+                epoch_d_losses.append(current_d_loss)
+                epoch_g_losses.append(current_g_loss)
+
+                # Simple progress bar
+                if verbose == 1:
+                    progress = int(50 * step / steps_per_epoch)
+                    bar = '=' * progress + '>' + '.' * (50 - progress - 1)
+                    print(
+                        f'\r[{bar}] {step}/{steps_per_epoch} - d_loss: {current_d_loss:.4f} - g_loss: {current_g_loss:.4f}',
+                        end='', flush=True)
+
+                if step >= steps_per_epoch:
+                    break
+
+            # Store epoch losses
+            epoch_d_loss = numpy.mean(epoch_d_losses) if epoch_d_losses else 0.0
+            epoch_g_loss = numpy.mean(epoch_g_losses) if epoch_g_losses else 0.0
+
+            history['d_loss'].append(epoch_d_loss)
+            history['g_loss'].append(epoch_g_loss)
+
+            if verbose == 1:
+                print(f' - d_loss: {epoch_d_loss:.4f} - g_loss: {epoch_g_loss:.4f}')
+            elif verbose == 2:
+                print(f'Epoch {epoch + 1}/{epochs} - d_loss: {epoch_d_loss:.4f} - g_loss: {epoch_g_loss:.4f}')
+
+            # Validation
+            if validation_data is not None and (epoch + 1) % validation_freq == 0:
+                val_loss = self._evaluate_validation(validation_data, validation_steps)
+                if 'val_loss' not in history:
+                    history['val_loss'] = []
+                history['val_loss'].append(val_loss)
+
+                if verbose >= 1:
+                    print(f' - val_loss: {val_loss:.4f}')
+
+            # Callbacks
+            if callbacks is not None:
+                for callback in callbacks:
+                    if hasattr(callback, 'on_epoch_end'):
+                        callback.on_epoch_end(epoch, {
+                            'd_loss': epoch_d_loss,
+                            'g_loss': epoch_g_loss
+                        })
+
+        # Return history object
+        class History:
+            def __init__(self, history_dict):
+                self.history = history_dict
+
+        return History(history)
+
+    def _evaluate_validation(self, validation_data, validation_steps=None):
+        """
+        Evaluate the model on validation data.
+
+        Args:
+            validation_data: Validation dataset (tf.data.Dataset or tuple).
+            validation_steps: Number of validation steps.
+
+        Returns:
+            Average validation loss.
+        """
+        val_d_losses = []
+        val_g_losses = []
+        step = 0
+
+        # Prepare validation dataset
+        if isinstance(validation_data, tensorflow.data.Dataset):
+            val_dataset = validation_data
+        else:
+            val_x, val_y = validation_data
+            val_dataset = tensorflow.data.Dataset.from_tensor_slices((val_x, val_y))
+            val_dataset = val_dataset.batch(32)
+
+        for batch_data in val_dataset:
+            real_feature, real_samples_label = batch_data
+            batch_size = tensorflow.shape(real_feature)[0]
+
+            # Expand label dimensions
+            real_samples_label = tensorflow.expand_dims(real_samples_label, axis=-1)
+
+            # Generate synthetic samples
+            latent_space = tensorflow.random.normal(
+                (batch_size, self._latent_dimension),
+                mean=self._latent_mean_distribution,
+                stddev=self._latent_stander_deviation
+            )
+
+            synthetic_feature = self._generator([latent_space, real_samples_label], training=False)
+
+            # Get discriminator predictions
+            label_predicted_real = self._discriminator([real_feature, real_samples_label], training=False)
+            label_predicted_synthetic = self._discriminator([synthetic_feature, real_samples_label], training=False)
+
+            # Calculate losses
+            d_loss = self._discriminator_loss_fn(
+                real_img=label_predicted_real,
+                fake_img=label_predicted_synthetic
+            )
+            g_loss = self._generator_loss_fn(label_predicted_synthetic)
+
+            val_d_losses.append(float(d_loss))
+            val_g_losses.append(float(g_loss))
+
+            step += 1
+            if validation_steps is not None and step >= validation_steps:
+                break
+
+        # Return average of discriminator and generator losses
+        avg_val_loss = (numpy.mean(val_d_losses) + numpy.mean(val_g_losses)) / 2
+        return avg_val_loss if val_d_losses else 0.0
+
     @tensorflow.function
     def train_step(self, batch):
         """
@@ -331,7 +554,12 @@ class WassersteinGPAlgorithmTensorflow(Model):
 
         Returns:
             dict: A dictionary where each key is a class label and the value is an array of generated samples.
+
+        Raises:
+            ValueError: If number_samples_per_class is not provided.
         """
+        if number_samples_per_class is None:
+            raise ValueError("number_samples_per_class is required for generating samples")
 
         # Dictionary to store generated samples for each class.
         generated_data = {}
@@ -383,7 +611,6 @@ class WassersteinGPAlgorithmTensorflow(Model):
         self._save_model_to_json(self._discriminator, f"{discriminator_file_name}.json")
         self._discriminator.save_weights(f"{discriminator_file_name}.weights.h5")
 
-
     @staticmethod
     def _save_model_to_json(model, file_path):
         """
@@ -395,7 +622,6 @@ class WassersteinGPAlgorithmTensorflow(Model):
         """
         with open(file_path, "w") as json_file:
             json.dump(model.to_json(), json_file)
-
 
     def load_models(self, directory, file_name):
         """

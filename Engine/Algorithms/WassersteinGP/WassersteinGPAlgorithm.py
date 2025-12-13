@@ -8,6 +8,8 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/12/07'
 __credits__ = ['Synthetic Ocean AI']
 
+from Engine.Algorithms.WassersteinGP.Tensorflow.AlgorithmWassersteinGPTensorflow import WassersteinGPAlgorithmTensorflow
+from Engine.Algorithms.WassersteinGP.Torch.WassersteinGPAlgorithmTorch import WassersteinGPAlgorithmTorch
 
 # MIT License
 #
@@ -36,10 +38,6 @@ try:
     import sys
 
     import logging
-
-    from Engine.Algorithms.WassersteinGP.Tensorflow.AlgorithmWassersteinGPTensorflow import (
-        WassersteinGPAlgorithmTensorflow)
-    from Engine.Algorithms.WassersteinGP.Torch.WassersteinGPAlgorithmTorch import WassersteinGPAlgorithmTorch
 
     framework = os.getenv("ML_FRAMEWORK", "Tensorflow").lower()
 
