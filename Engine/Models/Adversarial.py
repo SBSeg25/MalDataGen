@@ -46,7 +46,7 @@ try:
     from tensorflow.keras.utils import to_categorical
     from tensorflow.python.keras.losses import MeanSquaredError, BinaryCrossentropy
 
-    from Engine.Algorithms.Adversarial.AdversarialAlgorithm import AdversarialAlgorithm
+    from Engine.Algorithms.adversarial.AdversarialAlgorithm import AdversarialAlgorithm
 
 except ImportError as error:
     logging.error(error)
@@ -79,7 +79,7 @@ DEFAULT_VARIATIONAL_AUTOENCODER_NUMBER_EPOCHS = 10
 
 class Adversarial:
     """
-    A class that instantiates and manages a Conditional Generative Adversarial Network (CGAN) model.
+    A class that instantiates and manages a Conditional Generative adversarial Network (CGAN) model.
     This implementation provides complete configuration, training, and management capabilities
     for adversarial learning tasks within the Synthetic Ocean ecosystem.
 
@@ -179,7 +179,7 @@ class Adversarial:
         self._adversarial_algorithm: AdversarialAlgorithm | None = algorithm
         self._adversarial_model: AdversarialModel | None = model
 
-        # ** Adversarial Model (GAN) Configuration Parameters **
+        # ** adversarial Model (GAN) Configuration Parameters **
         self._adversarial_number_epochs: int = number_epochs
         self._adversarial_batch_size: int = batch_size
         self._adversarial_initializer_mean: float = initializer_mean
@@ -229,9 +229,9 @@ class Adversarial:
 
     def _get_adversarial_model(self, input_shape: tuple[int, ...]) -> None:
         """
-        Initialize and configure the Adversarial model, including both the generator and discriminator components.
+        Initialize and configure the adversarial model, including both the generator and discriminator components.
 
-        This method sets up an Adversarial model by configuring both the generator and discriminator using the
+        This method sets up an adversarial model by configuring both the generator and discriminator using the
         `AdversarialModel` class and linking them with the `AdversarialAlgorithm` class. The model is initialized
         with specified configurations such as latent dimension, activation functions, dropout rates, and layer sizes
         for both the generator and discriminator.
@@ -251,7 +251,7 @@ class Adversarial:
         """
         # Only create new model if none was provided
         if not self._has_external_model:
-            # Adversarial Model setup for Generator and Discriminator
+            # adversarial Model setup for Generator and Discriminator
             self._adversarial_model = AdversarialModel(
                 latent_dimension=self._adversarial_latent_dimension,
                 output_shape=input_shape,
@@ -273,7 +273,7 @@ class Adversarial:
             if self._adversarial_model is None:
                 raise ValueError("AdversarialModel instance is required but was not provided.")
 
-            # Adversarial Algorithm setup for training and model operations
+            # adversarial Algorithm setup for training and model operations
             self._adversarial_algorithm = AdversarialAlgorithm(
                 generator_model=self._adversarial_model.get_generator(),
                 discriminator_model=self._adversarial_model.get_discriminator(),

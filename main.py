@@ -31,7 +31,7 @@ __credits__ = ['Kayuã Oleques']
 # SOFTWARE.
 
 import os
-os.environ["ML_FRAMEWORK"] = "pytorch"
+os.environ["ML_FRAMEWORK"] = "tensorflow"
 
 try:
     import sys
@@ -160,9 +160,9 @@ class SynDataGen(Arguments, CSVDataProcessor, Metrics, GenerativeModels, Classif
 
     Model Catalog:
     --------------
-        1. Adversarial (GAN) [model_type='adversarial']
+        1. adversarial (GAN) [model_type='adversarial']
 
-            Implements an adversarial training algorithm, typically used in Generative Adversarial Networks (GANs).
+            Implements an adversarial training algorithm, typically used in Generative adversarial Networks (GANs).
 
             This class performs adversarial training by utilizing a generator and a discriminator,
             optimizing the generator to produce realistic data while training the discriminator to differentiate
@@ -196,7 +196,7 @@ class SynDataGen(Arguments, CSVDataProcessor, Metrics, GenerativeModels, Classif
 
         5. Wasserstein GAN [model_type='wasserstein']
 
-            A Wasserstein Generative Adversarial Network (Wasserstein GAN) model.
+            A Wasserstein Generative adversarial Network (Wasserstein GAN) model.
 
            This class represents a Wasserstein GAN consisting of a generator and discriminator (critic) model.
            It implements the Wasserstein loss to train the discriminator and generator, promoting more
@@ -204,7 +204,7 @@ class SynDataGen(Arguments, CSVDataProcessor, Metrics, GenerativeModels, Classif
 
         6. Wasserstein GP GAN [model_type='wasserstein_gp']
 
-            A Wasserstein GP Generative Adversarial Network (WassersteinGP GAN) model.
+            A Wasserstein GP Generative adversarial Network (WassersteinGP GAN) model.
 
             This class represents a WassersteinGP GAN consisting of a generator and discriminator model.
             It implements the WassersteinGP loss with gradient penalty to improve the training of the
@@ -545,7 +545,7 @@ class SynDataGen(Arguments, CSVDataProcessor, Metrics, GenerativeModels, Classif
 
                 # Using adversarial model to generate synthetic data
                 self.generator_name = 'adversarial'
-                logging.info("Generating data using Adversarial algorithm.")
+                logging.info("Generating data using adversarial algorithm.")
                 self.data_generated = self._adversarial_algorithm.get_samples(number_samples_per_class)
 
             elif self.arguments.model_type == 'autoencoder':

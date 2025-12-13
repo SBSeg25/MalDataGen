@@ -58,7 +58,7 @@ except ImportError as error:
 
 class WassersteinGPAlgorithmTensorflow(Model):
     """
-    A WassersteinGP Generative Adversarial Network (WassersteinGP GAN) model.
+    A WassersteinGP Generative adversarial Network (WassersteinGP GAN) model.
 
     This class represents a WassersteinGP GAN consisting of a generator and discriminator model.
     It implements the WassersteinGP loss with gradient penalty to improve the training of the discriminator and generator.
@@ -168,7 +168,7 @@ class WassersteinGPAlgorithmTensorflow(Model):
     def compile(self, optimizer_generator, optimizer_discriminator,
                 loss_generator, loss_discriminator, *args, **kwargs):
         """
-        Compile the WassersteinGP Generative Adversarial Network (WGAN) with custom optimizers and loss functions.
+        Compile the WassersteinGP Generative adversarial Network (WGAN) with custom optimizers and loss functions.
 
         Args:
             optimizer_generator (str):

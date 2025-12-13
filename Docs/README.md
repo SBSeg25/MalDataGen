@@ -243,7 +243,7 @@ number_samples_per_class = {
 }
 input_shape = (1200,)
 
-# Adversarial Model setup for Generator and Discriminator
+# adversarial Model setup for Generator and Discriminator
 adversarial_model = AdversarialModel(latent_dimension=128,
                                      output_shape=input_shape,
                                      activation_function="LeakyReLU",
@@ -257,7 +257,7 @@ adversarial_model = AdversarialModel(latent_dimension=128,
                                      dataset_type=numpy.float32,
                                      number_samples_per_class=number_samples_per_class)
 
-# Adversarial Algorithm setup for training and model operations
+# adversarial Algorithm setup for training and model operations
 adversarial_algorithm = AdversarialAlgorithm(generator_model=adversarial_model.get_generator(),
                                              discriminator_model=adversarial_model.get_discriminator(),
                                              latent_dimension=128,

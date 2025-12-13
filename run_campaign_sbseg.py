@@ -74,7 +74,7 @@ NUM_EPOCHS = 40  # Default number of training epochs (overridden per campaign)
 TIME_FORMAT = '%Y-%m-%d_%H:%M:%S'  # Format for timestamps in logs
 SAMPLES = '0:2000,1:2000'  # Default number of samples per class in string format (class:count)
 #DEFAULT_CAMPAIGN = "wasserstein wasserstein_gp variational autoencoder adversarial latent_diffusion denoising_diffusion ctgan tvae copula".split()  # Active campaign types
-DEFAULT_CAMPAIGN = "adversarial".split()  # Active campaign types
+DEFAULT_CAMPAIGN = "wasserstein".split()  # Active campaign types
 
 
 # Default classifiers to evaluate models with (space-separated string in list)
@@ -137,7 +137,7 @@ campaigns_available['teste'] = {
     'adversarial_smoothing_rate': [0.15],
 }
 
-# === Adversarial Campaign ===
+# === adversarial Campaign ===
 campaigns_available['adversarial'] = {
     'classifier': DEFAULT_CLASSIFIER,
     'model_type': ['adversarial'],
@@ -161,7 +161,7 @@ campaigns_available['adversarial'] = {
     'adversarial_loss_discriminator': ['binary_crossentropy'],
     'adversarial_smoothing_rate': [0.15]
 }
-# === Adversarial Campaign ===
+# === adversarial Campaign ===
 campaigns_available['adversarial_demo'] = {
     'classifier': DEFAULT_CLASSIFIER,
     'model_type': ['adversarial'],

@@ -51,13 +51,13 @@ except ImportError as error:
 
 class AdversarialAlgorithmTorch(nn.Module):
     """
-    Implements an adversarial training algorithm in PyTorch, typically used in Generative Adversarial Networks (GANs).
+    Implements an adversarial training algorithm in PyTorch, typically used in Generative adversarial Networks (GANs).
 
     This class performs adversarial training by utilizing a generator and a discriminator,
     optimizing the generator to produce realistic data while training the discriminator to differentiate
     between real and fake data.
 
-    The concept of Generative Adversarial Networks was introduced by Ian Goodfellow and his collaborators.
+    The concept of Generative adversarial Networks was introduced by Ian Goodfellow and his collaborators.
 
     Attributes:
         @generator_model (nn.Module):
@@ -647,7 +647,7 @@ class AdversarialAlgorithmTorch(nn.Module):
             k_fold (int): Fold number for cross-validation.
         """
         try:
-            logging.info(f"Starting to save Adversarial Model for fold {k_fold}...")
+            logging.info(f"Starting to save adversarial Model for fold {k_fold}...")
 
             # Create directory
             path_directory = os.path.join(path_output, self._models_saved_path)
@@ -696,7 +696,7 @@ class AdversarialAlgorithmTorch(nn.Module):
             k_fold (int): Fold number for cross-validation.
         """
         try:
-            logging.info(f"Loading Adversarial Model for fold {k_fold + 1}...")
+            logging.info(f"Loading adversarial Model for fold {k_fold + 1}...")
 
             # Directory containing saved models
             path_directory = os.path.join(path_output, self._models_saved_path)

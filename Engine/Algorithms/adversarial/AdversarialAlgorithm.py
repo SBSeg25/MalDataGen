@@ -37,8 +37,8 @@ try:
 
     import logging
 
-    from Engine.Algorithms.Adversarial.Tensorflow.AdversarialAlgorithmTensorflow import AdversarialAlgorithmTensorflow
-    from Engine.Algorithms.Adversarial.Torch.AdversarialAlgorithmTorch import AdversarialAlgorithmTorch
+    from Engine.Algorithms.adversarial.Tensorflow.AdversarialAlgorithmTensorflow import AdversarialAlgorithmTensorflow
+    from Engine.Algorithms.adversarial.Torch.AdversarialAlgorithmTorch import AdversarialAlgorithmTorch
 
     framework = os.getenv("ML_FRAMEWORK", "Tensorflow").lower()
 

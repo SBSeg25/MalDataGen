@@ -5,9 +5,8 @@ __author__ = 'Kayuã Oleques Paim'
 __email__ = 'kayuaolequesp@gmail.com'
 __version__ = '{1}.{0}.{1}'
 __initial_data__ = '2022/06/01'
-__last_update__ = '2025/03/29'
+__last_update__ = '2025/12/12'
 __credits__ = ['Kayuã Oleques']
-
 
 # MIT License
 #
@@ -58,7 +57,7 @@ except ImportError as error:
 
 class WassersteinAlgorithmTensorflow(Model):
     """
-    Implementation of the original Wasserstein Generative Adversarial Network (WGAN) algorithm.
+    Implementation of the original Wasserstein Generative adversarial Network (WGAN) algorithm.
     This class extends the Keras Model class to create a trainable WGAN model.
 
     The original WGAN (Arjovsky et al., 2017) improves upon standard GANs by:
@@ -82,7 +81,7 @@ class WassersteinAlgorithmTensorflow(Model):
     Reference:
     ----------
     Arjovsky, M., Chintala, S., & Bottou, L. (2017).
-    "Wasserstein Generative Adversarial Networks."
+    "Wasserstein Generative adversarial Networks."
     Proceedings of the 34th International Conference on Machine Learning, PMLR 70:214-223.
     Available at: http://proceedings.mlr.press/v70/arjovsky17a.html
 
@@ -93,7 +92,6 @@ class WassersteinAlgorithmTensorflow(Model):
     - Weight clipping to enforce Lipschitz constraint
     - Custom training step with multiple critic updates per generator update
     """
-
 
     def __init__(self,
                  generator_model,
@@ -129,13 +127,33 @@ class WassersteinAlgorithmTensorflow(Model):
         self._generator_optimizer = None
         self._discriminator_optimizer = None
 
+        # Initialize loss tracker
+        self._total_loss_tracker = tensorflow.keras.metrics.Mean(name="total_loss")
+
     def compile(self, optimizer_generator, optimizer_discriminator,
                 loss_generator, loss_discriminator, *args, **kwargs):
         super().compile()
         self._generator_optimizer = optimizer_generator
         self._discriminator_optimizer = optimizer_discriminator
-        self._generator_loss_fn = loss_generator
-        self._discriminator_loss_fn = loss_discriminator
+
+        # Set default Wasserstein losses if None is provided
+        if loss_generator is None:
+            def default_generator_loss(fake_output):
+                """Default Wasserstein generator loss: -mean(D(G(z)))"""
+                return -tensorflow.reduce_mean(fake_output)
+
+            self._generator_loss_fn = default_generator_loss
+        else:
+            self._generator_loss_fn = loss_generator
+
+        if loss_discriminator is None:
+            def default_discriminator_loss(real_output, fake_output):
+                """Default Wasserstein discriminator loss: mean(D(G(z))) - mean(D(x))"""
+                return tensorflow.reduce_mean(fake_output) - tensorflow.reduce_mean(real_output)
+
+            self._discriminator_loss_fn = default_discriminator_loss
+        else:
+            self._discriminator_loss_fn = loss_discriminator
 
     def train_step(self, batch):
         real_feature, real_samples_label = batch
@@ -180,7 +198,166 @@ class WassersteinAlgorithmTensorflow(Model):
         gradients = gen_tape.gradient(g_loss, self._generator.trainable_variables)
         self._generator_optimizer.apply_gradients(zip(gradients, self._generator.trainable_variables))
 
-        return {"d_loss": d_loss, "g_loss": g_loss}
+        # Update the total loss tracker with combined loss
+        total_loss = d_loss + g_loss
+        self._total_loss_tracker.update_state(total_loss)
+
+        return {"d_loss": d_loss, "g_loss": g_loss, "loss": total_loss}
+
+    def fit(self, x=None, y=None, batch_size=32, epochs=1, verbose=1,
+            callbacks=None, validation_data=None, shuffle=True,
+            initial_epoch=0, steps_per_epoch=None, validation_steps=None,
+            validation_freq=1, optimizer=None, learning_rate=0.001, **kwargs):
+        """
+        Train the model with a simplified progress bar.
+
+        Args:
+            x: Input data.
+            y: Target data.
+            batch_size: Number of samples per gradient update.
+            epochs: Number of epochs to train.
+            verbose: 0 = silent, 1 = progress bar, 2 = one line per epoch.
+            callbacks: List of callbacks to apply during training.
+            validation_data: Data for validation.
+            shuffle: Whether to shuffle data before each epoch.
+            initial_epoch: Epoch at which to start training.
+            steps_per_epoch: Number of steps per epoch.
+            validation_steps: Number of validation steps.
+            validation_freq: Validation frequency.
+            optimizer: TensorFlow optimizer (if None, uses already compiled optimizer).
+            learning_rate: Learning rate for optimizer (only used if optimizer is None).
+
+        Returns:
+            A History object with training metrics.
+        """
+
+        # Set optimizer if provided
+        if optimizer is not None:
+            self.optimizer = optimizer
+        elif not hasattr(self, 'optimizer') or self.optimizer is None:
+            # Create default optimizer if none exists
+            self.optimizer = tensorflow.keras.optimizers.Adam(learning_rate=learning_rate)
+
+        # Prepare the dataset
+        if isinstance(x, tensorflow.data.Dataset):
+            train_dataset = x
+        else:
+            if y is None:
+                y = x
+            train_dataset = tensorflow.data.Dataset.from_tensor_slices((x, y))
+            if shuffle:
+                train_dataset = train_dataset.shuffle(buffer_size=len(x))
+            train_dataset = train_dataset.batch(batch_size)
+
+        # Calculate steps per epoch if not provided
+        if steps_per_epoch is None:
+            steps_per_epoch = len(train_dataset)
+
+        # History to store metrics
+        history = {'loss': [], 'd_loss': [], 'g_loss': []}
+
+        # Training loop
+        for epoch in range(initial_epoch, epochs):
+            self._total_loss_tracker.reset_state()
+
+            # Trackers for epoch metrics
+            epoch_d_losses = []
+            epoch_g_losses = []
+
+            if verbose == 1:
+                print(f'\nEpoch {epoch + 1}/{epochs}')
+
+            # Progress tracking
+            step = 0
+            for batch_data in train_dataset:
+                step += 1
+
+                # Perform training step
+                metrics = self.train_step(batch_data)
+                current_loss = float(metrics['loss'])
+                current_d_loss = float(metrics['d_loss'])
+                current_g_loss = float(metrics['g_loss'])
+
+                # Track losses for this epoch
+                epoch_d_losses.append(current_d_loss)
+                epoch_g_losses.append(current_g_loss)
+
+                # Simple progress bar
+                if verbose == 1:
+                    progress = int(50 * step / steps_per_epoch)
+                    bar = '=' * progress + '>' + '.' * (50 - progress - 1)
+                    print(
+                        f'\r[{bar}] {step}/{steps_per_epoch} - d_loss: {current_d_loss:.4f} - g_loss: {current_g_loss:.4f}',
+                        end='', flush=True)
+
+                if step >= steps_per_epoch:
+                    break
+
+            # Store epoch losses
+            epoch_loss = float(self._total_loss_tracker.result())
+            epoch_d_loss = numpy.mean(epoch_d_losses) if epoch_d_losses else 0.0
+            epoch_g_loss = numpy.mean(epoch_g_losses) if epoch_g_losses else 0.0
+
+            history['loss'].append(epoch_loss)
+            history['d_loss'].append(epoch_d_loss)
+            history['g_loss'].append(epoch_g_loss)
+
+            if verbose == 1:
+                print(f' - d_loss: {epoch_d_loss:.4f} - g_loss: {epoch_g_loss:.4f} - total: {epoch_loss:.4f}')
+            elif verbose == 2:
+                print(f'Epoch {epoch + 1}/{epochs} - d_loss: {epoch_d_loss:.4f} - g_loss: {epoch_g_loss:.4f}')
+
+            # Validation
+            if validation_data is not None and (epoch + 1) % validation_freq == 0:
+                val_loss = self._evaluate_validation(validation_data, validation_steps)
+                if 'val_loss' not in history:
+                    history['val_loss'] = []
+                history['val_loss'].append(val_loss)
+
+                if verbose >= 1:
+                    print(f' - val_loss: {val_loss:.4f}')
+
+            # Callbacks
+            if callbacks is not None:
+                for callback in callbacks:
+                    callback.on_epoch_end(epoch, {
+                        'loss': epoch_loss,
+                        'd_loss': epoch_d_loss,
+                        'g_loss': epoch_g_loss
+                    })
+
+        # Return history object
+        class History:
+            def __init__(self, history_dict):
+                self.history = history_dict
+
+        return History(history)
+
+    def _evaluate_validation(self, validation_data, validation_steps=None):
+        """
+        Evaluate the model on validation data.
+
+        Args:
+            validation_data: Validation dataset.
+            validation_steps: Number of validation steps.
+
+        Returns:
+            Average validation loss.
+        """
+        val_losses = []
+        step = 0
+
+        for batch_data in validation_data:
+            batch_x, batch_y = batch_data
+            reconstructed = self._encoder_decoder_model(batch_x, training=False)
+            loss = tensorflow.reduce_mean(tensorflow.square(batch_y - reconstructed))
+            val_losses.append(float(loss))
+
+            step += 1
+            if validation_steps is not None and step >= validation_steps:
+                break
+
+        return numpy.mean(val_losses) if val_losses else 0.0
 
     def get_samples(self, number_samples_per_class):
         """
@@ -248,7 +425,6 @@ class WassersteinAlgorithmTensorflow(Model):
         self._save_model_to_json(self._discriminator, f"{discriminator_file_name}.json")
         self._discriminator.save_weights(f"{discriminator_file_name}.weights.h5")
 
-
     @staticmethod
     def _save_model_to_json(model, file_path):
         """
@@ -260,7 +436,6 @@ class WassersteinAlgorithmTensorflow(Model):
         """
         with open(file_path, "w") as json_file:
             json.dump(model.to_json(), json_file)
-
 
     def load_models(self, directory, file_name):
         """
@@ -278,6 +453,26 @@ class WassersteinAlgorithmTensorflow(Model):
         # Load the generator and discriminator models from the specified directory
         self._generator = self._save_neural_network_model(generator_file_name, directory)
         self._discriminator = self._save_neural_network_model(discriminator_file_name, directory)
+
+    # ========== PROPERTIES ==========
+
+    @property
+    def generator(self) -> Any:
+        """Get the generator model instance.
+
+        Returns:
+            The generator model used in GAN training.
+        """
+        return self._generator
+
+    @generator.setter
+    def generator(self, value: Any) -> None:
+        """Set the generator model instance.
+
+        Args:
+            value: The generator model to set.
+        """
+        self._generator = value
 
     @property
     def discriminator(self) -> Any:

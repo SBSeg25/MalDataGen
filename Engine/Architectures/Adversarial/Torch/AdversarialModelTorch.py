@@ -61,7 +61,7 @@ class AdversarialModelTorch:
     Combines a generator and a discriminator in a unified adversarial model for PyTorch.
     Uses composition instead of multiple inheritance to avoid MRO conflicts.
 
-    This class allows for seamless integration of both models in a Generative Adversarial
+    This class allows for seamless integration of both models in a Generative adversarial
     Network (GAN) framework, with methods for initializing, configuring, and interacting
     with the generator and discriminator networks.
 

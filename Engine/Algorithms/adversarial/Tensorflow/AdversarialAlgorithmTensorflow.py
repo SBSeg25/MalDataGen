@@ -32,7 +32,7 @@ except ImportError as error:
 
 class AdversarialAlgorithmTensorflow(Model):
     """
-    Implements an adversarial training algorithm, typically used in Generative Adversarial Networks (GANs).
+    Implements an adversarial training algorithm, typically used in Generative adversarial Networks (GANs).
     """
 
     def __init__(self, generator_model,
@@ -339,7 +339,7 @@ class AdversarialAlgorithmTensorflow(Model):
 
     def save_model(self, path_output, k_fold):
         try:
-            logging.info("Starting to save Adversarial Model for fold {}...".format(k_fold))
+            logging.info("Starting to save adversarial Model for fold {}...".format(k_fold))
 
             # Create directory for saving models
             path_directory = os.path.join(path_output, self._models_saved_path)
@@ -386,7 +386,7 @@ class AdversarialAlgorithmTensorflow(Model):
 
     def load_models(self, path_output, k_fold):
         try:
-            logging.info("Loading Adversarial Model for fold {}...".format(k_fold + 1))
+            logging.info("Loading adversarial Model for fold {}...".format(k_fold + 1))
 
             # Directory containing saved models
             path_directory = os.path.join(path_output, self._models_saved_path)

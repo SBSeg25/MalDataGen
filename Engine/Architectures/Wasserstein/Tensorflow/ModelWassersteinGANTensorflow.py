@@ -64,9 +64,9 @@ DEFAULT_WASSERSTEIN_GAN_INITIALIZER_DEVIATION = 0.125
 
 class WassersteinModelTensorflow(VanillaDiscriminatorTensorflow, VanillaGeneratorTensorflow):
     """
-    WassersteinGP Generative Adversarial Network (WGAN) with Gradient Penalty.
+    WassersteinGP Generative adversarial Network (WGAN) with Gradient Penalty.
 
-    This class implements a WassersteinGP GAN, a type of Generative Adversarial
+    This class implements a WassersteinGP GAN, a type of Generative adversarial
     Network designed to improve training stability and provide a more meaningful
     loss metric by approximating the Earth Mover's Distance (WassersteinGP-1 Distance)
     between real and generated data distributions.

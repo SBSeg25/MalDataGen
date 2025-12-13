@@ -75,7 +75,7 @@ class GenerativeModels:
 
         # FIXED: Changed from _model to _algorithm for consistency with SynDataGen
 
-        # Initialize Adversarial Model
+        # Initialize adversarial Model
         self._adversarial_algorithm = Adversarial(
             args.adversarial_number_epochs,
             args.adversarial_batch_size,

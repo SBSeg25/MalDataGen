@@ -86,7 +86,7 @@ class VanillaGeneratorTorch(Activations, nn.Module):
 
     References:
         - Goodfellow, I., Pouget-Abadie, J., Mirza, M., Xu, B., Warde-Farley, D., Ozair, S., Courville, A., & Bengio, Y. (2014).
-          Generative Adversarial Networks. arXiv preprint arXiv:1406.2661.
+          Generative adversarial Networks. arXiv preprint arXiv:1406.2661.
           Available at: https://arxiv.org/abs/1406.2661
 
     Example:

@@ -36,10 +36,10 @@ try:
     import sys
 
     import logging
-    from Engine.Algorithms.Wasserstein.Tensorflow.AlgorithmWassersteinTensorflow import WassersteinAlgorithmTensorflow
-    from Engine.Algorithms.Wasserstein.Torch.AlgorithmWassersteinTorch import WassersteinAlgorithmTorch
 
-    framework = os.getenv("ML_FRAMEWORK", "Tensorflow").lower()
+    from Engine.Algorithms.Wasserstein.Torch.AlgorithmWassersteinTorch import WassersteinAlgorithmTorch
+    from Engine.Algorithms.Wasserstein.Tensorflow.AlgorithmWassersteinTensorflow import WassersteinAlgorithmTensorflow
+    framework = os.getenv("ML_FRAMEWORK", "tensorflow").lower()
 
     if framework == "pytorch":
         WassersteinAlgorithmBase = WassersteinAlgorithmTorch
@@ -60,4 +60,4 @@ class WassersteinAlgorithm(WassersteinAlgorithmBase):
             self._framework = "pytorch"
 
         else:
-            self._framework = "Tensorflow"
+            self._framework = "tensorflow"

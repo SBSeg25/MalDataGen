@@ -74,7 +74,7 @@ DEFAULT_WASSERSTEIN_PATH_OUTPUT_MODELS = "models_saved/"
 
 class Wasserstein:
     """
-    A class that implements a Wasserstein Generative Adversarial Network (WGAN).
+    A class that implements a Wasserstein Generative adversarial Network (WGAN).
     This implementation follows the Wasserstein GAN framework with improved training stability.
 
     Key Components:
@@ -237,7 +237,7 @@ class Wasserstein:
         """
         Initializes and sets up a Wasserstein GAN model.
 
-        This method sets up a Wasserstein Generative Adversarial Network (WGAN) by configuring
+        This method sets up a Wasserstein Generative adversarial Network (WGAN) by configuring
         the generator and discriminator models using custom WassersteinModelTorch class.
         The generator and discriminator are created and configured with their respective parameters.
 
@@ -353,26 +353,44 @@ class Wasserstein:
         if self._wasserstein_algorithm is None:
             raise ValueError("WassersteinAlgorithm instance is required but was not provided or created.")
 
-        # Setup optimizers - FIXED: Changed from .generator_model to .generator
-        generator_optimizer = optim.Adam(
-            self._wasserstein_algorithm.generator.parameters(),
-            lr=self._wasserstein_optimizer_generator_learning_rate,
-            betas=(self._wasserstein_optimizer_generator_beta, 0.9)
-        )
+        # Detect framework and setup optimizers accordingly
+        framework = getattr(self._wasserstein_algorithm, '_framework', 'tensorflow')
 
-        # FIXED: Changed from .discriminator_model to .discriminator
-        discriminator_optimizer = optim.Adam(
-            self._wasserstein_algorithm.discriminator.parameters(),
-            lr=self._wasserstein_optimizer_discriminator_learning_rate,
-            betas=(self._wasserstein_optimizer_discriminator_beta, 0.9)
-        )
+        if framework == 'pytorch':
+            import torch.optim as optim
+            # PyTorch optimizers
+            generator_optimizer = optim.Adam(
+                self._wasserstein_algorithm.generator.parameters(),
+                lr=self._wasserstein_optimizer_generator_learning_rate,
+                betas=(self._wasserstein_optimizer_generator_beta, 0.9)
+            )
+
+            discriminator_optimizer = optim.Adam(
+                self._wasserstein_algorithm.discriminator.parameters(),
+                lr=self._wasserstein_optimizer_discriminator_learning_rate,
+                betas=(self._wasserstein_optimizer_discriminator_beta, 0.9)
+            )
+        else:
+            # TensorFlow optimizers
+            import tensorflow as tf
+            generator_optimizer = tf.keras.optimizers.Adam(
+                learning_rate=self._wasserstein_optimizer_generator_learning_rate,
+                beta_1=self._wasserstein_optimizer_generator_beta,
+                beta_2=0.9
+            )
+
+            discriminator_optimizer = tf.keras.optimizers.Adam(
+                learning_rate=self._wasserstein_optimizer_discriminator_learning_rate,
+                beta_1=self._wasserstein_optimizer_discriminator_beta,
+                beta_2=0.9
+            )
 
         # Compile the Wasserstein GAN algorithm
         self._wasserstein_algorithm.compile(
             generator_optimizer,
             discriminator_optimizer,
-            generator_loss_fn=None,  # Use default Wasserstein loss
-            discriminator_loss_fn=None  # Use default Wasserstein loss
+            None,  # loss_generator - Use default Wasserstein loss
+            None  # loss_discriminator - Use default Wasserstein loss
         )
 
         # Prepare callbacks list with safety wrapper
@@ -426,6 +444,7 @@ class Wasserstein:
         )
 
         print("\nTraining completed successfully!")
+
     # Additional getters for the algorithm and model
     @property
     def wasserstein_algorithm(self) -> WassersteinAlgorithm | None:

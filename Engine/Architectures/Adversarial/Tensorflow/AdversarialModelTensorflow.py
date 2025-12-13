@@ -59,7 +59,7 @@ class AdversarialModelTensorflow(VanillaGenerator, VanillaDiscriminator):
 
       Combines a generator and a discriminator in a unified adversarial model, inheriting
       from `VanillaGenerator` and `VanillaDiscriminator` classes. This class allows for
-      seamless integration of both models in a Generative Adversarial Network (GAN) framework,
+      seamless integration of both models in a Generative adversarial Network (GAN) framework,
       with methods for initializing, configuring, and interacting with the generator and
       discriminator networks.
 

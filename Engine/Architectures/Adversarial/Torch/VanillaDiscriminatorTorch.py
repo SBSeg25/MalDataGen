@@ -49,7 +49,7 @@ class VanillaDiscriminatorTorch(nn.Module):
     VanillaDiscriminatorTorch
 
     Implements a fully-connected (dense) discriminator network for use in generative models,
-    such as Generative Adversarial Networks (GANs). This PyTorch implementation provides
+    such as Generative adversarial Networks (GANs). This PyTorch implementation provides
     flexibility in the design of the architecture, including customizable latent dimensions,
     output shapes, activation functions, dropout rates, and layer sizes.
 
