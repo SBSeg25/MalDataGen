@@ -210,7 +210,7 @@ class GenerativeModels:
             time_steps=args.latent_diffusion_time_steps
         )
 
-        # Initialize Wasserstein Model
+        # Initialize wasserstein Model
         self._wasserstein_algorithm = Wasserstein(
             args.wasserstein_latent_dimension,
             args.wasserstein_training_algorithm,
@@ -240,7 +240,7 @@ class GenerativeModels:
             args.wasserstein_path_output_models
         )
 
-        # Initialize Wasserstein GP Model
+        # Initialize wasserstein GP Model
         self._wasserstein_gp_algorithm = WassersteinGP(
             args.wasserstein_gp_latent_dimension,
             args.wasserstein_gp_training_algorithm,

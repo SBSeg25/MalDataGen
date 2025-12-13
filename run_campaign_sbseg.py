@@ -277,7 +277,7 @@ campaigns_available['quantized'] = {
 
 
 
-# === Wasserstein GAN Campaign ===
+# === wasserstein GAN Campaign ===
 campaigns_available['wasserstein'] = {
     'classifier': DEFAULT_CLASSIFIER,
     'model_type': ['wasserstein'],
@@ -309,7 +309,7 @@ campaigns_available['wasserstein'] = {
 }
 
 
-# === Wasserstein GAN GP Campaign ===
+# === wasserstein GAN GP Campaign ===
 campaigns_available['wasserstein_gp'] = {
     'classifier': DEFAULT_CLASSIFIER,
     'model_type': ['wasserstein_gp'],

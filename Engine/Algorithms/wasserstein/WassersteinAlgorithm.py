@@ -37,8 +37,8 @@ try:
 
     import logging
 
-    from Engine.Algorithms.Wasserstein.Torch.AlgorithmWassersteinTorch import WassersteinAlgorithmTorch
-    from Engine.Algorithms.Wasserstein.Tensorflow.AlgorithmWassersteinTensorflow import WassersteinAlgorithmTensorflow
+    from Engine.Algorithms.wasserstein.Torch.AlgorithmWassersteinTorch import WassersteinAlgorithmTorch
+    from Engine.Algorithms.wasserstein.Tensorflow.AlgorithmWassersteinTensorflow import WassersteinAlgorithmTensorflow
     framework = os.getenv("ML_FRAMEWORK", "tensorflow").lower()
 
     if framework == "pytorch":

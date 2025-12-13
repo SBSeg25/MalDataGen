@@ -82,7 +82,7 @@ DEFAULT_WASSERSTEIN_GAN_GP_PATH_OUTPUT_MODELS = "models_saved/"
 
 class WassersteinGP:
     """
-    A class that implements a Wasserstein Generative adversarial Network with Gradient Penalty (WGAN-GP).
+    A class that implements a wasserstein Generative adversarial Network with Gradient Penalty (WGAN-GP).
     This version improves upon standard WGAN by using gradient penalty instead of weight clipping
     to enforce the Lipschitz constraint, leading to more stable training and higher quality results.
 

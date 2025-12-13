@@ -37,7 +37,7 @@ try:
     import torch.optim as optim
     import numpy as np
     import logging
-    from Engine.Algorithms.Wasserstein.WassersteinAlgorithm import WassersteinAlgorithm
+    from Engine.Algorithms.wasserstein.WassersteinAlgorithm import WassersteinAlgorithm
     from Engine.Architectures.Wasserstein.WassersteinModel import WassersteinModel
 except ImportError as error:
     logging.error(error)
@@ -74,12 +74,12 @@ DEFAULT_WASSERSTEIN_PATH_OUTPUT_MODELS = "models_saved/"
 
 class Wasserstein:
     """
-    A class that implements a Wasserstein Generative adversarial Network (WGAN).
-    This implementation follows the Wasserstein GAN framework with improved training stability.
+    A class that implements a wasserstein Generative adversarial Network (WGAN).
+    This implementation follows the wasserstein GAN framework with improved training stability.
 
     Key Components:
     - Generator model for synthetic sample generation
-    - Critic/Discriminator model (with Wasserstein loss)
+    - Critic/Discriminator model (with wasserstein loss)
     - Custom training loop with critic pre-training steps
     - Flexible architecture configuration via arguments
 
@@ -151,7 +151,7 @@ class Wasserstein:
             model: WassersteinModel | None = None
     ) -> None:
         """
-        Initializes the Wasserstein GAN instance with configuration parameters.
+        Initializes the wasserstein GAN instance with configuration parameters.
 
         Args:
             latent_dimension: Dimensionality of latent space (default: 64)
@@ -187,7 +187,7 @@ class Wasserstein:
         self._wasserstein_algorithm: WassersteinAlgorithm | None = algorithm
         self._wasserstein_model: WassersteinModel | None = model
 
-        # ** Wasserstein GAN Configuration Parameters **
+        # ** wasserstein GAN Configuration Parameters **
         self._wasserstein_latent_dimension: int = latent_dimension
         self._wasserstein_training_algorithm: str = training_algorithm
         self._wasserstein_activation_function: str = activation_function
@@ -235,9 +235,9 @@ class Wasserstein:
 
     def _get_wasserstein(self, input_shape: tuple[int, ...]) -> None:
         """
-        Initializes and sets up a Wasserstein GAN model.
+        Initializes and sets up a wasserstein GAN model.
 
-        This method sets up a Wasserstein Generative adversarial Network (WGAN) by configuring
+        This method sets up a wasserstein Generative adversarial Network (WGAN) by configuring
         the generator and discriminator models using custom WassersteinModelTorch class.
         The generator and discriminator are created and configured with their respective parameters.
 
@@ -252,7 +252,7 @@ class Wasserstein:
         """
         # Only create new model if none was provided
         if not self._has_external_model:
-            # Wasserstein Model setup for the Generator and Discriminator
+            # wasserstein Model setup for the Generator and Discriminator
             self._wasserstein_model = WassersteinModel(
                 latent_dimension=self._wasserstein_latent_dimension,
                 output_shape=input_shape,
@@ -277,13 +277,13 @@ class Wasserstein:
             generator_model = self._wasserstein_model.get_generator()
             discriminator_model = self._wasserstein_model.get_discriminator()
 
-            # Wasserstein Algorithm setup for training and model operations
+            # wasserstein Algorithm setup for training and model operations
             self._wasserstein_algorithm = WassersteinAlgorithm(
                 generator_model=generator_model,
                 discriminator_model=discriminator_model,
                 latent_dimension=self._wasserstein_latent_dimension,
-                generator_loss_fn=None,  # Will use default Wasserstein loss
-                discriminator_loss_fn=None,  # Will use default Wasserstein loss
+                generator_loss_fn=None,  # Will use default wasserstein loss
+                discriminator_loss_fn=None,  # Will use default wasserstein loss
                 file_name_discriminator=self._wasserstein_file_name_discriminator,
                 file_name_generator=self._wasserstein_file_name_generator,
                 models_saved_path=self._wasserstein_path_output_models,
@@ -320,7 +320,7 @@ class Wasserstein:
             y_real_samples: np.ndarray
     ) -> None:
         """
-        Executes the complete training pipeline for Wasserstein GAN with Gradient Penalty.
+        Executes the complete training pipeline for wasserstein GAN with Gradient Penalty.
 
         Process:
         1. Initializes generator and critic models (or uses provided)
@@ -385,12 +385,12 @@ class Wasserstein:
                 beta_2=0.9
             )
 
-        # Compile the Wasserstein GAN algorithm
+        # Compile the wasserstein GAN algorithm
         self._wasserstein_algorithm.compile(
             generator_optimizer,
             discriminator_optimizer,
-            None,  # loss_generator - Use default Wasserstein loss
-            None  # loss_discriminator - Use default Wasserstein loss
+            None,  # loss_generator - Use default wasserstein loss
+            None  # loss_discriminator - Use default wasserstein loss
         )
 
         # Prepare callbacks list with safety wrapper
@@ -448,12 +448,12 @@ class Wasserstein:
     # Additional getters for the algorithm and model
     @property
     def wasserstein_algorithm(self) -> WassersteinAlgorithm | None:
-        """Get the Wasserstein algorithm instance."""
+        """Get the wasserstein algorithm instance."""
         return self._wasserstein_algorithm
 
     @property
     def wasserstein_model(self) -> WassersteinModel | None:
-        """Get the Wasserstein model instance."""
+        """Get the wasserstein model instance."""
         return self._wasserstein_model
 
     # Getter and setter for wasserstein_latent_dimension

@@ -46,9 +46,9 @@ except ImportError as error:
 
 class WassersteinAlgorithmTorch:
     """
-    Training algorithm wrapper for Wasserstein GAN with Gradient Penalty (WGAN-GP).
+    Training algorithm wrapper for wasserstein GAN with Gradient Penalty (WGAN-GP).
 
-    This class manages the complete training process for a Wasserstein GAN, including:
+    This class manages the complete training process for a wasserstein GAN, including:
     - Alternating critic and generator training
     - Gradient penalty computation
     - Loss tracking and logging
@@ -56,14 +56,14 @@ class WassersteinAlgorithmTorch:
     - Callback management
 
     The algorithm implements the WGAN-GP framework as described in:
-    Gulrajani et al., "Improved Training of Wasserstein GANs" (2017)
+    Gulrajani et al., "Improved Training of wasserstein GANs" (2017)
 
     Attributes:
         generator_model: The generator network
         discriminator_model: The critic/discriminator network
         latent_dimension: Dimensionality of the latent space
-        generator_loss_fn: Loss function for generator (optional, uses Wasserstein loss by default)
-        discriminator_loss_fn: Loss function for discriminator (optional, uses Wasserstein loss by default)
+        generator_loss_fn: Loss function for generator (optional, uses wasserstein loss by default)
+        discriminator_loss_fn: Loss function for discriminator (optional, uses wasserstein loss by default)
         file_name_discriminator: Filename for saving discriminator checkpoints
         file_name_generator: Filename for saving generator checkpoints
         models_saved_path: Directory path for saving model checkpoints
@@ -89,7 +89,7 @@ class WassersteinAlgorithmTorch:
                  discriminator_steps: int = 5,
                  clip_value: float = 0.01):
         """
-        Initialize the Wasserstein GAN training algorithm.
+        Initialize the wasserstein GAN training algorithm.
 
         Args:
             generator_model: Generator neural network
@@ -110,7 +110,7 @@ class WassersteinAlgorithmTorch:
         self.discriminator = discriminator_model
         self.latent_dimension = latent_dimension
 
-        # Loss functions (use Wasserstein loss if not provided)
+        # Loss functions (use wasserstein loss if not provided)
         self.generator_loss_fn = generator_loss_fn if generator_loss_fn else self._wasserstein_generator_loss
         self.discriminator_loss_fn = discriminator_loss_fn if discriminator_loss_fn else self._wasserstein_discriminator_loss
 
@@ -149,7 +149,7 @@ class WassersteinAlgorithmTorch:
     def _wasserstein_discriminator_loss(real_validity: torch.Tensor,
                                         fake_validity: torch.Tensor) -> torch.Tensor:
         """
-        Wasserstein discriminator/critic loss.
+        wasserstein discriminator/critic loss.
         Critic tries to maximize the difference between real and fake scores.
 
         Args:
@@ -164,7 +164,7 @@ class WassersteinAlgorithmTorch:
     @staticmethod
     def _wasserstein_generator_loss(fake_validity: torch.Tensor) -> torch.Tensor:
         """
-        Wasserstein generator loss.
+        wasserstein generator loss.
         Generator tries to maximize the critic score for fake samples.
 
         Args:
@@ -291,7 +291,7 @@ class WassersteinAlgorithmTorch:
             real_validity = self.discriminator(real_samples, labels)
             fake_validity = self.discriminator(fake_samples.detach(), labels)
 
-            # Wasserstein loss
+            # wasserstein loss
             critic_loss = self.discriminator_loss_fn(real_validity, fake_validity)
 
             # Gradient penalty

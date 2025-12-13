@@ -57,11 +57,11 @@ except ImportError as error:
 
 class WassersteinAlgorithmTensorflow(Model):
     """
-    Implementation of the original Wasserstein Generative adversarial Network (WGAN) algorithm.
+    Implementation of the original wasserstein Generative adversarial Network (WGAN) algorithm.
     This class extends the Keras Model class to create a trainable WGAN model.
 
     The original WGAN (Arjovsky et al., 2017) improves upon standard GANs by:
-    - Using the Wasserstein (Earth Mover's) distance as the loss metric
+    - Using the wasserstein (Earth Mover's) distance as the loss metric
     - Providing more stable training dynamics
     - Offering meaningful loss metrics that correlate with generation quality
 
@@ -81,7 +81,7 @@ class WassersteinAlgorithmTensorflow(Model):
     Reference:
     ----------
     Arjovsky, M., Chintala, S., & Bottou, L. (2017).
-    "Wasserstein Generative adversarial Networks."
+    "wasserstein Generative adversarial Networks."
     Proceedings of the 34th International Conference on Machine Learning, PMLR 70:214-223.
     Available at: http://proceedings.mlr.press/v70/arjovsky17a.html
 
@@ -136,10 +136,10 @@ class WassersteinAlgorithmTensorflow(Model):
         self._generator_optimizer = optimizer_generator
         self._discriminator_optimizer = optimizer_discriminator
 
-        # Set default Wasserstein losses if None is provided
+        # Set default wasserstein losses if None is provided
         if loss_generator is None:
             def default_generator_loss(fake_output):
-                """Default Wasserstein generator loss: -mean(D(G(z)))"""
+                """Default wasserstein generator loss: -mean(D(G(z)))"""
                 return -tensorflow.reduce_mean(fake_output)
 
             self._generator_loss_fn = default_generator_loss
@@ -148,7 +148,7 @@ class WassersteinAlgorithmTensorflow(Model):
 
         if loss_discriminator is None:
             def default_discriminator_loss(real_output, fake_output):
-                """Default Wasserstein discriminator loss: mean(D(G(z))) - mean(D(x))"""
+                """Default wasserstein discriminator loss: mean(D(G(z))) - mean(D(x))"""
                 return tensorflow.reduce_mean(fake_output) - tensorflow.reduce_mean(real_output)
 
             self._discriminator_loss_fn = default_discriminator_loss

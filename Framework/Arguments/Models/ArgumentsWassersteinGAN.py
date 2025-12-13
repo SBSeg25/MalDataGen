@@ -73,15 +73,15 @@ def add_argument_wasserstein_gan(parser):
 
     parser.add_argument("--wasserstein_latent_dimension", type=int,
                         default=DEFAULT_WASSERSTEIN_GAN_LATENT_DIMENSION,
-                        help="Latent space dimension for the Wasserstein GAN.")
+                        help="Latent space dimension for the wasserstein GAN.")
 
     parser.add_argument("--wasserstein_training_algorithm", type=str,
                         default=DEFAULT_WASSERSTEIN_GAN_TRAINING_ALGORITHM,
-                        help="Training algorithm for the Wasserstein GAN.")
+                        help="Training algorithm for the wasserstein GAN.")
 
     parser.add_argument("--wasserstein_activation_function", type=str,
                         default=DEFAULT_WASSERSTEIN_GAN_ACTIVATION,
-                        help="Activation function for the Wasserstein GAN.")
+                        help="Activation function for the wasserstein GAN.")
 
     parser.add_argument("--wasserstein_dropout_decay_rate_g", type=float,
                         default=DEFAULT_WASSERSTEIN_GAN_DROPOUT_DECAY_RATE_G,
@@ -101,19 +101,19 @@ def add_argument_wasserstein_gan(parser):
 
     parser.add_argument('--wasserstein_batch_size', type=int,
                         default=DEFAULT_WASSERSTEIN_GAN_BATCH_SIZE,
-                        help='Batch size for the Wasserstein GAN.')
+                        help='Batch size for the wasserstein GAN.')
 
     parser.add_argument('--wasserstein_number_epochs', type=int,
                         default=DEFAULT_WASSERSTEIN_NUMBER_EPOCHS,
-                        help='Number epochs for the Wasserstein GAN.')
+                        help='Number epochs for the wasserstein GAN.')
 
     parser.add_argument('--wasserstein_number_classes', type=int,
                         default=DEFAULT_WASSERSTEIN_GAN_NUMBER_CLASSES,
-                        help='Number of classes for the Wasserstein GAN.')
+                        help='Number of classes for the wasserstein GAN.')
 
     parser.add_argument("--wasserstein_loss_function", type=str,
                         default=DEFAULT_WASSERSTEIN_GAN_LOSS,
-                        help="Loss function for the Wasserstein GAN.",
+                        help="Loss function for the wasserstein GAN.",
                         choices=['binary_crossentropy', 'mean_squared_error'])
 
     parser.add_argument("--wasserstein_momentum", type=float,

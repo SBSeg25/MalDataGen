@@ -246,7 +246,7 @@ class WassersteinGPAlgorithmTorch(nn.Module):
 
                 # Convert to PyTorch operations if they're tensors
                 if isinstance(real_img, torch.Tensor) and isinstance(fake_img, torch.Tensor):
-                    # Standard Wasserstein loss: E[D(fake)] - E[D(real)]
+                    # Standard wasserstein loss: E[D(fake)] - E[D(real)]
                     return torch.mean(fake_img) - torch.mean(real_img)
                 else:
                     # Call original function
@@ -257,7 +257,7 @@ class WassersteinGPAlgorithmTorch(nn.Module):
 
                 # Convert to PyTorch operations if it's a tensor
                 if isinstance(fake_img, torch.Tensor):
-                    # Standard Wasserstein generator loss: -E[D(fake)]
+                    # Standard wasserstein generator loss: -E[D(fake)]
                     return -torch.mean(fake_img)
                 else:
                     # Call original function
