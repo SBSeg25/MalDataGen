@@ -16,6 +16,7 @@ try:
     import torch
     import torch.nn as nn
     import torch.nn.functional as F
+    from torch.utils.data import DataLoader, TensorDataset
     from typing import Any
 
 except ImportError as error:
@@ -60,6 +61,16 @@ class AlgorithmDenoisingDiffusionTorch(nn.Module):
         self._optimizer_autoencoder = optimizer_autoencoder
         self._loss_fn = nn.MSELoss()
 
+        self._total_loss = 0.0
+        self._total_loss_count = 0
+
+        # Training history
+        self._training_history = {
+            'epoch': [],
+            'loss': [],
+            'avg_loss': []
+        }
+
     def set_stage_training(self, training_stage):
         """
         Sets the current training stage.
@@ -84,6 +95,7 @@ class AlgorithmDenoisingDiffusionTorch(nn.Module):
         self.sync_skip_projections()  # NEW: Sync skip projections before EMA update
         self.update_ema_weights()
         return {"Diffusion_loss": loss_diffusion.item() if loss_diffusion is not None else 0}
+
 
     def sync_skip_projections(self):
         """
@@ -194,6 +206,250 @@ class AlgorithmDenoisingDiffusionTorch(nn.Module):
                         print(f"Warning: Skipping EMA update for {name} due to shape mismatch: "
                               f"{param.shape} vs {ema_param.shape}")
 
+    def fit(self,
+            x_real_samples,
+            y_real_samples,
+            batch_size=128,
+            epochs=1000,
+            verbose=1,
+            callbacks=None,
+            callback_model_monitor=None,
+            callback_early_stop=None,
+            use_early_stop=False,
+            validation_data=None,
+            validation_freq=1,
+            shuffle=True):
+        """
+        Train the denoising diffusion model.
+
+        Args:
+            x_real_samples (numpy.ndarray): Training samples
+            y_real_samples (numpy.ndarray): Training labels
+            batch_size (int): Batch size for training
+            epochs (int): Number of training epochs
+            verbose (int): 0 = silent, 1 = progress bar, 2 = one line per epoch
+            callbacks (list): List of callbacks to apply during training
+            callback_model_monitor: Optional callback for monitoring training (deprecated, use callbacks)
+            callback_early_stop: Optional callback for early stopping (deprecated, use callbacks)
+            use_early_stop (bool): Whether to use early stopping
+            validation_data (tuple): Optional (x_val, y_val) for validation
+            validation_freq (int): Validation frequency in epochs
+            shuffle (bool): Whether to shuffle training data
+
+        Returns:
+            History object with training metrics
+        """
+        device = next(self._network.parameters()).device
+
+        # Print model summaries only if verbose
+        if verbose >= 1:
+            print("\n" + "=" * 80)
+            print("DENOISING DIFFUSION MODEL ARCHITECTURE (PyTorch)")
+            print("=" * 80)
+            print(f"\nDevice: {device}")
+            print(f"Batch Size: {batch_size}")
+            print(f"Epochs: {epochs}")
+            print(f"Time Steps: {self._time_steps}")
+
+            if self._network is not None:
+                print("\nFirst UNet Model:")
+                print(self._network)
+
+            if self._second_unet_model is not None:
+                print("\nSecond UNet Model (EMA):")
+                print(self._second_unet_model)
+
+            print("=" * 80 + "\n")
+
+        # Prepare data
+        x_real_samples = numpy.array(x_real_samples)
+        x_real_samples = torch.from_numpy(x_real_samples).float().unsqueeze(-1)
+
+        # Convert labels to one-hot
+        num_classes = int(y_real_samples.max()) + 1
+        y_one_hot = torch.zeros(len(y_real_samples), num_classes)
+        y_one_hot[torch.arange(len(y_real_samples)), y_real_samples] = 1
+
+        # Create dataset and dataloader
+        dataset = TensorDataset(x_real_samples, y_one_hot)
+        dataloader = DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=shuffle
+        )
+
+        # Prepare validation data if provided
+        val_dataloader = None
+        if validation_data is not None:
+            x_val, y_val = validation_data
+            x_val = numpy.array(x_val)
+            x_val = torch.from_numpy(x_val).float().unsqueeze(-1)
+
+            y_val_one_hot = torch.zeros(len(y_val), num_classes)
+            y_val_one_hot[torch.arange(len(y_val)), y_val] = 1
+
+            val_dataset = TensorDataset(x_val, y_val_one_hot)
+            val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+
+        # Training loop
+        if verbose >= 1:
+            print("\n" + "=" * 80)
+            print("STARTING TRAINING")
+            print("=" * 80 + "\n")
+
+        self.train()
+        best_loss = float('inf')
+        total_batches = len(dataloader)
+
+        # History to store metrics
+        history = {'loss': [], 'avg_loss': []}
+        if validation_data is not None:
+            history['val_loss'] = []
+
+        for epoch in range(epochs):
+            epoch_loss = 0.0
+            num_batches = 0
+
+            if verbose == 1:
+                print(f"Epoch {epoch + 1}/{epochs}")
+
+            for batch_idx, (batch_data, batch_labels) in enumerate(dataloader):
+                batch_data = batch_data.to(device)
+                batch_labels = batch_labels.to(device)
+
+                # Training step
+                loss_dict = self.train_step(batch_data, batch_labels)
+
+                current_loss = loss_dict["Diffusion_loss"]
+                epoch_loss += current_loss
+                num_batches += 1
+
+                # Simple progress bar (verbose=1)
+                if verbose == 1:
+                    progress = int(50 * (batch_idx + 1) / total_batches)
+                    bar = '=' * progress + '>' + '.' * (50 - progress - 1)
+                    print(f'\r[{bar}] {batch_idx + 1}/{total_batches} - loss: {current_loss:.4f}',
+                          end='', flush=True)
+
+            # Calculate average loss
+            avg_loss = epoch_loss / num_batches
+
+            # Store training history
+            self._training_history['epoch'].append(epoch + 1)
+            self._training_history['loss'].append(epoch_loss)
+            self._training_history['avg_loss'].append(avg_loss)
+
+            history['loss'].append(epoch_loss)
+            history['avg_loss'].append(avg_loss)
+
+            # Print epoch summary based on verbose level
+            if verbose == 1:
+                print(f' - avg_loss: {avg_loss:.4f}', end='')
+                if avg_loss < best_loss:
+                    best_loss = avg_loss
+                    print(f' ★ New Best!')
+                else:
+                    print()
+            elif verbose == 2:
+                print(f'Epoch {epoch + 1}/{epochs} - avg_loss: {avg_loss:.4f}', end='')
+                if avg_loss < best_loss:
+                    best_loss = avg_loss
+                    print(f' ★ New Best!')
+                else:
+                    print()
+
+            if avg_loss < best_loss:
+                best_loss = avg_loss
+
+            # Validation
+            if val_dataloader is not None and (epoch + 1) % validation_freq == 0:
+                val_loss = self._evaluate_validation(val_dataloader, device)
+                history['val_loss'].append(val_loss)
+
+                if verbose >= 1:
+                    print(f' - val_loss: {val_loss:.4f}')
+
+            if verbose >= 1:
+                print()
+
+            # Handle new callbacks list
+            if callbacks is not None:
+                for callback in callbacks:
+                    if hasattr(callback, 'on_epoch_end'):
+                        callback.on_epoch_end(epoch, {'loss': avg_loss, 'avg_loss': avg_loss})
+
+            # Handle legacy callbacks
+            if callback_model_monitor:
+                try:
+                    if callable(callback_model_monitor):
+                        callback_model_monitor(epoch, avg_loss)
+                    elif hasattr(callback_model_monitor, 'on_epoch_end'):
+                        callback_model_monitor.on_epoch_end(epoch, {'loss': avg_loss})
+                except Exception as e:
+                    if verbose >= 1:
+                        print(f"Warning: Could not call model monitor callback: {e}")
+
+            # Handle early stopping
+            if use_early_stop and callback_early_stop:
+                try:
+                    should_stop = False
+                    if callable(callback_early_stop):
+                        should_stop = callback_early_stop(epoch, avg_loss)
+                    elif hasattr(callback_early_stop, 'on_epoch_end'):
+                        should_stop = callback_early_stop.on_epoch_end(epoch, {'loss': avg_loss})
+
+                    if should_stop:
+                        if verbose >= 1:
+                            print("\n" + "=" * 80)
+                            print("EARLY STOPPING TRIGGERED")
+                            print("=" * 80 + "\n")
+                        break
+                except Exception as e:
+                    if verbose >= 1:
+                        print(f"Warning: Could not call early stop callback: {e}")
+
+        # Print final summary
+        if verbose >= 1:
+            print("\n" + "=" * 80)
+            print("TRAINING COMPLETED")
+            print("=" * 80)
+            print(f"  Total Epochs:   {len(self._training_history['epoch'])}")
+            print(f"  Best Loss:      {best_loss:.6f}")
+            print(f"  Final Loss:     {avg_loss:.6f}")
+            print("=" * 80 + "\n")
+
+        # Return history object (similar to Keras)
+        class History:
+            def __init__(self, history_dict):
+                self.history = history_dict
+
+        return History(history)
+
+    def _evaluate_validation(self, val_dataloader, device):
+        """
+        Evaluate the model on validation data.
+
+        Args:
+            val_dataloader: Validation data loader
+            device: Device to run evaluation on
+
+        Returns:
+            Average validation loss
+        """
+        self.eval()
+        val_losses = []
+
+        with torch.no_grad():
+            for batch_data, batch_labels in val_dataloader:
+                batch_data = batch_data.to(device)
+                batch_labels = batch_labels.to(device)
+
+                # Calculate validation loss
+                loss_dict = self.train_step(batch_data, batch_labels)
+                val_losses.append(loss_dict["Diffusion_loss"])
+
+        self.train()
+        return numpy.mean(val_losses) if val_losses else 0.0
     def generate_data(self, labels, batch_size):
         """
         Generates synthetic data by reversing the diffusion process, starting from pure noise
@@ -237,7 +493,7 @@ class AlgorithmDenoisingDiffusionTorch(nn.Module):
                     clip_denoised=True
                 )
 
-        self._network.fit()
+        self._network.train()
 
         # Crop to original size
         generated_data = self._crop_tensor_to_original_size(
@@ -329,6 +585,15 @@ class AlgorithmDenoisingDiffusionTorch(nn.Module):
             generated_data[label_class] = generated_samples
 
         return generated_data
+
+    def get_training_history(self):
+        """
+        Returns the training history.
+
+        Returns:
+            dict: Dictionary containing epoch, loss, and avg_loss lists
+        """
+        return self._training_history
 
     def save_model(self, directory, file_name):
         """

@@ -377,7 +377,7 @@ class DenoisingDiffusion:
             y_real_samples: np.ndarray
     ) -> None:
         """
-        PyTorch training implementation.
+        PyTorch training implementation (simplified - delegates to AlgorithmDenoisingDiffusionTorch).
         """
 
         # Initialize the diffusion model
@@ -391,127 +391,29 @@ class DenoisingDiffusion:
                 "Please check that all required components are properly initialized."
             )
 
-        # Print model summaries
-        print("\n" + "=" * 80)
-        print("DENOISING DIFFUSION MODEL ARCHITECTURE (PyTorch)")
-        print("=" * 80)
-        print(f"\nDevice: {self._device}")
-        print(f"Input Shape: {input_shape}")
-        print(f"Batch Size: {self._denoising_diffusion_unet_batch_size}")
-        print(f"Epochs: {self._denoising_diffusion_unet_epochs}")
-        print(f"Time Steps: {self._denoising_diffusion_gaussian_time_steps}")
+        # Extract training parameters
+        batch_size = self._denoising_diffusion_unet_batch_size
+        epochs = self._denoising_diffusion_unet_epochs
 
-        if self._denoising_first_unet_model is not None:
-            print("\nFirst UNet Model:")
-            print(self._denoising_first_unet_model)
+        # Extract callbacks
+        callback_model_monitor = getattr(arguments, 'callback_model_monitor', None) or self._callback_model_monitor
+        callback_early_stop = getattr(arguments, 'callback_early_stop', None) or self._callback_early_stop
+        use_early_stop = getattr(arguments, 'use_early_stop', False)
 
-        if self._denoising_second_unet_model is not None:
-            print("\nSecond UNet Model (EMA):")
-            print(self._denoising_second_unet_model)
-
-        print("=" * 80 + "\n")
-
-        # Prepare data
-        x_real_samples = np.array(x_real_samples)
-        x_real_samples = torch.from_numpy(x_real_samples).float().unsqueeze(-1)
-
-        # Convert labels to one-hot
-        num_classes = self._number_samples_per_class["number_classes"]
-        y_one_hot = torch.zeros(len(y_real_samples), num_classes)
-        y_one_hot[torch.arange(len(y_real_samples)), y_real_samples] = 1
-
-        # Create dataset and dataloader
-        dataset = TensorDataset(x_real_samples, y_one_hot)
-        dataloader = DataLoader(
-            dataset,
-            batch_size=self._denoising_diffusion_unet_batch_size,
-            shuffle=True
+        # Delegate training to the algorithm's fit method
+        history = self._denoising_diffusion_algorithm.fit(
+            x_real_samples=x_real_samples,
+            y_real_samples=y_real_samples,
+            batch_size=batch_size,
+            epochs=epochs,
+            callback_model_monitor=callback_model_monitor,
+            callback_early_stop=callback_early_stop,
+            use_early_stop=use_early_stop
         )
 
-        # Training loop
-        print("\n" + "=" * 80)
-        print("STARTING TRAINING")
-        print("=" * 80 + "\n")
+        # Update local training history
+        self._training_history = history
 
-        self._denoising_diffusion_algorithm.train()
-        best_loss = float('inf')
-
-        for epoch in range(self._denoising_diffusion_unet_epochs):
-            epoch_loss = 0.0
-            num_batches = 0
-
-            for batch_idx, (batch_data, batch_labels) in enumerate(dataloader):
-                batch_data = batch_data.to(self._device)
-                batch_labels = batch_labels.to(self._device)
-
-                # Training step
-                loss_dict = self._denoising_diffusion_algorithm.train_step(
-                    batch_data,
-                    batch_labels
-                )
-
-                current_loss = loss_dict["Diffusion_loss"]
-                epoch_loss += current_loss
-                num_batches += 1
-
-            # Calculate average loss
-            avg_loss = epoch_loss / num_batches
-
-            # Store training history
-            self._training_history['epoch'].append(epoch + 1)
-            self._training_history['loss'].append(epoch_loss)
-            self._training_history['avg_loss'].append(avg_loss)
-
-            # Print epoch summary
-            print(f"{'─' * 80}")
-            print(f"EPOCH {epoch + 1}/{self._denoising_diffusion_unet_epochs}")
-            print(f"{'─' * 80}")
-            print(f"  Loss: {avg_loss:.6f}", end="")
-
-            if avg_loss < best_loss:
-                best_loss = avg_loss
-                print(f"  ★ New Best!")
-            else:
-                print()
-
-            print(f"{'─' * 80}\n")
-
-            # Handle callbacks
-            if self._callback_model_monitor:
-                try:
-                    if callable(self._callback_model_monitor):
-                        self._callback_model_monitor(epoch, avg_loss)
-                    elif hasattr(self._callback_model_monitor, 'on_epoch_end'):
-                        self._callback_model_monitor.on_epoch_end(epoch, {'loss': avg_loss})
-                except Exception as e:
-                    print(f"Warning: Could not call model monitor callback: {e}")
-
-            # Handle early stopping
-            if hasattr(arguments, 'use_early_stop') and arguments.use_early_stop:
-                if self._callback_early_stop:
-                    try:
-                        should_stop = False
-                        if callable(self._callback_early_stop):
-                            should_stop = self._callback_early_stop(epoch, avg_loss)
-                        elif hasattr(self._callback_early_stop, 'on_epoch_end'):
-                            should_stop = self._callback_early_stop.on_epoch_end(epoch, {'loss': avg_loss})
-
-                        if should_stop:
-                            print("\n" + "=" * 80)
-                            print("EARLY STOPPING TRIGGERED")
-                            print("=" * 80 + "\n")
-                            break
-                    except Exception as e:
-                        print(f"Warning: Could not call early stop callback: {e}")
-
-        # Print final summary
-        print("\n" + "=" * 80)
-        print("TRAINING COMPLETED")
-        print("=" * 80)
-        print(f"  Total Epochs:   {len(self._training_history['epoch'])}")
-        print(f"  Best Loss:      {best_loss:.6f}")
-        print(f"  Final Loss:     {avg_loss:.6f}")
-        print("=" * 80 + "\n")
 
     def _training_denoising_diffusion_model_tensorflow(
             self,

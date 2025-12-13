@@ -179,7 +179,7 @@ class AlgorithmDenoisingDiffusionTensorflow(tensorflow.keras.Model):
         self._second_unet_model = second_unet_model
         self._optimizer_diffusion = optimizer_diffusion
         self._optimizer_autoencoder = optimizer_autoencoder
-
+        self._total_loss_tracker = tensorflow.keras.metrics.Mean(name='total_loss')
 
     def set_stage_training(self, training_stage):
         """
