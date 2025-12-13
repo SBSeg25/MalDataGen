@@ -291,7 +291,6 @@ class Autoencoder:
     def fit_model(
             self,
             input_shape: tuple[int, ...],
-            arguments: 'argparse.Namespace',
             x_real_samples: np.ndarray,
             y_real_samples: np.ndarray
     ) -> None:
@@ -324,7 +323,7 @@ class Autoencoder:
             raise ValueError("AutoencoderAlgorithm instance is required but was not provided or created.")
 
         # Compile the autoencoder algorithm with the specified loss function
-        self._autoencoder_algorithm.compile(loss=arguments.autoencoder_loss_function)
+        self._autoencoder_algorithm.compile(loss= 'mse')
 
         # Build callbacks list - only include callbacks that exist
         callbacks_list = []
@@ -332,9 +331,8 @@ class Autoencoder:
         if self._callback_model_monitor is not None:
             callbacks_list.append(self._callback_model_monitor)
 
-        if hasattr(arguments, 'use_early_stop') and arguments.use_early_stop:
-            if self._callback_early_stop is not None:
-                callbacks_list.append(self._callback_early_stop)
+        if self._callback_early_stop is not None:
+            callbacks_list.append(self._callback_early_stop)
 
         # Fit the autoencoder model
         self._autoencoder_algorithm.fit(

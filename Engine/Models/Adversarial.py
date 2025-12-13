@@ -317,7 +317,6 @@ class Adversarial:
     def fit_model(
             self,
             input_shape: tuple[int, ...],
-            arguments: 'argparse.Namespace',
             x_real_samples: np.ndarray,
             y_real_samples: np.ndarray
     ) -> None:
@@ -359,8 +358,8 @@ class Adversarial:
             raise ValueError("AdversarialAlgorithm instance is required but was not provided or created.")
 
         # Set up optimizers for the generator and discriminator
-        generator_optimizer = keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5, beta_2=0.9)
-        discriminator_optimizer = keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5, beta_2=0.9)
+        generator_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5, beta_2=0.9)
+        discriminator_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5, beta_2=0.9)
 
         # Compile the adversarial algorithm with binary cross-entropy loss
         self._adversarial_algorithm.compile(
@@ -379,9 +378,8 @@ class Adversarial:
         if self._callback_resources_monitor is not None:
             callbacks_list.append(self._callback_resources_monitor)
 
-        if hasattr(arguments, 'use_early_stop') and arguments.use_early_stop:
-            if self._callback_early_stop is not None:
-                callbacks_list.append(self._callback_early_stop)
+        if self._callback_early_stop is not None:
+            callbacks_list.append(self._callback_early_stop)
 
         # Fit the model with real samples and the corresponding labels
         self._adversarial_algorithm.fit(

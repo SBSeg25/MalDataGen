@@ -8,8 +8,6 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
-from Engine.Algorithms.variational_autoencoder.VariationalAutoencoderAlgorithm import VariationalAutoencoderAlgorithm
-
 # MIT License
 # (License text omitted for brevity)
 
@@ -322,10 +320,10 @@ class GenerativeModels:
 
         # Delegate to appropriate model
         if arguments.model_type == 'adversarial':
-            self._adversarial_algorithm.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
+            self._adversarial_algorithm.fit_model(input_shape, x_real_samples, y_real_samples)
 
         elif arguments.model_type == 'autoencoder':
-            self._autoencoder_algorithm.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
+            self._autoencoder_algorithm.fit_model(input_shape, x_real_samples, y_real_samples)
 
         elif arguments.model_type == 'random':
             self._get_random_noise(input_shape)

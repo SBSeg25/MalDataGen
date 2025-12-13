@@ -585,10 +585,6 @@ class LatentDiffusion:
             batch_size=self._latent_diffusion_unet_batch_size,
             callbacks=callbacks_list)
 
-    # ========================================================================
-    # PYTORCH IMPLEMENTATION (Now using AlgorithmLatentDiffusionPyTorch)
-    # ========================================================================
-
     def _detect_embedding_shape_pytorch(self, x_real_samples):
         """PyTorch-specific helper to detect embedding shape."""
         if len(x_real_samples) > 32:
@@ -611,11 +607,6 @@ class LatentDiffusion:
 
     def fit_model_pytorch(self, input_shape, arguments, x_real_samples, y_real_samples):
         """PyTorch-specific training pipeline using AlgorithmLatentDiffusionPyTorch."""
-
-        # ========================================================================
-        # PHASE 1: Initialize VAE
-        # ========================================================================
-        print("Phase 1: Initializing VAE...")
 
         self._latent_variation_model_diffusion = VariationalModelDiffusion(
             latent_dimension=self._latent_diffusion_latent_dimension,
@@ -688,17 +679,8 @@ class LatentDiffusion:
         self._encoder_latent_diffusion = self._latent_variational_algorithm.get_encoder_trained()
         self._decoder_latent_diffusion = self._latent_variational_algorithm.get_decoder_trained()
 
-        # ========================================================================
-        # PHASE 2: Detect Actual Embedding Shape
-        # ========================================================================
-        print("\nPhase 2: Detecting embedding shape...")
         actual_embedding_shape = self._detect_embedding_shape_pytorch(x_real_samples)
-        print(f"  Detected embedding shape: {actual_embedding_shape}")
 
-        # ========================================================================
-        # PHASE 3: Create Full Embeddings
-        # ========================================================================
-        print("\nPhase 3: Creating embeddings...")
         data_embedding = self._latent_variational_algorithm.create_embedding(
             x_real_samples,
             batch_size=self._latent_diffusion_VAE_batch_size_create_embedding
@@ -708,10 +690,6 @@ class LatentDiffusion:
         if len(data_embedding.shape) == 2:
             data_embedding = data_embedding.unsqueeze(-1)
 
-        # ========================================================================
-        # PHASE 4: Initialize UNets with Correct Dimensions
-        # ========================================================================
-        print("\nPhase 4: Initializing UNet models...")
 
         embedding_seq_len, embedding_channels = actual_embedding_shape
 
@@ -754,10 +732,6 @@ class LatentDiffusion:
             clip_max=self._latent_diffusion_gaussian_clip_max
         ).to(self._device)
 
-        # ========================================================================
-        # PHASE 5: Initialize PyTorch Diffusion Algorithm
-        # ========================================================================
-        print("\nPhase 5: Initializing diffusion algorithm...")
 
         self._latent_diffusion_algorithm = LatentDiffusionAlgorithm(
             first_unet_model=self._latent_first_unet_model,
@@ -777,11 +751,6 @@ class LatentDiffusion:
             embedding_dimension=embedding_seq_len,
             device=self._device
         )
-
-        # ========================================================================
-        # PHASE 6: Train Diffusion Model
-        # ========================================================================
-        print("\nPhase 6: Training diffusion model...")
 
         num_batches = len(data_embedding) // self._latent_diffusion_unet_batch_size
 
@@ -811,10 +780,6 @@ class LatentDiffusion:
 
         print("\nTraining completed!")
 
-    # ========================================================================
-    # UNIFIED PUBLIC API
-    # ========================================================================
-
     def fit_model(self, input_shape, arguments, x_real_samples, y_real_samples):
         """
         Executes the complete training pipeline for latent diffusion.
@@ -832,10 +797,6 @@ class LatentDiffusion:
             return self.fit_model_tensorflow(input_shape, arguments, x_real_samples, y_real_samples)
         else:  # pytorch
             return self.fit_model_pytorch(input_shape, arguments, x_real_samples, y_real_samples)
-
-    # ========================================================================
-    # PROPERTIES (Framework-agnostic)
-    # ========================================================================
 
     @property
     def framework(self):
