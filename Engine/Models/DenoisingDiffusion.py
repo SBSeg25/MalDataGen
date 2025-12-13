@@ -5,7 +5,7 @@ __author__ = 'Synthetic Ocean AI - Team'
 __email__ = 'syntheticoceanai@gmail.com'
 __version__ = '{1}.{0}.{1}'
 __initial_data__ = '2022/06/01'
-__last_update__ = '2025/03/29'
+__last_update__ = '2025/12/13'
 __credits__ = ['Synthetic Ocean AI']
 
 try:
@@ -22,7 +22,6 @@ try:
     from Engine.Algorithms.DenoisingDiffusion.Torch.AlgorithmDenoisingDiffusionTorch import \
         AlgorithmDenoisingDiffusionTorch
     from Engine.Algorithms.DenoisingDiffusion.GaussianDenoisingDiffusion import GaussianDenoisingDiffusion
-
 
 except ImportError as error:
     logging.error(error)
@@ -128,7 +127,7 @@ class DenoisingDiffusion:
                 f"Supported frameworks are 'Tensorflow' or 'pytorch'"
             )
 
-        logging.info(f"Initializing DenoisingDiffusionInstance with framework: {self._framework}")
+        logging.info(f"Initializing DenoisingDiffusion with framework: {self._framework}")
 
         # Store pre-initialized instances if provided
         self._denoising_first_unet_model = first_unet_model
@@ -197,6 +196,9 @@ class DenoisingDiffusion:
         self._callback_early_stop = None
         self._callback_resources_monitor = None
 
+        # Number of samples per class (set during training)
+        self._number_samples_per_class = None
+
     def _get_denoising_diffusion_pytorch(self, input_shape: tuple[int, ...]) -> None:
         """
         PyTorch implementation: Initializes and configures the diffusion model using UNet architecture.
@@ -255,6 +257,7 @@ class DenoisingDiffusion:
 
         # Only create new algorithm if none was provided
         if not self._has_external_algorithm:
+            # Validate required components
             if self._denoising_first_unet_model is None:
                 raise ValueError("First UNet model is required but was not provided.")
             if self._denoising_second_unet_model is None:
@@ -283,6 +286,13 @@ class DenoisingDiffusion:
                 margin=self._denoising_diffusion_margin
             ).to(self._device)
         else:
+            # Ensure external algorithm is properly assigned
+            if self._denoising_diffusion_algorithm is None:
+                raise ValueError(
+                    "External algorithm was marked as provided but is None. "
+                    "Please provide a valid algorithm instance."
+                )
+            # Update algorithm parameters
             if hasattr(self._denoising_diffusion_algorithm, 'time_steps'):
                 self._denoising_diffusion_algorithm.time_steps = self._denoising_diffusion_gaussian_time_steps
             if hasattr(self._denoising_diffusion_algorithm, 'ema'):
@@ -373,6 +383,14 @@ class DenoisingDiffusion:
         # Initialize the diffusion model
         self._get_denoising_diffusion_pytorch(input_shape)
 
+        # CRITICAL VALIDATION: Ensure algorithm was created
+        if self._denoising_diffusion_algorithm is None:
+            raise RuntimeError(
+                "Failed to initialize denoising diffusion algorithm. "
+                "This may be due to missing models or incorrect configuration. "
+                "Please check that all required components are properly initialized."
+            )
+
         # Print model summaries
         print("\n" + "=" * 80)
         print("DENOISING DIFFUSION MODEL ARCHITECTURE (PyTorch)")
@@ -392,9 +410,6 @@ class DenoisingDiffusion:
             print(self._denoising_second_unet_model)
 
         print("=" * 80 + "\n")
-
-        if self._denoising_diffusion_algorithm is None:
-            raise ValueError("Denoising diffusion algorithm is required but was not provided or created.")
 
         # Prepare data
         x_real_samples = np.array(x_real_samples)
@@ -418,7 +433,7 @@ class DenoisingDiffusion:
         print("STARTING TRAINING")
         print("=" * 80 + "\n")
 
-        self._denoising_diffusion_algorithm.fit()
+        self._denoising_diffusion_algorithm.train()
         best_loss = float('inf')
 
         for epoch in range(self._denoising_diffusion_unet_epochs):
@@ -623,7 +638,7 @@ class DenoisingDiffusion:
             self._training_denoising_diffusion_model_pytorch(
                 input_shape, arguments, x_real_samples, y_real_samples
             )
-        elif self._framework == 'Tensorflow':
+        elif self._framework == 'tensorflow':
             self._training_denoising_diffusion_model_tensorflow(
                 input_shape, arguments, x_real_samples, y_real_samples
             )
@@ -637,7 +652,7 @@ class DenoisingDiffusion:
     ) -> None:
         """
         Public method to train the denoising diffusion model.
-        This is an alias to _training_denoising_diffusion_model for convenience.
+        This is an alias to fit_model for convenience.
 
         Args:
             input_shape: Shape of input data
@@ -648,6 +663,27 @@ class DenoisingDiffusion:
         self.fit_model(
             input_shape, arguments, x_real_samples, y_real_samples
         )
+
+    def get_samples(self, number_samples_per_class):
+        """
+        Generate samples using the trained model.
+
+        Args:
+            number_samples_per_class: Dictionary with class information
+
+        Returns:
+            Generated samples
+
+        Raises:
+            RuntimeError: If algorithm is not initialized
+        """
+        if self._denoising_diffusion_algorithm is None:
+            raise RuntimeError(
+                "Cannot generate samples: algorithm is not initialized. "
+                "Please train the model first using fit_model() or train()."
+            )
+
+        return self._denoising_diffusion_algorithm.get_samples(number_samples_per_class)
 
     def get_training_history(self) -> dict:
         """
@@ -839,11 +875,7 @@ class DenoisingDiffusion:
 
     def __repr__(self) -> str:
         return (
-            f"DenoisingDiffusionInstance(framework='{self._framework}', "
+            f"DenoisingDiffusion(framework='{self._framework}', "
             f"epochs={self._denoising_diffusion_unet_epochs}, "
             f"batch_size={self._denoising_diffusion_unet_batch_size})"
         )
-
-    def get_samples(self, number_samples_per_class):
-
-        return self._denoising_diffusion_algorithm.get_samples(number_samples_per_class)

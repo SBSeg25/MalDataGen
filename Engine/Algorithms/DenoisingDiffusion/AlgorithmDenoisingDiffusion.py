@@ -54,12 +54,14 @@ except ImportError as error:
     sys.exit(-1)
 
 class AlgorithmDenoisingDiffusion(AlgorithmDenoisingDiffusionBase):
+    """
+    Framework-agnostic wrapper that selects the appropriate implementation
+    (PyTorch or TensorFlow) based on the ML_FRAMEWORK environment variable.
+    """
     def __init__(self, *args, **kwargs):
-
         super().__init__(*args, **kwargs)
 
         if framework == "pytorch":
             self._framework = "pytorch"
-
         else:
-            self._framework = "Tensorflow"
+            self._framework = "tensorflow"

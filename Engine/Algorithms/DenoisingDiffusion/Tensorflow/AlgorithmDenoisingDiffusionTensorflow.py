@@ -208,6 +208,186 @@ class AlgorithmDenoisingDiffusionTensorflow(tensorflow.keras.Model):
         self.update_ema_weights()
         return {"Diffusion_loss": loss_diffusion if loss_diffusion is not None else 0}
 
+    def fit(self, x=None, y=None, batch_size=32, epochs=1, verbose=1,
+            callbacks=None, validation_data=None, shuffle=True,
+            initial_epoch=0, steps_per_epoch=None, validation_steps=None,
+            validation_freq=1, optimizer=None, learning_rate=0.001, **kwargs):
+        """
+        Train the model with a simplified progress bar.
+
+        Args:
+            x: Input data.
+            y: Target data (labels).
+            batch_size: Number of samples per gradient update.
+            epochs: Number of epochs to train.
+            verbose: 0 = silent, 1 = progress bar, 2 = one line per epoch.
+            callbacks: List of callbacks to apply during training.
+            validation_data: Data for validation.
+            shuffle: Whether to shuffle data before each epoch.
+            initial_epoch: Epoch at which to start training.
+            steps_per_epoch: Number of steps per epoch.
+            validation_steps: Number of validation steps.
+            validation_freq: Validation frequency.
+            optimizer: TensorFlow optimizer (if None, uses already compiled optimizer).
+            learning_rate: Learning rate for optimizer (only used if optimizer is None).
+
+        Returns:
+            A History object with training metrics.
+        """
+
+        # Set optimizer if provided
+        if optimizer is not None:
+            self._optimizer_diffusion = optimizer
+        elif not hasattr(self, '_optimizer_diffusion') or self._optimizer_diffusion is None:
+            # Create default optimizer if none exists
+            self._optimizer_diffusion = tensorflow.keras.optimizers.Adam(learning_rate=learning_rate)
+
+        # Prepare the dataset
+        if isinstance(x, tensorflow.data.Dataset):
+            train_dataset = x
+        else:
+            if y is None:
+                raise ValueError("Labels (y) must be provided for diffusion training")
+            train_dataset = tensorflow.data.Dataset.from_tensor_slices((x, y))
+            if shuffle:
+                train_dataset = train_dataset.shuffle(buffer_size=len(x))
+            train_dataset = train_dataset.batch(batch_size)
+
+        # Calculate steps per epoch if not provided
+        if steps_per_epoch is None:
+            steps_per_epoch = len(train_dataset)
+
+        # History to store metrics
+        history = {'Diffusion_loss': []}
+
+        # Training loop
+        for epoch in range(initial_epoch, epochs):
+            self._total_loss_tracker.reset_state()
+
+            if verbose == 1:
+                print(f'\nEpoch {epoch + 1}/{epochs}')
+
+            # Progress tracking
+            step = 0
+            for batch_data in train_dataset:
+                step += 1
+
+                # Perform training step
+                metrics = self.train_step(batch_data)
+                current_loss = float(metrics['Diffusion_loss'])
+
+                # Update total loss tracker
+                self._total_loss_tracker.update_state(current_loss)
+
+                # Simple progress bar
+                if verbose == 1:
+                    progress = int(50 * step / steps_per_epoch)
+                    bar = '=' * progress + '>' + '.' * (50 - progress - 1)
+                    print(f'\r[{bar}] {step}/{steps_per_epoch} - Diffusion_loss: {current_loss:.4f}',
+                          end='', flush=True)
+
+                if step >= steps_per_epoch:
+                    break
+
+            # Store epoch loss
+            epoch_loss = float(self._total_loss_tracker.result())
+            history['Diffusion_loss'].append(epoch_loss)
+
+            if verbose == 1:
+                print(f' - Diffusion_loss: {epoch_loss:.4f}')
+            elif verbose == 2:
+                print(f'Epoch {epoch + 1}/{epochs} - Diffusion_loss: {epoch_loss:.4f}')
+
+            # Validation
+            if validation_data is not None and (epoch + 1) % validation_freq == 0:
+                val_loss = self._evaluate_validation(validation_data, validation_steps, batch_size)
+                if 'val_Diffusion_loss' not in history:
+                    history['val_Diffusion_loss'] = []
+                history['val_Diffusion_loss'].append(val_loss)
+
+                if verbose >= 1:
+                    print(f' - val_Diffusion_loss: {val_loss:.4f}')
+
+            # Callbacks
+            if callbacks is not None:
+                for callback in callbacks:
+                    callback.on_epoch_end(epoch, {'Diffusion_loss': epoch_loss})
+
+        # Return history object
+        class History:
+            def __init__(self, history_dict):
+                self.history = history_dict
+
+        return History(history)
+
+    def _evaluate_validation(self, validation_data, validation_steps=None, batch_size=32):
+        """
+        Evaluate the model on validation data.
+
+        Args:
+            validation_data: Validation dataset (tuple of (x_val, y_val) or tf.data.Dataset).
+            validation_steps: Number of validation steps.
+            batch_size: Batch size for validation.
+
+        Returns:
+            Average validation loss.
+        """
+        val_losses = []
+        step = 0
+
+        # Prepare validation dataset
+        if isinstance(validation_data, tensorflow.data.Dataset):
+            val_dataset = validation_data
+        else:
+            x_val, y_val = validation_data
+            val_dataset = tensorflow.data.Dataset.from_tensor_slices((x_val, y_val))
+            val_dataset = val_dataset.batch(batch_size)
+
+        for batch_data in val_dataset:
+            raw_data, labels = batch_data
+
+            # Prepare data
+            embedding_data_expanded = self._padding_input_tensor(raw_data)
+            embedding_data_expanded = tensorflow.cast(embedding_data_expanded, tensorflow.float32)
+            batch_size_val = tensorflow.shape(raw_data)[0]
+
+            # Sample random time steps
+            random_time_steps = tensorflow.random.uniform(
+                minval=0,
+                maxval=self._time_steps,
+                shape=(batch_size_val,),
+                dtype=tensorflow.int32
+            )
+
+            # Sample random noise
+            random_noise = tensorflow.random.normal(
+                shape=tensorflow.shape(embedding_data_expanded),
+                dtype=embedding_data_expanded.dtype
+            )
+
+            # Apply forward diffusion process
+            embedding_with_noise = self._gdf_util.q_sample(
+                embedding_data_expanded,
+                random_time_steps,
+                random_noise
+            )
+
+            # Predict noise using the network (without training)
+            predicted_noise = self._network(
+                [embedding_with_noise, random_time_steps, labels],
+                training=False
+            )
+
+            # Compute validation loss
+            loss = self.loss(random_noise, tensorflow.squeeze(predicted_noise, axis=-1))
+            val_losses.append(float(loss))
+
+            step += 1
+            if validation_steps is not None and step >= validation_steps:
+                break
+
+        return numpy.mean(val_losses) if val_losses else 0.0
+
     def train_diffusion_model(self, data, ground_truth):
         """
         Performs a single training step for the diffusion model.
