@@ -213,12 +213,15 @@ class VanillaDecoderTensorflow(Activations):
         self._decoder_number_samples_per_class = number_samples_per_class
         self._decoder_model = None
 
-    def get_decoder(self):
+    def get_decoder(self, input_shape=None):
         """
         Builds and returns the decoder model.
 
         The model is a fully connected neural network that accepts both latent vectors and conditional inputs
         (e.g., class labels). It uses dropout and specified activation functions for regularization and non-linearity.
+
+        Args:
+            input_shape: Optional input shape (for API compatibility with PyTorch version, not used)
 
         Returns:
             Tensorflow.keras.Model: The decoder model.
@@ -227,20 +230,23 @@ class VanillaDecoderTensorflow(Activations):
 
         # Input layers
         neural_model_inputs = Input(shape=(self._decoder_latent_dimension,), dtype=self._decoder_dataset_type)
-        label_input = Input(shape=(self._decoder_number_samples_per_class["number_classes"],), dtype=self._decoder_dataset_type)
-        label_input_embedding = Dense(8, activation='relu') (label_input)
+        label_input = Input(shape=(self._decoder_number_samples_per_class["number_classes"],),
+                            dtype=self._decoder_dataset_type)
+        label_input_embedding = Dense(8, activation='relu')(label_input)
         # Concatenate latent vector with conditional labels
         concatenate_input = Concatenate()([neural_model_inputs, label_input_embedding])
         conditional_decoder = Dense(self._decoder_number_neurons_decoder[0],
                                     kernel_initializer=initialization)(concatenate_input)
-        conditional_decoder = self._add_activation_layer(conditional_decoder, self._decoder_intermediary_activation_function)
+        conditional_decoder = self._add_activation_layer(conditional_decoder,
+                                                         self._decoder_intermediary_activation_function)
         conditional_decoder = Dropout(self._decoder_dropout_decay_rate_decoder)(conditional_decoder)
 
         # Hidden layers
         for number_filters in self._decoder_number_neurons_decoder[1:]:
             conditional_decoder = Dense(number_filters, kernel_initializer=initialization)(conditional_decoder)
             conditional_decoder = Dropout(self._decoder_dropout_decay_rate_decoder)(conditional_decoder)
-            conditional_decoder = self._add_activation_layer(conditional_decoder, self._decoder_intermediary_activation_function)
+            conditional_decoder = self._add_activation_layer(conditional_decoder,
+                                                             self._decoder_intermediary_activation_function)
 
         # Output layer
         conditional_decoder = Dense(self._decoder_output_shape, kernel_initializer=initialization)(conditional_decoder)

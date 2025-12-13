@@ -235,25 +235,231 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
                 "reconstruction_loss": self._reconstruction_loss_tracker.result(),
                 "kl_loss": self._kl_loss_tracker.result()}
 
-
-
-    def configure_optimizer(self,
-                        learning_rate=0.001,
-                        beta_1=0.9,
-                        beta_2=0.999,
-                        epsilon=1e-7,
-                        amsgrad=False,
-                        weight_decay=1e-5):
+    def fit(self, x=None, y=None, batch_size=32, epochs=1, verbose=1,
+            callbacks=None, validation_data=None, shuffle=True,
+            initial_epoch=0, steps_per_epoch=None, validation_steps=None,
+            validation_freq=1, optimizer=None, learning_rate=0.001, **kwargs):
         """
-        Configure the Adam optimizer with custom parameters.
+        Train the model with a simplified progress bar.
 
         Args:
-            learning_rate: Learning rate
-            beta_1: Adam beta1 parameter
-            beta_2: Adam beta2 parameter
-            epsilon: Adam epsilon
-            amsgrad: Whether to use AMSGrad variant
-            weight_decay: L2 regularization factor
+            x: Input data.
+            y: Target data.
+            batch_size: Number of samples per gradient update.
+            epochs: Number of epochs to train.
+            verbose: 0 = silent, 1 = progress bar, 2 = one line per epoch.
+            callbacks: List of callbacks to apply during training.
+            validation_data: Data for validation.
+            shuffle: Whether to shuffle data before each epoch.
+            initial_epoch: Epoch at which to start training.
+            steps_per_epoch: Number of steps per epoch.
+            validation_steps: Number of validation steps.
+            validation_freq: Validation frequency.
+            optimizer: TensorFlow optimizer (if None, uses already compiled optimizer).
+            learning_rate: Learning rate for optimizer (only used if optimizer is None).
+
+        Returns:
+            A History object with training metrics.
+        """
+
+        # Set optimizer if provided
+        if optimizer is not None:
+            self.optimizer = optimizer
+        elif not hasattr(self, 'optimizer') or self.optimizer is None:
+            # Create default optimizer if none exists
+            self.optimizer = tensorflow.keras.optimizers.Adam(learning_rate=learning_rate)
+
+        # Prepare the dataset
+        if isinstance(x, tensorflow.data.Dataset):
+            train_dataset = x
+        else:
+            if y is None:
+                y = x
+            train_dataset = tensorflow.data.Dataset.from_tensor_slices((x, y))
+            if shuffle:
+                train_dataset = train_dataset.shuffle(buffer_size=len(x))
+            train_dataset = train_dataset.batch(batch_size)
+
+        # Calculate steps per epoch if not provided
+        if steps_per_epoch is None:
+            steps_per_epoch = len(train_dataset)
+
+        # History to store metrics
+        history = {'loss': [], 'reconstruction_loss': [], 'kl_loss': []}
+
+        # Training loop
+        for epoch in range(initial_epoch, epochs):
+            self._total_loss_tracker.reset_state()
+            self._reconstruction_loss_tracker.reset_state()
+            self._kl_loss_tracker.reset_state()
+
+            # Trackers for epoch metrics
+            epoch_losses = []
+            epoch_recon_losses = []
+            epoch_kl_losses = []
+
+            if verbose == 1:
+                print(f'\nEpoch {epoch + 1}/{epochs}')
+
+            # Progress tracking
+            step = 0
+            for batch_data in train_dataset:
+                step += 1
+
+                # Perform training step
+                metrics = self.train_step(batch_data)
+                current_loss = float(metrics['loss'])
+                current_recon_loss = float(metrics['reconstruction_loss'])
+                current_kl_loss = float(metrics['kl_loss'])
+
+                # Track losses for this epoch
+                epoch_losses.append(current_loss)
+                epoch_recon_losses.append(current_recon_loss)
+                epoch_kl_losses.append(current_kl_loss)
+
+                # Simple progress bar
+                if verbose == 1:
+                    progress = int(50 * step / steps_per_epoch)
+                    bar = '=' * progress + '>' + '.' * (50 - progress - 1)
+                    print(
+                        f'\r[{bar}] {step}/{steps_per_epoch} - loss: {current_loss:.4f} - recon_loss: {current_recon_loss:.4f} - kl_loss: {current_kl_loss:.4f}',
+                        end='', flush=True)
+
+                if step >= steps_per_epoch:
+                    break
+
+            # Store epoch losses
+            epoch_loss = float(self._total_loss_tracker.result())
+            epoch_recon_loss = numpy.mean(epoch_recon_losses) if epoch_recon_losses else 0.0
+            epoch_kl_loss = numpy.mean(epoch_kl_losses) if epoch_kl_losses else 0.0
+
+            history['loss'].append(epoch_loss)
+            history['reconstruction_loss'].append(epoch_recon_loss)
+            history['kl_loss'].append(epoch_kl_loss)
+
+            if verbose == 1:
+                print(f' - loss: {epoch_loss:.4f} - recon_loss: {epoch_recon_loss:.4f} - kl_loss: {epoch_kl_loss:.4f}')
+            elif verbose == 2:
+                print(
+                    f'Epoch {epoch + 1}/{epochs} - loss: {epoch_loss:.4f} - recon_loss: {epoch_recon_loss:.4f} - kl_loss: {epoch_kl_loss:.4f}')
+
+            # Validation
+            if validation_data is not None and (epoch + 1) % validation_freq == 0:
+                val_loss = self._evaluate_validation(validation_data, validation_steps)
+                if 'val_loss' not in history:
+                    history['val_loss'] = []
+                history['val_loss'].append(val_loss)
+
+                if verbose >= 1:
+                    print(f' - val_loss: {val_loss:.4f}')
+
+            # Callbacks
+            if callbacks is not None:
+                for callback in callbacks:
+                    if hasattr(callback, 'on_epoch_end'):
+                        callback.on_epoch_end(epoch, {
+                            'loss': epoch_loss,
+                            'reconstruction_loss': epoch_recon_loss,
+                            'kl_loss': epoch_kl_loss
+                        })
+
+        # Return history object
+        class History:
+            def __init__(self, history_dict):
+                self.history = history_dict
+
+        return History(history)
+
+    def _evaluate_validation(self, validation_data, validation_steps=None):
+        """
+        Evaluate the model on validation data.
+
+        Args:
+            validation_data: Validation dataset (tf.data.Dataset or tuple).
+            validation_steps: Number of validation steps.
+
+        Returns:
+            Average validation loss.
+        """
+        val_losses = []
+        val_recon_losses = []
+        val_kl_losses = []
+        step = 0
+
+        # Prepare validation dataset
+        if isinstance(validation_data, tensorflow.data.Dataset):
+            val_dataset = validation_data
+        else:
+            val_x, val_y = validation_data
+            val_dataset = tensorflow.data.Dataset.from_tensor_slices((val_x, val_y))
+            val_dataset = val_dataset.batch(32)
+
+        for batch_data in val_dataset:
+            batch_x, batch_y = batch_data
+
+            # Forward pass through encoder and decoder
+            latent_mean, latent_log_variation, latent, label = self._encoder(batch_x, training=False)
+            reconstruction_data = self._decoder([latent, label], training=False)
+
+            # Calculate binary cross-entropy loss for reconstruction
+            binary_cross_entropy_loss = tensorflow.keras.losses.binary_crossentropy(batch_y, reconstruction_data)
+            sum_reduced = binary_cross_entropy_loss
+            reconstruction_loss = tensorflow.reduce_mean(sum_reduced)
+
+            # Calculate KL divergence loss
+            encoder_output = (1 + latent_log_variation - tensorflow.square(latent_mean))
+            kl_divergence_loss = -0.5 * (encoder_output - tensorflow.exp(latent_log_variation))
+            kl_divergence_loss = tensorflow.reduce_mean(tensorflow.reduce_sum(kl_divergence_loss, axis=1))
+
+            # Total loss
+            total_loss = reconstruction_loss + kl_divergence_loss
+
+            val_losses.append(float(total_loss))
+            val_recon_losses.append(float(reconstruction_loss))
+            val_kl_losses.append(float(kl_divergence_loss))
+
+            step += 1
+            if validation_steps is not None and step >= validation_steps:
+                break
+
+        return numpy.mean(val_losses) if val_losses else 0.0
+
+    @staticmethod
+    def calculate_samples_per_class(y_labels):
+        """
+        Calculate the distribution of samples per class from labels.
+
+        Args:
+            y_labels (array-like): Labels array
+
+        Returns:
+            dict: Dictionary with 'classes' and 'number_classes' keys
+        """
+        # Convert to numpy if needed
+        if tensorflow.is_tensor(y_labels):
+            y_labels = y_labels.numpy()
+
+        # Handle one-hot encoded labels
+        if len(y_labels.shape) == 2 and y_labels.shape[1] > 1:
+            y_labels = numpy.argmax(y_labels, axis=1)
+
+        # Count samples per class
+        unique, counts = numpy.unique(y_labels, return_counts=True)
+
+        return {
+            "classes": dict(zip(unique.tolist(), counts.tolist())),
+            "number_classes": len(unique)
+        }
+
+    def configure_optimizer(self,
+                            learning_rate=0.001,
+                            beta_1=0.9,
+                            beta_2=0.999,
+                            epsilon=1e-7,
+                            amsgrad=False,
+                            weight_decay=1e-5):
+        """
+        Configure the Adam optimizer with custom parameters.
         """
         self.optimizer = tensorflow.keras.optimizers.Adam(
             learning_rate=learning_rate,
@@ -263,6 +469,9 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
             amsgrad=amsgrad,
             decay=weight_decay
         )
+
+        # FIX: Compile the model after setting up the optimizer
+        self.compile(optimizer=self.optimizer)
 
     def get_decoder_trained(self):
 

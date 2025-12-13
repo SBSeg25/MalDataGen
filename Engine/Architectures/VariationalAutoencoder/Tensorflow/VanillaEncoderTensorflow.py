@@ -191,13 +191,16 @@ class VanillaEncoderTensorflow(Activations, LayerSampling):
         self._encoder_number_samples_per_class = number_samples_per_class
         self._encoder_model = None
 
-    def get_encoder(self) -> Model:
+    def get_encoder(self, input_shape=None) -> Model:
         """
         Constructs and returns the encoder model.
 
         The encoder combines input features and labels into a conditional representation
         that maps to a latent space. The model uses variational layers for mean and log variance,
         enabling sampling in the latent space.
+
+        Args:
+            input_shape: Optional input shape (for API compatibility with PyTorch version, not used)
 
         Returns:
             Model: The constructed encoder model.
@@ -213,17 +216,19 @@ class VanillaEncoderTensorflow(Activations, LayerSampling):
         initialization = RandomNormal(mean=self._encoder_initializer_mean, stddev=self._encoder_initializer_deviation)
 
         # Input layer for feature data
-        neural_model_inputs = Input(shape=(self._encoder_output_shape,), dtype=self._encoder_dataset_type, name="first_input")
+        neural_model_inputs = Input(shape=(self._encoder_output_shape,), dtype=self._encoder_dataset_type,
+                                    name="first_input")
 
         # Input layer for class labels
         label_input = Input(shape=(self._encoder_number_samples_per_class["number_classes"],),
                             dtype=self._encoder_dataset_type, name="second_input")
-        label_input_embedding = Dense(8, activation='relu') (label_input)
+        label_input_embedding = Dense(8, activation='relu')(label_input)
         # Concatenate feature and label inputs
         concatenate_input = Concatenate()([neural_model_inputs, label_input_embedding])
 
         # Build encoder layers with dense and dropout
-        conditional_encoder = Dense(self._encoder_number_neurons_encoder[0], kernel_initializer=initialization)(concatenate_input)
+        conditional_encoder = Dense(self._encoder_number_neurons_encoder[0], kernel_initializer=initialization)(
+            concatenate_input)
         conditional_encoder = Dropout(self._encoder_dropout_decay_rate_encoder)(conditional_encoder)
         conditional_encoder = self._add_activation_layer(conditional_encoder, self._encoder_activation_function)
 
@@ -249,7 +254,6 @@ class VanillaEncoderTensorflow(Activations, LayerSampling):
                                     [latent_mean, latent_log_var, latent, label_input], name="Encoder")
 
         return self._encoder_model
-
     @property
     def dropout_decay_rate_encoder(self) -> float:
         """float: Dropout rate for encoder regularization."""

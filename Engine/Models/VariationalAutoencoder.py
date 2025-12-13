@@ -130,44 +130,36 @@ class VariationalAutoencoder:
             beta_2: float = 0.999,
             algorithm: VariationalAutoencoderAlgorithm | None = None,
             model: VariationalAutoencoderModel | None = None,
+            number_samples_per_class: dict | None = None,  # FIX: Add this parameter
     ) -> None:
         """
         Initializes the variational autoencoder instance with configuration parameters.
 
         Args:
-            latent_dimension: Latent space dimension (default: 32)
-            training_algorithm: Training algorithm (default: "Adam")
-            activation_function: Activation function (default: "swish")
-            dropout_decay_rate_encoder: Encoder dropout rate (default: 0.25)
-            dropout_decay_rate_decoder: Decoder dropout rate (default: 0.25)
-            dense_layer_sizes_encoder: Encoder layer sizes (default: [320, 160])
-            dense_layer_sizes_decoder: Decoder layer sizes (default: [160, 320])
-            batch_size: Batch size (default: 64)
-            number_epochs: Training epochs (default: 300)
-            number_classes: Number of classes (default: 2)
-            loss_function: Loss function (default: "binary_crossentropy")
-            momentum: Momentum parameter (default: 0.8)
-            last_activation_layer: Last layer activation (default: "sigmoid")
-            initializer_mean: Weight init mean (default: 0)
-            initializer_deviation: Weight init std dev (default: 0.125)
-            latent_mean_distribution: Latent distribution mean (default: 0.5)
-            latent_stander_deviation: Latent distribution std dev (default: 0.125)
-            file_name_encoder: Encoder filename (default: "encoder_model")
-            file_name_decoder: Decoder filename (default: "decoder_model")
-            path_output_models: Output models path (default: "models_saved/")
-            learning_rate: Learning rate (default: 0.001)
-            beta_1: Beta1 optimizer parameter (default: 0.9)
-            beta_2: Beta2 optimizer parameter (default: 0.999)
-            algorithm: Optional pre-initialized VariationalAutoencoderAlgorithm (default: None)
-            model: Optional pre-initialized VariationalAutoencoderModel (default: None)
-            number_samples_per_class: Optional class distribution information (default: None)
+            # ... (previous args remain the same) ...
+            number_samples_per_class: Optional dictionary containing class distribution info
+                Expected structure: {"number_classes": int, "classes": {class_id: count, ...}}
+                If None, will be constructed from number_classes parameter
         """
         # Store pre-initialized instances if provided
         self._variational_algorithm: VariationalAutoencoderAlgorithm | None = algorithm
         self._variational_model: VariationalAutoencoderModel | None = model
 
-        # Store class distribution information
-        self._number_samples_per_class: dict | None = number_classes
+        # FIX: Properly handle number_samples_per_class
+        if number_samples_per_class is None:
+            # If not provided, create basic structure with just number_classes
+            # The "classes" dict will need to be populated later based on actual data
+            self._number_samples_per_class: dict | None = {
+                "number_classes": number_classes,
+                "classes": {}  # Will be populated during training
+            }
+        else:
+            # Validate the provided dictionary
+            if not isinstance(number_samples_per_class, dict):
+                raise ValueError("number_samples_per_class must be a dictionary or None")
+            if "number_classes" not in number_samples_per_class:
+                raise ValueError("number_samples_per_class must contain 'number_classes' key")
+            self._number_samples_per_class: dict | None = number_samples_per_class
 
         # ** Variational autoencoder Model Configuration Parameters **
         self._variational_latent_dimension: int = latent_dimension
