@@ -8,7 +8,6 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
-from Engine.Architectures.Adversarial.AdversarialModel import AdversarialModel
 
 # MIT License
 #
@@ -45,7 +44,7 @@ try:
     from tensorflow.keras.optimizers import Adam
     from tensorflow.keras.utils import to_categorical
     from tensorflow.python.keras.losses import MeanSquaredError, BinaryCrossentropy
-
+    from Engine.Architectures.Adversarial.AdversarialModel import AdversarialModel
     from Engine.Algorithms.adversarial.AdversarialAlgorithm import AdversarialAlgorithm
 
 except ImportError as error:

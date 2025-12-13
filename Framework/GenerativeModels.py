@@ -8,6 +8,8 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
+from Engine.Algorithms.variational_autoencoder.VariationalAutoencoderAlgorithm import VariationalAutoencoderAlgorithm
+
 # MIT License
 # (License text omitted for brevity)
 
@@ -209,6 +211,7 @@ class GenerativeModels:
             ema=args.latent_diffusion_ema,
             time_steps=args.latent_diffusion_time_steps
         )
+
 
         # Initialize wasserstein Model
         self._wasserstein_algorithm = Wasserstein(

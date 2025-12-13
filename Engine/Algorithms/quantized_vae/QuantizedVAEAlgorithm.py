@@ -8,8 +8,8 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/12/07'
 __credits__ = ['Synthetic Ocean AI']
 
-from Engine.Algorithms.QuantizedVAE.Tensorflow.AlgorithmQuantizedVAETensorflow import QuantizedVAEAlgorithmTensorflow
-from Engine.Algorithms.QuantizedVAE.Torch.AlgorithmQuantizedVAETorch import QuantizedVAEAlgorithmTorch
+from Engine.Algorithms.quantized_vae.Tensorflow.AlgorithmQuantizedVAETensorflow import QuantizedVAEAlgorithmTensorflow
+from Engine.Algorithms.quantized_vae.Torch.AlgorithmQuantizedVAETorch import QuantizedVAEAlgorithmTorch
 
 # MIT License
 #

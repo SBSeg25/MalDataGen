@@ -8,8 +8,6 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Synthetic Ocean AI']
 
-from Engine.Architectures.QuantizedVAE.QuantizedVAEModel import QuantizedVAEModel
-from Engine.Algorithms.QuantizedVAE.QuantizedVAEAlgorithm import QuantizedVAEAlgorithm
 
 # MIT License
 #
@@ -39,6 +37,8 @@ try:
     import logging
     import torch
     import torch.nn.functional as F
+    from Engine.Architectures.QuantizedVAE.QuantizedVAEModel import QuantizedVAEModel
+    from Engine.Algorithms.quantized_vae.QuantizedVAEAlgorithm import QuantizedVAEAlgorithm
 
 except ImportError as error:
     logging.error(error)
@@ -116,8 +116,13 @@ class QuantizedVAE:
                  file_name_encoder: str = DEFAULT_QUANTIZED_VAE_FILE_NAME_ENCODER,
                  file_name_decoder: str = DEFAULT_QUANTIZED_VAE_FILE_NAME_DECODER,
                  path_output_models: str = DEFAULT_QUANTIZED_VAE_PATH_OUTPUT_MODELS,
+                 number_classes: int = DEFAULT_QUANTIZED_VAE_NUMBER_CLASSES,  # ADD THIS
                  algorithm: QuantizedVAEAlgorithm | None = None,
                  model: QuantizedVAEModel | None = None) -> None:
+
+
+        # ADD THIS LINE after the existing initializations:
+        self._number_samples_per_class = {"number_classes": number_classes}
         """
         Initializes the quantized VAE instance with configuration parameters.
 
@@ -270,19 +275,6 @@ class QuantizedVAE:
     ) -> None:
         """
         Executes the complete quantized VAE training process.
-
-        Args:
-            input_shape: Shape of input data samples
-            arguments: Configuration parameters namespace
-            x_real_samples: Training data samples
-            y_real_samples: Corresponding class labels
-
-        Process:
-            1. Initializes model architecture (or uses provided)
-            2. Configures optimizer and loss functions
-            3. Sets up training callbacks
-            4. Executes quantized VAE training
-            5. Manages model saving and monitoring
         """
         # Initialize the quantized VAE model (or use provided)
         self._get_quantized_vae(input_shape)
@@ -298,16 +290,32 @@ class QuantizedVAE:
         if self._quantized_vae_algorithm is None:
             raise ValueError("QuantizedVAEAlgorithm instance is required but was not provided or created.")
 
-        # Compile the quantized VAE algorithm with the specified optimizer
-        optimizer = torch.optim.Adam(
-            self._quantized_vae_algorithm._quantized_vae_model.parameters(),
-            lr=0.0001
-        )
+        # Determine framework and compile with appropriate optimizer
+        framework = getattr(self._quantized_vae_algorithm, '_framework', 'tensorflow').lower()
+
+        if framework == 'pytorch':
+            import torch
+            optimizer = torch.optim.Adam(
+                self._quantized_vae_algorithm._quantized_vae_model.parameters(),
+                lr=0.0001
+            )
+        else:
+            from tensorflow.keras.optimizers import Adam
+            optimizer = Adam(learning_rate=0.0001)
+
         self._quantized_vae_algorithm.compile(optimizer=optimizer)
 
-        callbacks_list = [self._callback_resources_monitor, self._callback_model_monitor]
+        # Build callbacks list, only including callbacks that exist
+        callbacks_list = []
 
-        if arguments.use_early_stop:
+        if hasattr(self, '_callback_resources_monitor') and self._callback_resources_monitor is not None:
+            callbacks_list.append(self._callback_resources_monitor)
+
+        if hasattr(self, '_callback_model_monitor') and self._callback_model_monitor is not None:
+            callbacks_list.append(self._callback_model_monitor)
+
+        if (hasattr(arguments, 'use_early_stop') and arguments.use_early_stop and
+                hasattr(self, '_callback_early_stop') and self._callback_early_stop is not None):
             callbacks_list.append(self._callback_early_stop)
 
         # Convert labels to one-hot encoding
@@ -321,9 +329,8 @@ class QuantizedVAE:
             x_real_samples,
             epochs=self._quantized_vae_number_epochs,
             batch_size=self._quantized_vae_batch_size,
-            callbacks=callbacks_list
+            callbacks=callbacks_list if callbacks_list else None
         )
-
     # Additional getters for the algorithm and model
     @property
     def quantized_vae_algorithm(self) -> QuantizedVAEAlgorithm | None:
