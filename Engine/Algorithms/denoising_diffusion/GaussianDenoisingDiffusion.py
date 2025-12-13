@@ -39,11 +39,11 @@ try:
 
     if framework == "pytorch":
         # Import the CLASS, not the module
-        from Engine.Algorithms.DenoisingDiffusion.Torch.GaussianDenoisingDiffusionTorch import \
+        from Engine.Algorithms.denoising_diffusion.Torch.GaussianDenoisingDiffusionTorch import \
             GaussianDiffusionTorch as GaussianDenoisingDiffusionBase
     else:
         # Import the CLASS, not the module
-        from Engine.Algorithms.DenoisingDiffusion.Tensorflow.GaussianDenoisingDiffusionTensorflow import \
+        from Engine.Algorithms.denoising_diffusion.Tensorflow.GaussianDenoisingDiffusionTensorflow import \
             GaussianDenoisingDiffusionTensorflow as GaussianDenoisingDiffusionBase
 
 except ImportError as error:

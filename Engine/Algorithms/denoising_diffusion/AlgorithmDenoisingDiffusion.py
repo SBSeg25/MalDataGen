@@ -38,9 +38,9 @@ try:
     import logging
 
     framework = os.getenv("ML_FRAMEWORK", "Tensorflow").lower()
-    from Engine.Algorithms.DenoisingDiffusion.Tensorflow.AlgorithmDenoisingDiffusionTensorflow import \
+    from Engine.Algorithms.denoising_diffusion.Tensorflow.AlgorithmDenoisingDiffusionTensorflow import \
         AlgorithmDenoisingDiffusionTensorflow
-    from Engine.Algorithms.DenoisingDiffusion.Torch.AlgorithmDenoisingDiffusionTorch import \
+    from Engine.Algorithms.denoising_diffusion.Torch.AlgorithmDenoisingDiffusionTorch import \
         AlgorithmDenoisingDiffusionTorch
 
     if framework == "pytorch":

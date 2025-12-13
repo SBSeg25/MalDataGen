@@ -17,11 +17,11 @@ try:
     from torch.utils.data import DataLoader, TensorDataset
     from Engine.Architectures.DenoisingDiffusion.Torch.DenoisingDiffusionUnetModelTorch import \
         DenoisingDiffusionUNetModelTorch
-    from Engine.Algorithms.DenoisingDiffusion.Torch.GaussianDenoisingDiffusionTorch import \
+    from Engine.Algorithms.denoising_diffusion.Torch.GaussianDenoisingDiffusionTorch import \
         GaussianDiffusionTorch
-    from Engine.Algorithms.DenoisingDiffusion.Torch.AlgorithmDenoisingDiffusionTorch import \
+    from Engine.Algorithms.denoising_diffusion.Torch.AlgorithmDenoisingDiffusionTorch import \
         AlgorithmDenoisingDiffusionTorch
-    from Engine.Algorithms.DenoisingDiffusion.GaussianDenoisingDiffusion import GaussianDenoisingDiffusion
+    from Engine.Algorithms.denoising_diffusion.GaussianDenoisingDiffusion import GaussianDenoisingDiffusion
 
 except ImportError as error:
     logging.error(error)
@@ -437,11 +437,11 @@ class DenoisingDiffusion:
             ) from e
 
         try:
-            from Engine.Algorithms.DenoisingDiffusion.AlgorithmDenoisingDiffusion import \
+            from Engine.Algorithms.denoising_diffusion.AlgorithmDenoisingDiffusion import \
                 AlgorithmDenoisingDiffusion
         except ImportError:
             try:
-                from Engine.Algorithms.DenoisingDiffusion.Tensorflow.AlgorithmDenoisingDiffusion import \
+                from Engine.Algorithms.denoising_diffusion.Tensorflow.AlgorithmDenoisingDiffusion import \
                     AlgorithmDenoisingDiffusion
             except ImportError as e:
                 raise ImportError(
