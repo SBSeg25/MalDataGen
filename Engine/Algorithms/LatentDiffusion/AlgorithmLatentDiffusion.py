@@ -38,7 +38,6 @@ try:
     import sys
     import logging
 
-
     framework = os.getenv("ML_FRAMEWORK", "tensorflow").lower()
 
     if framework == "pytorch":

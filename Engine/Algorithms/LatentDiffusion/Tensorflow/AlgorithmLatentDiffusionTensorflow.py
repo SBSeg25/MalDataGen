@@ -5,9 +5,8 @@ __author__ = 'Kayuã Oleques Paim'
 __email__ = 'kayuaolequesp@gmail.com'
 __version__ = '{1}.{0}.{1}'
 __initial_data__ = '2022/06/01'
-__last_update__ = '2025/03/29'
+__last_update__ = '2025/12/13'
 __credits__ = ['Kayuã Oleques']
-
 
 # MIT License
 #
@@ -42,7 +41,7 @@ try:
     from typing import Any
 
     from tensorflow.keras.utils import to_categorical
-
+    from tensorflow.keras.metrics import Mean
 except ImportError as error:
     print(error)
     sys.exit(-1)
@@ -182,6 +181,7 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
         self._optimizer_diffusion = optimizer_diffusion
         self._optimizer_autoencoder = optimizer_autoencoder
 
+        self._total_loss_tracker = Mean(name="loss")
 
     def set_stage_training(self, training_stage):
         """
@@ -204,11 +204,17 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
         """
         raw_data, label = data
 
-        loss_encoder, loss_diffusion = None, None
-
         loss_diffusion = self.train_diffusion_model(raw_data, label)
         self.update_ema_weights()
-        return {"Diffusion_loss": loss_diffusion if loss_diffusion is not None else 0}
+
+        # Update the loss tracker
+        self._total_loss_tracker.update_state(loss_diffusion)
+
+        # Return both 'loss' and 'Diffusion_loss' for compatibility
+        return {
+            "loss": loss_diffusion if loss_diffusion is not None else 0,
+            "Diffusion_loss": loss_diffusion if loss_diffusion is not None else 0
+        }
 
     def train_diffusion_model(self, data, ground_truth):
         """
@@ -240,7 +246,6 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
         loss_diffusion = 0
         # Track gradients for the diffusion model's weights
         with tensorflow.GradientTape() as tape:
-
             # Sample random noise to add to the data (same shape as the data itself)
             random_noise = tensorflow.random.normal(shape=tensorflow.shape(embedding_data_expanded),
                                                     dtype=embedding_data_expanded.dtype)
@@ -264,6 +269,174 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
 
         # Return the computed diffusion loss for monitoring
         return loss_diffusion
+
+    def fit(self, x=None, y=None, batch_size=32, epochs=1, verbose=1,
+            callbacks=None, validation_data=None, shuffle=True,
+            initial_epoch=0, steps_per_epoch=None, validation_steps=None,
+            validation_freq=1, optimizer=None, learning_rate=0.001, **kwargs):
+        """
+        Train the model with a simplified progress bar.
+
+        Args:
+            x: Input data.
+            y: Target data.
+            batch_size: Number of samples per gradient update.
+            epochs: Number of epochs to train.
+            verbose: 0 = silent, 1 = progress bar, 2 = one line per epoch.
+            callbacks: List of callbacks to apply during training.
+            validation_data: Data for validation.
+            shuffle: Whether to shuffle data before each epoch.
+            initial_epoch: Epoch at which to start training.
+            steps_per_epoch: Number of steps per epoch.
+            validation_steps: Number of validation steps.
+            validation_freq: Validation frequency.
+            optimizer: TensorFlow optimizer (if None, uses already compiled optimizer).
+            learning_rate: Learning rate for optimizer (only used if optimizer is None).
+
+        Returns:
+            A History object with training metrics.
+        """
+
+        # Set optimizer if provided
+        if optimizer is not None:
+            self.optimizer = optimizer
+        elif not hasattr(self, 'optimizer') or self.optimizer is None:
+            # Create default optimizer if none exists
+            self.optimizer = tensorflow.keras.optimizers.Adam(learning_rate=learning_rate)
+
+        # Prepare the dataset
+        if isinstance(x, tensorflow.data.Dataset):
+            train_dataset = x
+        else:
+            if y is None:
+                y = x
+            train_dataset = tensorflow.data.Dataset.from_tensor_slices((x, y))
+            if shuffle:
+                train_dataset = train_dataset.shuffle(buffer_size=len(x))
+            train_dataset = train_dataset.batch(batch_size)
+
+        # Calculate steps per epoch if not provided
+        if steps_per_epoch is None:
+            steps_per_epoch = len(train_dataset)
+
+        # History to store metrics
+        history = {'loss': [], 'Diffusion_loss': []}
+
+        # Training loop
+        for epoch in range(initial_epoch, epochs):
+            self._total_loss_tracker.reset_state()
+
+            if verbose == 1:
+                print(f'\nEpoch {epoch + 1}/{epochs}')
+
+            # Progress tracking
+            step = 0
+            epoch_losses = []
+
+            for batch_data in train_dataset:
+                step += 1
+
+                # Perform training step
+                metrics = self.train_step(batch_data)
+                current_loss = float(metrics.get('loss', 0))
+                epoch_losses.append(current_loss)
+
+                # Simple progress bar
+                if verbose == 1:
+                    progress = int(50 * step / steps_per_epoch)
+                    bar = '=' * progress + '>' + '.' * (50 - progress - 1)
+                    print(f'\r[{bar}] {step}/{steps_per_epoch} - loss: {current_loss:.4f}',
+                          end='', flush=True)
+
+                if step >= steps_per_epoch:
+                    break
+
+            # Store epoch loss
+            epoch_loss = float(self._total_loss_tracker.result())
+            if len(epoch_losses) > 0:
+                epoch_loss = numpy.mean(epoch_losses)
+
+            history['loss'].append(epoch_loss)
+            history['Diffusion_loss'].append(epoch_loss)
+
+            if verbose == 1:
+                print(f' - loss: {epoch_loss:.4f}')
+            elif verbose == 2:
+                print(f'Epoch {epoch + 1}/{epochs} - loss: {epoch_loss:.4f}')
+
+            # Validation
+            if validation_data is not None and (epoch + 1) % validation_freq == 0:
+                val_loss = self._evaluate_validation(validation_data, validation_steps)
+                if 'val_loss' not in history:
+                    history['val_loss'] = []
+                history['val_loss'].append(val_loss)
+
+                if verbose >= 1:
+                    print(f' - val_loss: {val_loss:.4f}')
+
+            # Callbacks
+            if callbacks is not None:
+                for callback in callbacks:
+                    if hasattr(callback, 'on_epoch_end'):
+                        callback.on_epoch_end(epoch, {'loss': epoch_loss})
+
+        # Return history object
+        class History:
+            def __init__(self, history_dict):
+                self.history = history_dict
+
+        return History(history)
+
+    def _evaluate_validation(self, validation_data, validation_steps=None):
+        """
+        Evaluate the model on validation data.
+
+        Args:
+            validation_data: Validation dataset.
+            validation_steps: Number of validation steps.
+
+        Returns:
+            Average validation loss.
+        """
+        val_losses = []
+        step = 0
+
+        for batch_data in validation_data:
+            batch_x, batch_y = batch_data
+
+            # Use the diffusion model for validation
+            batch_size = tensorflow.shape(batch_x)[0]
+            random_time_steps = tensorflow.random.uniform(
+                minval=0,
+                maxval=self._time_steps,
+                shape=(batch_size,),
+                dtype=tensorflow.int32
+            )
+
+            random_noise = tensorflow.random.normal(
+                shape=tensorflow.shape(batch_x),
+                dtype=batch_x.dtype
+            )
+
+            embedding_with_noise = self._gdf_util.q_sample(
+                batch_x,
+                random_time_steps,
+                random_noise
+            )
+
+            predicted_noise = self._network(
+                [embedding_with_noise, random_time_steps, batch_y],
+                training=False
+            )
+
+            loss = tensorflow.reduce_mean(tensorflow.square(random_noise - predicted_noise))
+            val_losses.append(float(loss))
+
+            step += 1
+            if validation_steps is not None and step >= validation_steps:
+                break
+
+        return numpy.mean(val_losses) if val_losses else 0.0
 
     def update_ema_weights(self):
         """
@@ -296,7 +469,6 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
 
         # Reverse the diffusion process by iterating over the time steps (from T to 0)
         for time_step in reversed(range(0, self._time_steps)):
-
             # Create an array with the current time step for each sample in the batch
             array_time = tensorflow.cast(tensorflow.fill([labels_vector.shape[0]], time_step),
                                          dtype=tensorflow.int32)
@@ -310,11 +482,11 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
                                                           clip_denoised=True)
 
         # Use the decoder model to transform the denoised embeddings into real data samples
-        generated_data = self._decoder_model_data.predict([embedding_diffusion, labels_vector], verbose=0, batch_size=batch_size // 4)
+        generated_data = self._decoder_model_data.predict([embedding_diffusion, labels_vector], verbose=0,
+                                                          batch_size=batch_size // 4)
 
         # Return the generated data
         return generated_data
-
 
     @staticmethod
     def _crop_tensor_to_original_size(tensor: numpy.ndarray, original_size: int) -> numpy.ndarray:
@@ -354,7 +526,6 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
 
         # Slice the tensor along axis 1 (sequence length) to crop the excess at the end
         return tensor[:, :original_size, :]
-
 
     def _padding_input_tensor(self, input_tensor):
         """
@@ -408,7 +579,6 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
 
         return padded_tensor
 
-
     def get_samples(self, number_samples_per_class):
         """
         Generates synthetic data samples for each class, using the specified number of samples per class.
@@ -430,7 +600,8 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
                                                      num_classes=number_samples_per_class["number_classes"])
 
             # Generate synthetic data using the diffusion model (or another generation method)
-            generated_samples = self.generate_data(numpy.array(label_samples_generated, dtype=numpy.float32), batch_size=64)
+            generated_samples = self.generate_data(numpy.array(label_samples_generated, dtype=numpy.float32),
+                                                   batch_size=64)
 
             # Round the generated samples to ensure valid output format (e.g., pixel values)
             generated_samples = numpy.rint(generated_samples)
@@ -442,7 +613,7 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
 
     def save_model(self, directory, file_name):
         """
-        Save the encoder and decoder models in both JSON and H5 formats.
+        Save the encoder and decoder models in Keras native format.
 
         Args:
             directory (str): Directory where models will be saved.
@@ -452,26 +623,59 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
             os.makedirs(directory)
 
         # Construct file names for encoder and decoder models
-        encoder_file_name = os.path.join(directory, f"{file_name}_encoder")
-        decoder_file_name = os.path.join(directory, f"{file_name}_decoder")
-        first_unet_file_name = os.path.join(directory, f"{file_name}_first_unet")
-        second_unet_file_name = os.path.join(directory, f"{file_name}_second_unet")
+        encoder_file_name = os.path.join(directory, f"{file_name}_encoder.keras")
+        decoder_file_name = os.path.join(directory, f"{file_name}_decoder.keras")
+        first_unet_file_name = os.path.join(directory, f"{file_name}_first_unet.keras")
+        second_unet_file_name = os.path.join(directory, f"{file_name}_second_unet.keras")
 
-        # Save encoder model
-        self._save_model_to_json(self._encoder_model_data, f"{encoder_file_name}.json")
-        self._encoder_model_data.save_weights(f"{encoder_file_name}.weights.h5")
+        # Remove old files if they exist
+        for file_path in [encoder_file_name, decoder_file_name, first_unet_file_name, second_unet_file_name]:
+            if os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                    print(f"Removed existing file: {file_path}")
+                except Exception as e:
+                    print(f"Warning: Could not remove {file_path}: {e}")
 
-        # Save decoder model
-        self._save_model_to_json(self._decoder_model_data, f"{decoder_file_name}.json")
-        self._decoder_model_data.save_weights(f"{decoder_file_name}.weights.h5")
+        try:
+            # Save encoder model
+            self._encoder_model_data.save(encoder_file_name)
+            print(f"Encoder model saved to {encoder_file_name}")
+        except Exception as e:
+            print(f"Error saving encoder: {e}")
+            # Fallback to JSON + weights
+            self._save_model_to_json(self._encoder_model_data, f"{encoder_file_name}.json")
+            self._encoder_model_data.save_weights(f"{encoder_file_name}.weights.h5")
 
-        # Save encoder model
-        self._save_model_to_json(self._network, f"{first_unet_file_name}.json")
-        self._network.save_weights(f"{first_unet_file_name}.weights.h5")
+        try:
+            # Save decoder model
+            self._decoder_model_data.save(decoder_file_name)
+            print(f"Decoder model saved to {decoder_file_name}")
+        except Exception as e:
+            print(f"Error saving decoder: {e}")
+            # Fallback to JSON + weights
+            self._save_model_to_json(self._decoder_model_data, f"{decoder_file_name}.json")
+            self._decoder_model_data.save_weights(f"{decoder_file_name}.weights.h5")
 
-        # Save decoder model
-        self._save_model_to_json(self._second_unet_model, f"{second_unet_file_name}.json")
-        self._second_unet_model.save_weights(f"{second_unet_file_name}.weights.h5")
+        try:
+            # Save first UNet model
+            self._network.save(first_unet_file_name)
+            print(f"First UNet model saved to {first_unet_file_name}")
+        except Exception as e:
+            print(f"Error saving first UNet: {e}")
+            # Fallback to JSON + weights
+            self._save_model_to_json(self._network, f"{first_unet_file_name}.json")
+            self._network.save_weights(f"{first_unet_file_name}.weights.h5")
+
+        try:
+            # Save second UNet model
+            self._second_unet_model.save(second_unet_file_name)
+            print(f"Second UNet model saved to {second_unet_file_name}")
+        except Exception as e:
+            print(f"Error saving second UNet: {e}")
+            # Fallback to JSON + weights
+            self._save_model_to_json(self._second_unet_model, f"{second_unet_file_name}.json")
+            self._second_unet_model.save_weights(f"{second_unet_file_name}.weights.h5")
 
     @staticmethod
     def _save_model_to_json(model, file_path):
@@ -484,14 +688,13 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
         """
 
         try:
-            # Tenta salvar o modelo como JSON
+            # Try to save the model as JSON
             with open(file_path, "w") as json_file:
                 json.dump(model.to_json(), json_file)
-            print(f"Model successfully saved to {file_path}.")
+            print(f"Model architecture successfully saved to {file_path}.")
 
         except Exception as e:
-
-            # Em caso de erro, salva a mensagem de erro no arquivo
+            # In case of error, save the error message to the file
             error_message = f"Error occurred while saving model: {str(e)}"
 
             with open(file_path, "w") as error_file:
@@ -719,6 +922,3 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
             value: The optimizer instance to set.
         """
         self._optimizer_autoencoder = value
-
-
-
