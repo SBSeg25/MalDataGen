@@ -113,7 +113,7 @@ class AutoencoderAlgorithmTensorflow(Model):
         ...     latent_dimension=64
         ...     )
         ...     autoencoder.compile(optimizer=Tensorflow.keras.optimizers.Adam(learning_rate=0.001))
-        >>> autoencoder.fit_model(train_dataset, epochs=50)
+        >>> autoencoder.fit(train_dataset, epochs=50)
     """
 
     def __init__(self,
@@ -368,31 +368,6 @@ class AutoencoderAlgorithmTensorflow(Model):
 
         return History(history)
 
-    def _evaluate_validation(self, validation_data, validation_steps=None):
-        """
-        Evaluate the model on validation data.
-
-        Args:
-            validation_data: Validation dataset.
-            validation_steps: Number of validation steps.
-
-        Returns:
-            Average validation loss.
-        """
-        val_losses = []
-        step = 0
-
-        for batch_data in validation_data:
-            batch_x, batch_y = batch_data
-            reconstructed = self._encoder_decoder_model(batch_x, training=False)
-            loss = tensorflow.reduce_mean(tensorflow.square(batch_y - reconstructed))
-            val_losses.append(float(loss))
-
-            step += 1
-            if validation_steps is not None and step >= validation_steps:
-                break
-
-        return numpy.mean(val_losses) if val_losses else 0.0
     def _evaluate_validation(self, validation_data, validation_steps=None):
         """
         Evaluate the model on validation data.

@@ -113,7 +113,7 @@ class RandomForest:
             )
 
             logging.info("Fitting the Random Forest model to the training data.")
-            instance_model_classifier.fit_model(x_samples_training, y_samples_training)
+            instance_model_classifier.fit(x_samples_training, y_samples_training)
             logging.info("Finished training RANDOM FOREST model.")
             return instance_model_classifier
 

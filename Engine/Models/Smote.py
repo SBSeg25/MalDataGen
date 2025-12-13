@@ -136,8 +136,8 @@ class Smote:
         self._get_smote(input_shape)
 
         # Fit the autoencoder model
-        self._smote_algorithm.fit_model(x_real_samples,
-                                        to_categorical(y_real_samples,
+        self._smote_algorithm.fit(x_real_samples,
+                                  to_categorical(y_real_samples,
                                                  num_classes=self._number_samples_per_class["number_classes"]))
 
     @property

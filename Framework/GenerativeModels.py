@@ -319,22 +319,22 @@ class GenerativeModels:
 
         # Delegate to appropriate model
         if arguments.model_type == 'adversarial':
-            self._adversarial_algorithm.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
+            self._adversarial_algorithm.fit(input_shape, arguments, x_real_samples, y_real_samples)
 
         elif arguments.model_type == 'autoencoder':
             self._autoencoder_algorithm.fit_model(input_shape, arguments, x_real_samples, y_real_samples)
 
         elif arguments.model_type == 'random':
             self._get_random_noise(input_shape)
-            self._random_noise_algorithm.fit_model(x_real_samples,
-                                                   to_categorical(y_real_samples,
+            self._random_noise_algorithm.fit(x_real_samples,
+                                             to_categorical(y_real_samples,
                                                                   num_classes=self._number_samples_per_class[
                                                                       "number_classes"]))
 
         elif arguments.model_type == 'smote':
             self._get_smote(input_shape)
-            self._smote_algorithm._smote_algorithm.fit_model(x_real_samples,
-                                                             to_categorical(y_real_samples,
+            self._smote_algorithm._smote_algorithm.fit(x_real_samples,
+                                                       to_categorical(y_real_samples,
                                                                             num_classes=self._number_samples_per_class[
                                                                                 "number_classes"]))
 

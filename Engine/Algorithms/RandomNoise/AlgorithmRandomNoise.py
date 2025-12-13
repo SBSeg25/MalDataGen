@@ -87,7 +87,7 @@ class RandomNoiseAlgorithm:
     Example:
         >>> python
         ...     model = RandomAlgorithm(noise_level=0.1, noise_type='salt_and_pepper')
-        ...     model.fit_model(X_train, Y_train)
+        ...     model.fit(X_train, Y_train)
         ...     noisy_samples = model.predict([0, 1, 2])
         >>>     generated_samples = model.get_samples({"classes": {0: 5, 1: 10}})
 

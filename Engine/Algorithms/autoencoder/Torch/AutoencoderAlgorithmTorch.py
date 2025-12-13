@@ -94,7 +94,7 @@ class AutoencoderAlgorithmTorch(nn.Module):
         ...     latent_dimension=64
         ... )
         >>> autoencoder.compile(loss='mse')
-        >>> history = autoencoder.fit_model(x_train, y_train, epochs=50, batch_size=32)
+        >>> history = autoencoder.fit(x_train, y_train, epochs=50, batch_size=32)
     """
 
     def __init__(self,

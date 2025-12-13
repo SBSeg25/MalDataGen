@@ -459,7 +459,7 @@ class LatentDiffusion:
             callbacks_list.append(self._callback_early_stop)
 
         # Fit the diffusion model with the training data
-        self._latent_variational_algorithm.fit_model(
+        self._latent_variational_algorithm.fit(
             (x_real_samples, to_categorical(y_real_samples,
                                             num_classes=self._number_samples_per_class["number_classes"])),
             x_real_samples,

@@ -418,7 +418,7 @@ class DenoisingDiffusion:
         print("STARTING TRAINING")
         print("=" * 80 + "\n")
 
-        self._denoising_diffusion_algorithm.fit_model()
+        self._denoising_diffusion_algorithm.fit()
         best_loss = float('inf')
 
         for epoch in range(self._denoising_diffusion_unet_epochs):

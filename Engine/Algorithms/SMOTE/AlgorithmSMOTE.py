@@ -91,7 +91,7 @@ class SMOTEAlgorithm(BaseEstimator):
         >>> from sklearn.datasets import make_classification
         >>> X, y = make_classification(n_classes=2, weights=[0.1, 0.9])
         >>> smote = SMOTEAlgorithm(random_state=42, k_neighbors=5)
-        >>> X_resampled, y_resampled = smote.fit_model(X, y)
+        >>> X_resampled, y_resampled = smote.fit(X, y)
         >>> print(f"Original class distribution: {np.bincount(y)}")
         >>> print(f"Resampled class distribution: {np.bincount(y_resampled)}")
     """
@@ -159,7 +159,7 @@ class SMOTEAlgorithm(BaseEstimator):
                 X_class = numpy.tile(X_class, (repeat_factor, 1))[:self.k_neighbors + 1]
 
             # Fit the k-NN model to the samples of the target class
-            self.nn_k_.fit_model(X_class)
+            self.nn_k_.fit(X_class)
 
             # Get the indices of the k nearest neighbors for each sample, excluding the sample itself
             knn_kernels = self.nn_k_.kneighbors(X_class, return_distance=False)[:, 1:]
@@ -312,7 +312,7 @@ class SMOTEAlgorithm(BaseEstimator):
                 X_class = numpy.tile(X_class, (repeat_factor, 1))[:self.k_neighbors + 1]
 
             # Fit the nearest neighbors model using the samples from the current class
-            self.nn_k_.fit_model(X_class)
+            self.nn_k_.fit(X_class)
 
             # Compute the indices of k-nearest neighbors for each sample, excluding itself
             knn_kernels = self.nn_k_.kneighbors(X_class, return_distance=False)[:, 1:]

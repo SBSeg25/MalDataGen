@@ -115,7 +115,7 @@ class Perceptron:
 
             # Train the model
             logging.info("Fitting the MLP model to the training data.")
-            model_classifier.fit_model(x_samples_training, y_samples_training, epochs=self._perceptron_number_epochs, verbose=0)
+            model_classifier.fit(x_samples_training, y_samples_training, epochs=self._perceptron_number_epochs, verbose=0)
             logging.info("Finished training Multilayer Perceptron classifier.")
 
             return model_classifier

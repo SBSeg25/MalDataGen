@@ -331,7 +331,7 @@ class ClusteringVisualizer:
             Cluster labels as a NumPy array.
         """
         if self.cluster_algo == 'gaussian':
-            self.labels = self.cluster_model.fit_model(x_scaled).predict(x_scaled)
+            self.labels = self.cluster_model.fit(x_scaled).predict(x_scaled)
         else:
             self.labels = self.cluster_model.fit_predict(x_scaled)
 

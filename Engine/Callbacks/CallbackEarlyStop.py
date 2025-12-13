@@ -84,7 +84,7 @@ class EarlyStopping(Callback):
         ...     # This callback will stop training when there is no improvement in the loss for three consecutive epochs.
         ...     model = keras.models.Sequential([keras.layers.Dense(10)])
         ...     model.compile(keras.optimizers.SGD(), loss='mse')
-        ...     history = model.fit_model(np.arange(100).reshape(5, 20), np.zeros(5),
+        ...     history = model.fit(np.arange(100).reshape(5, 20), np.zeros(5),
         ...                         epochs=10, batch_size=1, callbacks=[callback], verbose=0)
         >>> len(history.history['loss'])  # Only 4 epochs are run.
 

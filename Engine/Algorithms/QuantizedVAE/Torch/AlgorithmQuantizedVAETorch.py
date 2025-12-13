@@ -99,7 +99,7 @@ class QuantizedVAEAlgorithmTorch:
         ...     models_saved_path="./saved_models/"
         ... )
         >>> vae.compile(optimizer=torch.optim.Adam(vae.parameters()))
-        >>> vae.fit_model(train_dataset, epochs=10)
+        >>> vae.fit(train_dataset, epochs=10)
         >>> generated_samples = vae.get_samples({
         ...     "classes": {0: 5, 1: 5},
         ...     "number_classes": 2
@@ -294,7 +294,7 @@ class QuantizedVAEAlgorithmTorch:
                     callback.on_train_begin()
 
         # Training loop
-        self._quantized_vae_model.fit_model()
+        self._quantized_vae_model.fit()
 
         for epoch in range(epochs):
             epoch_losses = {"loss": [], "reconstruction_loss": [], "vqvae_loss": []}

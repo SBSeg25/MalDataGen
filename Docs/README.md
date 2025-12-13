@@ -85,7 +85,8 @@ from SynDataGen.Engine.Algorithms.Diffusion.GaussianDiffusion import GaussianDif
 from SynDataGen.Engine.Models.Diffusion.VariationalAutoencoderModel import VariationalModelDiffusion
 
 from SynDataGen.Engine.Algorithms.Diffusion.AlgorithmVariationalAutoencoderDiffusion import
-    VariationalAlgorithmDiffusion
+
+VariationalAlgorithmDiffusion
 
 number_samples_per_class = {
     "classes": {1: 100, 2: 200, 3: 150},
@@ -190,7 +191,7 @@ data_embedding = variational_algorithm_diffusion.create_embedding(
 data_embedding = numpy.array(data_embedding)
 data_embedding = tensorflow.expand_dims(data_embedding, axis=-1)
 
-diffusion_algorithm.fit_model(
+diffusion_algorithm.fit(
     data_embedding, to_categorical(y_real_samples, num_classes=number_samples_per_class["number_classes"]),
     epochs=1000, batch_size=32, verbose=2)
 
@@ -282,7 +283,7 @@ adversarial_algorithm.compile(
     generator_optimizer, discriminator_optimizer, BinaryCrossentropy(), BinaryCrossentropy())
 
 # Fit the model with real samples and the corresponding labels
-adversarial_algorithm.fit_model(
+adversarial_algorithm.fit(
     x_real_samples, to_categorical(y_real_samples, num_classes=number_samples_per_class["number_classes"]),
     epochs=1000, batch_size=32)
 
@@ -400,9 +401,9 @@ wasserstein_algorithm.compile(generator_optimizer,
                               discriminator_loss)
 
 # Fit the WassersteinGP GAN model
-wasserstein_algorithm.fit_model(x_real_samples,
-                                to_categorical(y_real_samples, num_classes=number_samples_per_class["number_classes"]),
-                                epochs=1000, batch_size=32)
+wasserstein_algorithm.fit(x_real_samples,
+                          to_categorical(y_real_samples, num_classes=number_samples_per_class["number_classes"]),
+                          epochs=1000, batch_size=32)
 
 Samples = wasserstein_algorithm.get_samples(number_samples_per_class)
 
@@ -485,10 +486,10 @@ autoencoder_model.get_decoder(input_shape).summary()
 autoencoder_algorithm.compile(loss='mse')
 
 # Fit the autoencoder model
-autoencoder_algorithm.fit_model((x_real_samples,
-                                 to_categorical(y_real_samples,
-                                                num_classes=number_samples_per_class["number_classes"])),
-                                x_real_samples, epochs=1000, batch_size=32)
+autoencoder_algorithm.fit((x_real_samples,
+                           to_categorical(y_real_samples,
+                                          num_classes=number_samples_per_class["number_classes"])),
+                          x_real_samples, epochs=1000, batch_size=32)
 
 Samples = autoencoder_algorithm.get_samples(number_samples_per_class)
 
@@ -572,10 +573,10 @@ variation_model.get_decoder().summary()
 variational_algorithm.compile()
 
 # Fit the variational autoencoder model
-variational_algorithm.fit_model((x_real_samples,
-                                 to_categorical(y_real_samples,
-                                                num_classes=number_samples_per_class["number_classes"])),
-                                epochs=1000, batch_size=32, )
+variational_algorithm.fit((x_real_samples,
+                           to_categorical(y_real_samples,
+                                          num_classes=number_samples_per_class["number_classes"])),
+                          epochs=1000, batch_size=32, )
 
 Samples = variational_algorithm.get_samples(number_samples_per_class)
 

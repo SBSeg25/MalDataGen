@@ -100,7 +100,7 @@ class NaiveBayes:
                                                    var_smoothing=self._naive_bayes_variation_smoothing)
 
             logging.info("Fitting the Naive Bayes classifier to the training data.")
-            instance_model_classifier.fit_model(x_samples_training, y_samples_training)
+            instance_model_classifier.fit(x_samples_training, y_samples_training)
             logging.info("Finished training Naive Bayes classifier.")
 
             return instance_model_classifier

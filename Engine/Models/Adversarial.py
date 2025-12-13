@@ -109,6 +109,10 @@ class Adversarial:
         _adversarial_path_output_models (str): Path for saving models
         _adversarial_last_layer_activation (str): Last layer activation function
         _variational_autoencoder_number_epochs (int): Epochs for VAE pre-training
+        _number_samples_per_class (dict): Number of samples per class configuration
+        _callback_model_monitor: Callback for monitoring model performance
+        _callback_early_stop: Callback for early stopping
+        _callback_resources_monitor: Callback for monitoring resources
     """
 
     def __init__(self,
@@ -133,6 +137,10 @@ class Adversarial:
                  path_output_models: str = DEFAULT_ADVERSARIAL_PATH_OUTPUT_MODELS,
                  last_layer_activation: str = DEFAULT_ADVERSARIAL_LAST_ACTIVATION_LAYER,
                  autoencoder_number_epochs: int = DEFAULT_VARIATIONAL_AUTOENCODER_NUMBER_EPOCHS,
+                 number_samples_per_class: dict = None,
+                 callback_model_monitor=None,
+                 callback_early_stop=None,
+                 callback_resources_monitor=None,
                  algorithm: AdversarialAlgorithm | None = None,
                  model: AdversarialModel | None = None) -> None:
         """
@@ -160,6 +168,10 @@ class Adversarial:
             path_output_models: Path for saving models (default: "models_saved/")
             last_layer_activation: Last layer activation function (default: "Sigmoid")
             autoencoder_number_epochs: Epochs for VAE pre-training (default: 10)
+            number_samples_per_class: Dict with class sample information (default: None)
+            callback_model_monitor: Optional callback for monitoring model performance (default: None)
+            callback_early_stop: Optional callback for early stopping (default: None)
+            callback_resources_monitor: Optional callback for monitoring resources (default: None)
             algorithm: Optional pre-initialized AdversarialAlgorithm instance (default: None)
             model: Optional pre-initialized AdversarialModel instance (default: None)
         """
@@ -200,6 +212,16 @@ class Adversarial:
         self._adversarial_path_output_models: str = path_output_models
         self._adversarial_last_layer_activation: str = last_layer_activation
         self._variational_autoencoder_number_epochs: int = autoencoder_number_epochs
+
+        # ** FIX: Initialize the missing attribute **
+        self._number_samples_per_class: dict = (
+            number_samples_per_class if number_samples_per_class is not None else {}
+        )
+
+        # ** FIX: Initialize callback attributes **
+        self._callback_model_monitor = callback_model_monitor
+        self._callback_early_stop = callback_early_stop
+        self._callback_resources_monitor = callback_resources_monitor
 
         # Flag to indicate if instances were provided
         self._has_external_algorithm: bool = algorithm is not None
@@ -267,7 +289,6 @@ class Adversarial:
             )
         else:
             # If algorithm was provided externally, update its configuration if needed
-            # (assuming AdversarialAlgorithm has setters for these properties)
             if hasattr(self._adversarial_algorithm, 'latent_dimension'):
                 self._adversarial_algorithm.latent_dimension = self._adversarial_latent_dimension
 
@@ -295,7 +316,7 @@ class Adversarial:
             if hasattr(self._adversarial_algorithm, 'smoothing_rate'):
                 self._adversarial_algorithm.smoothing_rate = self._adversarial_smoothing_rate
 
-    def fit_model(
+    def fit(
             self,
             input_shape: tuple[int, ...],
             arguments: 'argparse.Namespace',
@@ -318,6 +339,15 @@ class Adversarial:
             4. Executes adversarial training
             5. Manages model saving and monitoring
         """
+        # ** FIX: Auto-detect number_samples_per_class if not set **
+        if not self._number_samples_per_class:
+            unique_classes = np.unique(y_real_samples)
+            self._number_samples_per_class = {
+                "number_classes": len(unique_classes),
+                "classes": {int(cls): np.sum(y_real_samples == cls) for cls in unique_classes}
+            }
+            logging.info(f"Auto-detected number_samples_per_class: {self._number_samples_per_class}")
+
         # Initialize the adversarial model (or use provided)
         self._get_adversarial_model(input_shape)
 
@@ -342,11 +372,18 @@ class Adversarial:
             BinaryCrossentropy()
         )
 
-        # callbacks_list = [self._callback_resources_monitor, self._callback_model_monitor]
-        callbacks_list = [self._callback_model_monitor]
+        # ** FIX: Build callbacks list only with available callbacks **
+        callbacks_list = []
 
-        if arguments.use_early_stop:
-            callbacks_list.append(self._callback_early_stop)
+        if self._callback_model_monitor is not None:
+            callbacks_list.append(self._callback_model_monitor)
+
+        if self._callback_resources_monitor is not None:
+            callbacks_list.append(self._callback_resources_monitor)
+
+        if hasattr(arguments, 'use_early_stop') and arguments.use_early_stop:
+            if self._callback_early_stop is not None:
+                callbacks_list.append(self._callback_early_stop)
 
         # Fit the model with real samples and the corresponding labels
         self._adversarial_algorithm.fit(
@@ -354,7 +391,7 @@ class Adversarial:
             to_categorical(y_real_samples, num_classes=self._number_samples_per_class["number_classes"]),
             epochs=self._adversarial_number_epochs,
             batch_size=self._adversarial_batch_size,
-            callbacks=callbacks_list
+            callbacks=callbacks_list if callbacks_list else None
         )
 
     def get_samples(self, number_samples_per_class):
@@ -371,6 +408,50 @@ class Adversarial:
     def adversarial_model(self) -> AdversarialModel | None:
         """Get the adversarial model instance."""
         return self._adversarial_model
+
+    # ** FIX: Add getter and setter for number_samples_per_class **
+    @property
+    def number_samples_per_class(self) -> dict:
+        """Get the number of samples per class configuration."""
+        return self._number_samples_per_class
+
+    @number_samples_per_class.setter
+    def number_samples_per_class(self, value: dict) -> None:
+        """Set the number of samples per class configuration."""
+        self._number_samples_per_class = value
+
+    # Getter and setter for callback_model_monitor
+    @property
+    def callback_model_monitor(self):
+        """Get the model monitoring callback."""
+        return self._callback_model_monitor
+
+    @callback_model_monitor.setter
+    def callback_model_monitor(self, value) -> None:
+        """Set the model monitoring callback."""
+        self._callback_model_monitor = value
+
+    # Getter and setter for callback_early_stop
+    @property
+    def callback_early_stop(self):
+        """Get the early stopping callback."""
+        return self._callback_early_stop
+
+    @callback_early_stop.setter
+    def callback_early_stop(self, value) -> None:
+        """Set the early stopping callback."""
+        self._callback_early_stop = value
+
+    # Getter and setter for callback_resources_monitor
+    @property
+    def callback_resources_monitor(self):
+        """Get the resources monitoring callback."""
+        return self._callback_resources_monitor
+
+    @callback_resources_monitor.setter
+    def callback_resources_monitor(self, value) -> None:
+        """Set the resources monitoring callback."""
+        self._callback_resources_monitor = value
 
     # Getter and setter for adversarial_number_epochs
     @property
