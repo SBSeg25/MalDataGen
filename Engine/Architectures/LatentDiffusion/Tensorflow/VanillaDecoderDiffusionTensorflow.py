@@ -249,7 +249,7 @@ class VanillaDecoderDiffusion(Activations):
         (e.g., class labels). It uses dropout and specified activation functions for regularization and non-linearity.
 
         Returns:
-            _tensorflow.keras.Model: The decoder model.
+            Tensorflow.keras.Model: The decoder model.
         """
 
         initialization = RandomNormal(mean=self._decoder_initializer_mean, stddev=self._decoder_initializer_deviation)

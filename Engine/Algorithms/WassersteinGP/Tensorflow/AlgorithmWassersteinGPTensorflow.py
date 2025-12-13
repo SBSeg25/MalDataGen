@@ -202,9 +202,9 @@ class WassersteinGPAlgorithmTensorflow(Model):
         Parameters:
             batch_size (int):
                 The batch size of the input data.
-            real_feature (_tensorflow.Tensor):
+            real_feature (Tensorflow.Tensor):
                 Real data features.
-            synthetic_feature (_tensorflow.Tensor):
+            synthetic_feature (Tensorflow.Tensor):
                 Synthetic (generated) data features.
 
         """

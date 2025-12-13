@@ -60,14 +60,14 @@ class Sigmoid(Layer):
 
     Methods
     -------
-    call(neural_network_flow: _tensorflow.Tensor) -> _tensorflow.Tensor
+    call(neural_network_flow: Tensorflow.Tensor) -> Tensorflow.Tensor
         Applies the Sigmoid activation function to the input tensor and returns the output tensor.
 
     Example
     -------
-    >>> import _tensorflow
+    >>> import Tensorflow
     ...    # Example tensor with shape (batch_size, sequence_length, 8)
-    ...    input_tensor = _tensorflow.random.uniform((2, 5, 8))
+    ...    input_tensor = Tensorflow.random.uniform((2, 5, 8))
     ...    # Instantiate and apply Sigmoid
     ...    sigmoid_layer = Sigmoid()
     ...    output_tensor = sigmoid_layer(input_tensor)
@@ -95,12 +95,12 @@ class Sigmoid(Layer):
 
         Parameters
         ----------
-            neural_network_flow : _tensorflow.Tensor
+            neural_network_flow : Tensorflow.Tensor
                 Input tensor with any shape.
 
         Returns
         -------
-        _tensorflow.Tensor
+        Tensorflow.Tensor
             Output tensor with the same shape as input, after applying Sigmoid transformation.
         """
         output = tensorflow.sigmoid(neural_network_flow)

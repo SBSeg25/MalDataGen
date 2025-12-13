@@ -74,15 +74,15 @@ class BinaryCrossEntropy(Loss):
     Example:
     -------
         >>> python3
-        ...    import _tensorflow
+        ...    import Tensorflow
         ...     # Example with logits (from_logits=True)
-        ...     y_true = _tensorflow.constant([0, 1, 0, 0], dtype=_tensorflow.float32)
-        ...     y_pred = _tensorflow.constant([-18.6, 0.51, 2.94, -12.8], dtype=_tensorflow.float32)
+        ...     y_true = Tensorflow.constant([0, 1, 0, 0], dtype=Tensorflow.float32)
+        ...     y_pred = Tensorflow.constant([-18.6, 0.51, 2.94, -12.8], dtype=Tensorflow.float32)
         ...     loss_fn = BinaryCrossentropy(from_logits=True)
         ...     loss = loss_fn(y_true, y_pred)
         ...     print(loss.numpy())  # Output: 0.8654
         ...     # Example with probabilities (from_logits=False)
-        ...     y_pred_prob = _tensorflow.constant([0.6, 0.3, 0.2, 0.8], dtype=_tensorflow.float32)
+        ...     y_pred_prob = Tensorflow.constant([0.6, 0.3, 0.2, 0.8], dtype=Tensorflow.float32)
         ...     loss_fn_prob = BinaryCrossentropy(from_logits=False)
         ...     loss_prob = loss_fn_prob(y_true, y_pred_prob)
         >>>     print(loss_prob.numpy())  # Output varies based on probabilities

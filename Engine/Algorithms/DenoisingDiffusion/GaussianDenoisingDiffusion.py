@@ -35,7 +35,7 @@ try:
     import sys
     import logging
 
-    framework = os.getenv("ML_FRAMEWORK", "_tensorflow").lower()
+    framework = os.getenv("ML_FRAMEWORK", "Tensorflow").lower()
 
     if framework == "pytorch":
         # Import the CLASS, not the module

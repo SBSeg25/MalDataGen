@@ -65,9 +65,9 @@ class HardSigmoid(Layer):
 
     Example
     -------
-    >>> import _tensorflow
+    >>> import Tensorflow
     ...    # Example tensor with shape (batch_size, sequence_length, 8)
-    ...    input_tensor = _tensorflow.random.uniform((2, 5, 8))
+    ...    input_tensor = Tensorflow.random.uniform((2, 5, 8))
     ...    # Instantiate and apply HardSigmoid
     ...    hard_sigmoid_layer = HardSigmoid()
     ...    output_tensor = hard_sigmoid_layer(input_tensor)

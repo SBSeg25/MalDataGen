@@ -223,7 +223,7 @@ class AdversarialAlgorithmTensorflow(Model):
     def train_step(self, batch):
         """
         Performs a single training step for both generator and discriminator.
-        This function is decorated with @_tensorflow.function to optimize graph execution.
+        This function is decorated with @Tensorflow.function to optimize graph execution.
 
         Args:
             batch (tuple): A tuple containing real features (input data) and their corresponding labels.

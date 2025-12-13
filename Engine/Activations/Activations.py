@@ -99,14 +99,14 @@ class Activations:
         function is not recognized, it raises a ValueError.
 
         Args:
-            neural_nodel (_tensorflow.keras.layers.Layer): The neural network layer to
+            neural_nodel (Tensorflow.keras.layers.Layer): The neural network layer to
                                                           which the activation function
                                                           will be applied.
             activation (str): The name of the activation function to add. This should be
                               one of the supported activation names, e.g., 'relu', 'sigmoid'.
 
         Returns:
-            _tensorflow.keras.layers.Layer: The neural network layer with the specified
+            Tensorflow.keras.layers.Layer: The neural network layer with the specified
                                            activation function applied.
 
         Raises:

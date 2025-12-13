@@ -71,9 +71,9 @@ class MeanAbsoluteError(Loss):
     Example:
     -------
         >>> python3
-        ...     import _tensorflow
-        ...     y_true = _tensorflow.constant([[1.0, 2.0], [3.0, 4.0]], dtype=_tensorflow.float32)
-        ...     y_predicted = _tensorflow.constant([[1.5, 2.5], [3.0, 3.5]], dtype=_tensorflow.float32)
+        ...     import Tensorflow
+        ...     y_true = Tensorflow.constant([[1.0, 2.0], [3.0, 4.0]], dtype=Tensorflow.float32)
+        ...     y_predicted = Tensorflow.constant([[1.5, 2.5], [3.0, 3.5]], dtype=Tensorflow.float32)
         ...     loss_fn = MeanAbsoluteError()
         ...     loss = loss_fn(y_true, y_predicted)
         >>>     print(loss.numpy())  # Output: computed MAE loss

@@ -60,9 +60,9 @@ class CategoricalCrossEntropy(Loss):
     Example:
     -------
         >>> python3
-        ...     import _tensorflow
-        ...     y_true = _tensorflow.constant([[0, 1, 0], [0, 0, 1]], dtype=_tensorflow.float32)
-        ...     y_predicted = _tensorflow.constant([[0.05, 0.95, 0], [0.1, 0.8, 0.1]], dtype=_tensorflow.float32)
+        ...     import Tensorflow
+        ...     y_true = Tensorflow.constant([[0, 1, 0], [0, 0, 1]], dtype=Tensorflow.float32)
+        ...     y_predicted = Tensorflow.constant([[0.05, 0.95, 0], [0.1, 0.8, 0.1]], dtype=Tensorflow.float32)
         ...     loss_fn = CategoricalCrossEntropy()
         ...     loss = loss_fn(y_true, y_predicted)
         >>>     print(loss.numpy())  # Output: computed CCE loss

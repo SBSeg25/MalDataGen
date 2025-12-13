@@ -35,7 +35,7 @@ try:
     import numpy as np
 
     # Detect framework from environment
-    ML_FRAMEWORK = os.environ.get('ML_FRAMEWORK', '_tensorflow').lower()
+    ML_FRAMEWORK = os.environ.get('ML_FRAMEWORK', 'Tensorflow').lower()
 
     from Engine.Algorithms.LatentDiffusion.AlgorithmLatentDiffusion import LatentDiffusionAlgorithm
     from Engine.Algorithms.LatentDiffusion.AlgorithmVAELatentDiffusion import AlgorithmVAELatentDiffusion
@@ -44,7 +44,7 @@ try:
     from Engine.Architectures.LatentDiffusion.Torch.VariationalModelDiffusionTorch import VariationalModelDiffusionTorch
     from Engine.Architectures.LatentDiffusion.VariationalModelDiffusion import VariationalModelDiffusion
 
-    if ML_FRAMEWORK == '_tensorflow':
+    if ML_FRAMEWORK == 'tensorflow':
         import keras
         import tensorflow as tf
         import tensorflow
@@ -59,7 +59,7 @@ try:
         from torch.optim import Adam
 
     else:
-        raise ValueError(f"Invalid ML_FRAMEWORK: '{ML_FRAMEWORK}'. Must be '_tensorflow' or 'pytorch'.")
+        raise ValueError(f"Invalid ML_FRAMEWORK: '{ML_FRAMEWORK}'. Must be 'Tensorflow' or 'pytorch'.")
 
 except ImportError as error:
     logging.error(error)
@@ -126,10 +126,10 @@ class LatentDiffusion:
     - Highly configurable architecture via arguments for research experimentation
 
     Environment Variables:
-        ML_FRAMEWORK: Set to '_tensorflow' or 'pytorch' (default: '_tensorflow')
+        ML_FRAMEWORK: Set to 'Tensorflow' or 'pytorch' (default: 'Tensorflow')
 
     Attributes:
-        _framework: Current framework being used ('_tensorflow' or 'pytorch')
+        _framework: Current framework being used ('Tensorflow' or 'pytorch')
         _device: Device for PyTorch ('cuda' or 'cpu')
         _latent_variational_algorithm: VAE training orchestrator
         _latent_variation_model_diffusion: VAE encoder/decoder models
@@ -749,7 +749,7 @@ class LatentDiffusion:
             x_real_samples (ndarray): Training samples
             y_real_samples (ndarray): Corresponding labels
         """
-        if self._framework == '_tensorflow':
+        if self._framework == 'Tensorflow':
             return self.fit_model_tensorflow(input_shape, arguments, x_real_samples, y_real_samples)
         else:  # pytorch
             return self.fit_model_pytorch(input_shape, arguments, x_real_samples, y_real_samples)

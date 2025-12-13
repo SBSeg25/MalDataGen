@@ -65,9 +65,9 @@ class CeLU(Layer):
 
     Example
     -------
-    >>> import _tensorflow
+    >>> import Tensorflow
     ...    # Example tensor with shape (batch_size, sequence_length, 8)
-    ...    input_tensor = _tensorflow.random.uniform((2, 5, 8))
+    ...    input_tensor = Tensorflow.random.uniform((2, 5, 8))
     ...    # Instantiate and apply CELU
     ...    celu_layer = CeLU()
     ...    output_tensor = celu_layer(input_tensor)

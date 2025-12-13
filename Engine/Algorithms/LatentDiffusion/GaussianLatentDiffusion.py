@@ -40,7 +40,7 @@ try:
         GaussianLatentDiffusionTensorflow
     from Engine.Algorithms.LatentDiffusion.Torch.GaussianLatentDiffusionTorch import GaussianLatentDiffusionTorch
 
-    framework = os.getenv("ML_FRAMEWORK", "_tensorflow").lower()
+    framework = os.getenv("ML_FRAMEWORK", "Tensorflow").lower()
 
     if framework == "pytorch":
         GaussianLatentDiffusionBase = GaussianLatentDiffusionTorch
@@ -61,4 +61,4 @@ class GaussianLatentDiffusion(GaussianLatentDiffusionBase):
             self._framework = "pytorch"
 
         else:
-            self._framework = "_tensorflow"
+            self._framework = "Tensorflow"

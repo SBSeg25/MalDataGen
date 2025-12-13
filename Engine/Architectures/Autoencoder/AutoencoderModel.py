@@ -39,7 +39,7 @@ try:
     from Engine.Architectures.Autoencoder.Torch.ModelAutoencoderTorch import AutoencoderModelTorch
     from Engine.Architectures.Autoencoder.Tensorflow.ModelAutoencoderTensorflow import AutoencoderModelTensorflow
 
-    framework = os.getenv("ML_FRAMEWORK", "_tensorflow").lower()
+    framework = os.getenv("ML_FRAMEWORK", "Tensorflow").lower()
 
     if framework == "pytorch":
         AutoencoderModelBase = AutoencoderModelTorch
@@ -60,4 +60,4 @@ class AutoencoderModel(AutoencoderModelBase):
             self._framework = "pytorch"
 
         else:
-            self._framework = "_tensorflow"
+            self._framework = "Tensorflow"

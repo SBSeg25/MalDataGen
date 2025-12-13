@@ -73,7 +73,7 @@ class AutoencoderModelTorch(VanillaEncoderTorch, VanillaDecoderTorch):
     e denoising.
 
     Variável de Ambiente:
-        ML_FRAMEWORK: Define o framework a ser usado ('_tensorflow' ou 'pytorch').
+        ML_FRAMEWORK: Define o framework a ser usado ('Tensorflow' ou 'pytorch').
                      Padrão: 'pytorch'
 
     Attributes:
@@ -232,7 +232,7 @@ class AutoencoderModelTorch(VanillaEncoderTorch, VanillaDecoderTorch):
         Retorna o framework sendo utilizado.
 
         Returns:
-            str: O nome do framework ('_tensorflow' ou 'pytorch').
+            str: O nome do framework ('Tensorflow' ou 'pytorch').
         """
         return self._framework
 

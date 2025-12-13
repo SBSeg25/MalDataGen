@@ -80,7 +80,7 @@ class GELU(Layer):
 
     Example
     -------
-    >>> import _tensorflow as tf
+    >>> import Tensorflow as tf
     ...    # Example tensor with shape (batch_size, feature_dim)
     ...    input_tensor = tf.random.uniform((2, 5))
     ...    # Instantiate and apply GELU
@@ -110,17 +110,17 @@ class GELU(Layer):
 
         Parameters
         ----------
-            neural_network_flow : _tensorflow.Tensor
+            neural_network_flow : Tensorflow.Tensor
                 Input tensor with any shape.
 
         Returns
         -------
-        _tensorflow.Tensor
+        Tensorflow.Tensor
             Output tensor with the same shape as input, after applying GELU transformation.
 
         Example
         -------
-        >>> input_tensor = _tensorflow.random.uniform((2, 5))
+        >>> input_tensor = Tensorflow.random.uniform((2, 5))
         ...     gelu = GELU()
         ...     output = gelu(input_tensor)
         ...     print(output.shape)

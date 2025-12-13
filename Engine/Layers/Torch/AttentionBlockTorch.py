@@ -67,7 +67,7 @@ class AttentionBlock(Layer):
             scores, applies them to the input, and returns the augmented input after normalization.
 
     Example:
-        >>> import _tensorflow as tf
+        >>> import Tensorflow as tf
         >>> attention_block = AttentionBlock(units=64, groups=8)
         >>> inputs = tf.random.normal((2, 10, 64))  # (batch_size, height, units)
         >>> output = attention_block(inputs)

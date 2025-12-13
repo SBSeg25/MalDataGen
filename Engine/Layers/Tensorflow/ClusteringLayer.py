@@ -50,7 +50,7 @@ class ClusteringLayer(Layer):
             The number of time steps in the sequence.
         @alpha (float, optional):
             A scaling factor for the similarity calculation. Default is 0.5.
-        @latent_vectors (_tensorflow.Variable):
+        @latent_vectors (Tensorflow.Variable):
             The latent vectors to be optimized during training.
 
     Methods:
@@ -61,14 +61,14 @@ class ClusteringLayer(Layer):
 
     Example:
         >>>     # Create a model with the ClusteringLayer
-        ...     model = _tensorflow.keras.Sequential([
-        ...     _tensorflow.keras.layers.InputLayer(input_shape=(None, 64, 1)),  # Input shape (timesteps, feature_size, 1)
+        ...     model = Tensorflow.keras.Sequential([
+        ...     Tensorflow.keras.layers.InputLayer(input_shape=(None, 64, 1)),  # Input shape (timesteps, feature_size, 1)
         ...     ClusteringLayer(number_vectors=10, latent_dimension=64, number_steps=5)
         ...     ])
         ...
         ...     # Prepare input and index (e.g., [inputs, indices])
-        ...     inputs = _tensorflow.random.normal(shape=(32, 64, 1))  # Example input data with batch_size=32
-        ...     indices = _tensorflow.random.uniform(shape=(32,), minval=0, maxval=5, dtype=tf.int32)  # Example indices
+        ...     inputs = Tensorflow.random.normal(shape=(32, 64, 1))  # Example input data with batch_size=32
+        ...     indices = Tensorflow.random.uniform(shape=(32,), minval=0, maxval=5, dtype=tf.int32)  # Example indices
         ...
         ...     output = model([inputs, indices])  # Call the model with input and indices
         ...
@@ -123,7 +123,7 @@ class ClusteringLayer(Layer):
             training (bool, optional): Whether the model is in training mode or not. Default is False.
 
         Returns:
-            _tensorflow.Tensor: A tensor of shape (batch_size, latent_dimension), which contains the selected
+            Tensorflow.Tensor: A tensor of shape (batch_size, latent_dimension), which contains the selected
                                latent vectors based on the input data and the indices.
         """
         inputs, index = inputs  # Unpack inputs and indices

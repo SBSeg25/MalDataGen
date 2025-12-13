@@ -61,14 +61,14 @@ class LeakyReLU(Layer):
 
     Methods
     -------
-        call(neural_network_flow: _tensorflow.Tensor) -> _tensorflow.Tensor
+        call(neural_network_flow: Tensorflow.Tensor) -> Tensorflow.Tensor
             Applies the Leaky ReLU activation function to the input tensor and returns the output tensor.
 
     Example
     -------
-    >>> import _tensorflow
+    >>> import Tensorflow
     ...    # Example tensor with shape (batch_size, sequence_length, 8)
-    ...    input_tensor = _tensorflow.random.uniform((2, 5, 8))
+    ...    input_tensor = Tensorflow.random.uniform((2, 5, 8))
     ...    # Instantiate and apply LeakyReLU
     ...    leaky_relu_layer = LeakyReLU()
     ...    output_tensor = leaky_relu_layer(input_tensor)
@@ -99,12 +99,12 @@ class LeakyReLU(Layer):
 
         Parameters
         ----------
-            neural_network_flow : _tensorflow.Tensor
+            neural_network_flow : Tensorflow.Tensor
                 Input tensor with any shape.
 
         Returns
         -------
-        _tensorflow.Tensor
+        Tensorflow.Tensor
             Output tensor with the same shape as input, after applying Leaky ReLU transformation.
         """
         return tensorflow.maximum(self.negative_slope * neural_network_flow,

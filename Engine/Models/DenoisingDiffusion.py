@@ -58,10 +58,10 @@ class DenoisingDiffusion:
     The framework is selected based on the ML_FRAMEWORK environment variable.
 
     Supported frameworks:
-        - '_tensorflow': Uses TensorFlow/Keras implementation
+        - 'Tensorflow': Uses TensorFlow/Keras implementation
         - 'pytorch': Uses PyTorch implementation
 
-    Set the framework by: os.environ['ML_FRAMEWORK'] = 'pytorch' or '_tensorflow'
+    Set the framework by: os.environ['ML_FRAMEWORK'] = 'pytorch' or 'Tensorflow'
     Default framework is TensorFlow if ML_FRAMEWORK is not set.
     """
 
@@ -120,12 +120,12 @@ class DenoisingDiffusion:
             algorithm: Optional pre-initialized algorithm (default: None)
         """
         # Detect framework from environment variable
-        self._framework = os.environ.get('ML_FRAMEWORK', '_tensorflow').lower()
+        self._framework = os.environ.get('ML_FRAMEWORK', 'Tensorflow').lower()
 
-        if self._framework not in ['_tensorflow', 'pytorch']:
+        if self._framework not in ['tensorflow', 'pytorch']:
             raise ValueError(
                 f"Unsupported framework: {self._framework}. "
-                f"Supported frameworks are '_tensorflow' or 'pytorch'"
+                f"Supported frameworks are 'Tensorflow' or 'pytorch'"
             )
 
         logging.info(f"Initializing DenoisingDiffusionInstance with framework: {self._framework}")
@@ -623,7 +623,7 @@ class DenoisingDiffusion:
             self._training_denoising_diffusion_model_pytorch(
                 input_shape, arguments, x_real_samples, y_real_samples
             )
-        elif self._framework == '_tensorflow':
+        elif self._framework == 'Tensorflow':
             self._training_denoising_diffusion_model_tensorflow(
                 input_shape, arguments, x_real_samples, y_real_samples
             )

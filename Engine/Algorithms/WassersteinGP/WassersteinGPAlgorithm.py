@@ -41,7 +41,7 @@ try:
         WassersteinGPAlgorithmTensorflow)
     from Engine.Algorithms.WassersteinGP.Torch.WassersteinGPAlgorithmTorch import WassersteinGPAlgorithmTorch
 
-    framework = os.getenv("ML_FRAMEWORK", "_tensorflow").lower()
+    framework = os.getenv("ML_FRAMEWORK", "Tensorflow").lower()
 
     if framework == "pytorch":
         WassersteinGPAlgorithmBase = WassersteinGPAlgorithmTorch
@@ -62,4 +62,4 @@ class WassersteinGPAlgorithm(WassersteinGPAlgorithmBase):
             self._framework = "pytorch"
 
         else:
-            self._framework = "_tensorflow"
+            self._framework = "Tensorflow"

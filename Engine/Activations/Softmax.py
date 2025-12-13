@@ -65,13 +65,13 @@ class Softmax(Layer):
 
     Methods
     -------
-        call(neural_network_flow: _tensorflow.Tensor) -> _tensorflow.Tensor
+        call(neural_network_flow: Tensorflow.Tensor) -> Tensorflow.Tensor
             Applies the Softmax activation function to the input tensor and returns the output tensor.
 
     Example
     -------
-    >>> import _tensorflow
-    >>> input_tensor = _tensorflow.random.uniform((2, 5, 8))  # Example tensor
+    >>> import Tensorflow
+    >>> input_tensor = Tensorflow.random.uniform((2, 5, 8))  # Example tensor
     >>> softmax_layer = Softmax()
     >>> output_tensor = softmax_layer(input_tensor)
     >>> print(output_tensor.shape)  # Output shape will be (2, 5, 8)
@@ -97,12 +97,12 @@ class Softmax(Layer):
 
         Parameters
         ----------
-            neural_network_flow : _tensorflow.Tensor
+            neural_network_flow : Tensorflow.Tensor
                 Input tensor with any shape.
 
         Returns
         -------
-        _tensorflow.Tensor
+        Tensorflow.Tensor
             Output tensor with the same shape as input, after applying Softmax transformation.
         """
         return tensorflow.nn.softmax(neural_network_flow, axis=self.axis)

@@ -169,7 +169,7 @@ class QuantizedVAEModelTensorflow(QuantizedVAEVanillaEncoderTensorflow, Quantize
         Returns the encoder model.
 
         Returns:
-            _tensorflow.keras.Model: The model representing the encoder.
+            Tensorflow.keras.Model: The model representing the encoder.
         """
         return self._encoder_model
 
@@ -178,7 +178,7 @@ class QuantizedVAEModelTensorflow(QuantizedVAEVanillaEncoderTensorflow, Quantize
         Returns the decoder model.
 
         Returns:
-            _tensorflow.keras.Model: The model representing the decoder.
+            Tensorflow.keras.Model: The model representing the decoder.
         """
         return self._decoder_model
 

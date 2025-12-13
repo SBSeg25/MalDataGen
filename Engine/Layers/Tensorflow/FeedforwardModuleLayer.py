@@ -118,7 +118,7 @@ class FeedForwardModule(Layer):
             @embedding_dimension (int, optional): Dimensionality of the output embeddings.
             @dropout_rate (float, optional): Dropout rate applied after each dense layer.
             @activation_function (function, optional): Activation function used in the first
-            @dense layer. Default is _tensorflow.nn.swish.
+            @dense layer. Default is Tensorflow.nn.swish.
             @factor_projection (int, optional): Factor by which the dimensionality is increased
             @in the first dense layer. Default is 4.
             **kwargs: Additional arguments passed to the base `Layer` class.
