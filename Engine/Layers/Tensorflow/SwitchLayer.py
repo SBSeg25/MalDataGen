@@ -34,7 +34,6 @@ __credits__ = ['Synthetic Ocean AI']
 
 try:
     import sys
-    import keras
 
     import tensorflow
 

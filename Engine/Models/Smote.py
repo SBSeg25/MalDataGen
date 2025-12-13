@@ -36,7 +36,6 @@ from Engine.Algorithms.SMOTE.AlgorithmSMOTE import SMOTEAlgorithm
 try:
     import sys
 
-    import keras
     import numpy
 
     import logging

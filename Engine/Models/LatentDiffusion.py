@@ -45,7 +45,7 @@ try:
     from Engine.Architectures.LatentDiffusion.VariationalModelDiffusion import VariationalModelDiffusion
 
     if ML_FRAMEWORK == 'tensorflow':
-        import keras
+
         import tensorflow as tf
         import tensorflow
         from tensorflow.keras.optimizers import Adam
