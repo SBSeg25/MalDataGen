@@ -11,6 +11,10 @@ import numpy as np
 from Engine.Models.Adversarial import Adversarial
 from Engine.Models.Autoencoder import Autoencoder
 import os
+
+from Engine.Models.VariationalAutoencoder import VariationalAutoencoder
+from Engine.Models.Wasserstein import Wasserstein
+
 os.environ["ML_FRAMEWORK"] = "pytorch"
 
 # ========================================================================
@@ -117,10 +121,10 @@ def generate_pyramid(base_size, height, grid_size, noise_level=0.05):
 # ========================================================================
 # CONFIGURAÇÃO DOS DADOS
 # ========================================================================
-N_SAMPLES = 1200  # 200 cubos + 200 esferas + 200 pirâmides
-DEPTH = 8
-HEIGHT = 8
-WIDTH = 8
+N_SAMPLES = 300  # 200 cubos + 200 esferas + 200 pirâmides
+DEPTH = 16
+HEIGHT = 16
+WIDTH = 16
 N_CLASSES = 3  # 0 = Cubo, 1 = Esfera, 2 = Pirâmide
 
 CUBE_SIZE_RANGE = (6, 10)  # Tamanho variável dos cubos
@@ -200,7 +204,7 @@ print("=" * 70)
 input_shape = (DEPTH, HEIGHT, WIDTH)
 
 print("\nInicializando autoencoder...")
-autoencoder = Adversarial()
+autoencoder = VariationalAutoencoder(number_classes=3)
 
 print("\n🚀 Treinando modelo com dados geométricos...")
 print("   (Isso pode levar alguns minutos...)")

@@ -86,9 +86,13 @@ class WassersteinGP:
     This version improves upon standard WGAN by using gradient penalty instead of weight clipping
     to enforce the Lipschitz constraint, leading to more stable training and higher quality results.
 
+    NOW SUPPORTS MULTI-DIMENSIONAL DATA: Automatically handles 1D, 2D, 3D, and N-D inputs
+    by flattening them during training and reshaping them during generation.
+
     Attributes:
         _wasserstein_gp_algorithm (WassersteinGPAlgorithm): Orchestrates the WGAN-GP training process
         _wasserstein_gp_model (WassersteinGPModel): Stores the generator and critic models
+        _original_input_shape (tuple): Stores the original shape of input data for reconstruction
 
     Configuration Parameters (with getters/setters):
         _wasserstein_gp_latent_dimension (int): Dimensionality of the latent space
@@ -234,6 +238,9 @@ class WassersteinGP:
         self._has_external_algorithm: bool = algorithm is not None
         self._has_external_model: bool = model is not None
 
+        # Storage for original input shape (for multi-dimensional data)
+        self._original_input_shape = None
+
     def _calculate_samples_per_class(self, y_labels: np.ndarray) -> dict:
         """
         Calculate the distribution of samples per class from labels.
@@ -295,7 +302,7 @@ class WassersteinGP:
                 dense_layer_sizes_g=self._wasserstein_gp_dense_layer_sizes_generator,
                 dense_layer_sizes_d=self._wasserstein_gp_dense_layer_sizes_discriminator,
                 dataset_type=np.float32,
-                number_samples_per_class=number_samples_per_class  # ADD THIS PARAMETER
+                number_samples_per_class=number_samples_per_class
             )
 
         # Only create new algorithm if none was provided
@@ -348,34 +355,59 @@ class WassersteinGP:
     def fit_model(
             self,
             input_shape: tuple[int, ...],
-            arguments: 'argparse.Namespace',
             x_real_samples: np.ndarray,
             y_real_samples: np.ndarray
     ) -> None:
         """
-        Executes the complete WGAN-GP training pipeline.
+        Executes the complete WGAN-GP training pipeline with automatic data flattening.
+
+        NOW SUPPORTS MULTI-DIMENSIONAL DATA:
+        - Automatically flattens N-D input data (1D, 2D, 3D, etc.)
+        - Converts labels to categorical format
+        - Stores original shape for reconstruction during generation
 
         Args:
-            input_shape: Input data dimensions
+            input_shape: Shape of input data samples (e.g., (784,) for 1D, (28, 28, 1) for 2D, (16, 16, 16) for 3D)
             arguments: Training configuration parameters
-            x_real_samples: Training dataset samples
-            y_real_samples: Corresponding sample labels
+            x_real_samples: Training dataset samples (can be N-dimensional)
+            y_real_samples: Corresponding sample labels (1D array of class indices)
 
         Process:
-            1. Calculates class distribution automatically from labels
-            2. Initializes model architecture (or uses provided)
-            3. Configures optimizers and loss functions
-            4. Sets up training callbacks
-            5. Alternates between critic and generator updates
-            6. Applies gradient penalty during critic training
-            7. Manages model saving and monitoring
+            1. Flattens multi-dimensional input data
+            2. Calculates class distribution automatically from labels
+            3. Initializes model architecture (or uses provided)
+            4. Configures optimizers and loss functions
+            5. Sets up training callbacks
+            6. Alternates between critic and generator updates
+            7. Applies gradient penalty during critic training
+            8. Manages model saving and monitoring
         """
+        # Store original input shape for later reconstruction
+        self._original_input_shape = input_shape
+
+        # Calculate total flattened dimension
+        flattened_dim = int(np.prod(input_shape))
+
+        # Prepare data
+        print(f"\nPreparing data for Wasserstein GAN-GP...")
+        print(f"  - Original input shape: {input_shape}")
+        print(f"  - Input data shape: {x_real_samples.shape}")
+
+        # Flatten the input data if it has more than 2 dimensions
+        # (batch_size, ...) -> (batch_size, flattened_features)
+        if len(x_real_samples.shape) > 2:
+            x_real_samples_flat = x_real_samples.reshape(x_real_samples.shape[0], -1)
+            print(f"  - Flattened data shape: {x_real_samples_flat.shape}")
+        else:
+            x_real_samples_flat = x_real_samples
+            print(f"  - Data already flat: {x_real_samples_flat.shape}")
+
         # Calculate number_samples_per_class automatically from labels
         number_samples_per_class = self._calculate_samples_per_class(y_real_samples)
-        print(f"\nAuto-calculated class distribution: {number_samples_per_class}")
+        print(f"  - Auto-calculated class distribution: {number_samples_per_class}")
 
-        # Initialize the wasserstein_gp model (or use provided) - NOW passing number_samples_per_class
-        self._get_wasserstein_gp(input_shape, number_samples_per_class)
+        # Initialize the wasserstein_gp model (or use provided) with flattened dimension
+        self._get_wasserstein_gp(flattened_dim, number_samples_per_class)
 
         # Print the model summaries for the generator and discriminator if available
         if self._wasserstein_gp_model is not None:
@@ -420,19 +452,75 @@ class WassersteinGP:
         if hasattr(self, '_callback_model_monitor'):
             callbacks_list.append(self._callback_model_monitor)
 
-        # Add early stop callback if requested
-        if hasattr(arguments, 'use_early_stop') and arguments.use_early_stop:
-            if hasattr(self, '_callback_early_stop'):
-                callbacks_list.append(self._callback_early_stop)
+        if hasattr(self, '_callback_early_stop'):
+            callbacks_list.append(self._callback_early_stop)
 
-        # Fit the wasserstein_gp GAN model
+        print(f"\nStarting training...")
+        print(f"  - Epochs: {self._wasserstein_gp_number_epochs}")
+        print(f"  - Batch size: {self._wasserstein_gp_batch_size}")
+        print(f"  - Latent dimension: {self._wasserstein_gp_latent_dimension}")
+        print(f"  - Discriminator steps: {self._wasserstein_gp_discriminator_steps}")
+        print(f"  - Gradient penalty weight: {self._wasserstein_gp_gradient_penalty}")
+
+        # Fit the wasserstein_gp GAN model with flattened samples
         self._wasserstein_gp_algorithm.fit(
-            x_real_samples,
+            x_real_samples_flat,
             to_categorical(y_real_samples, num_classes=number_samples_per_class["number_classes"]),
             epochs=self._wasserstein_gp_number_epochs,
             batch_size=self._wasserstein_gp_batch_size,
             callbacks=callbacks_list if callbacks_list else None
         )
+
+        print(f"\n✓ Training completed successfully!")
+
+    def get_samples(self, number_samples_per_class):
+        """
+        Generate synthetic samples and reshape them to original input shape.
+
+        NOW SUPPORTS MULTI-DIMENSIONAL OUTPUT:
+        - Automatically reshapes generated samples to original input dimensions
+        - Works with 1D, 2D, 3D, and N-D data
+
+        Args:
+            number_samples_per_class: Dictionary specifying number of samples per class
+                Format 1: {"number_classes": N, "classes": {0: n0, 1: n1, ...}}
+                Format 2 (simplified): {"number_classes": N, 0: n0, 1: n1, ...}
+
+        Returns:
+            np.ndarray: Generated samples reshaped to original input dimensions
+                - Shape: (total_samples, *original_input_shape)
+                - Example: For 3D input (16, 16, 16) with 100 total samples -> (100, 16, 16, 16)
+        """
+        # Generate flattened samples from algorithm
+        generated_data = self._wasserstein_gp_algorithm.get_samples(number_samples_per_class)
+
+        # Check if we have stored original input shape
+        if not hasattr(self, '_original_input_shape') or self._original_input_shape is None:
+            # If no original shape stored, return flattened data
+            # Convert dict to array if needed
+            if isinstance(generated_data, dict):
+                all_samples = []
+                for label in sorted(generated_data.keys()):
+                    all_samples.append(generated_data[label])
+                return np.concatenate(all_samples, axis=0)
+            return generated_data
+
+        # Reshape generated samples to original input shape
+        reshaped_samples = []
+
+        if isinstance(generated_data, dict):
+            # If returned as dict, reshape each class
+            for label in sorted(generated_data.keys()):
+                samples = generated_data[label]
+                # Reshape from (n_samples, flattened_features) to (n_samples, *original_shape)
+                reshaped = samples.reshape(-1, *self._original_input_shape)
+                reshaped_samples.append(reshaped)
+
+            # Concatenate all classes
+            return np.concatenate(reshaped_samples, axis=0)
+        else:
+            # If returned as array, reshape directly
+            return generated_data.reshape(-1, *self._original_input_shape)
 
     # Additional getters for the algorithm and model
     @property
@@ -444,6 +532,11 @@ class WassersteinGP:
     def wasserstein_gp_model(self) -> WassersteinGPModel | None:
         """Get the wasserstein_gp model instance."""
         return self._wasserstein_gp_model
+
+    @property
+    def original_input_shape(self) -> tuple:
+        """Get the original input shape (before flattening)."""
+        return self._original_input_shape
 
     # Property getters and setters
     @property

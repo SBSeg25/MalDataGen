@@ -5,7 +5,7 @@ __author__ = 'Synthetic Ocean AI - Team'
 __email__ = 'syntheticoceanai@gmail.com'
 __version__ = '{1}.{0}.{1}'
 __initial_data__ = '2022/06/01'
-__last_update__ = '2025/12/07'
+__last_update__ = '2025/12/13'
 __credits__ = ['Synthetic Ocean AI']
 
 
@@ -77,6 +77,9 @@ class Wasserstein:
     A class that implements a wasserstein Generative adversarial Network (WGAN).
     This implementation follows the wasserstein GAN framework with improved training stability.
 
+    NOW SUPPORTS MULTI-DIMENSIONAL DATA: Automatically handles 1D, 2D, 3D, and N-D inputs
+    by flattening them during training and reshaping them during generation.
+
     Key Components:
     - Generator model for synthetic sample generation
     - Critic/Discriminator model (with wasserstein loss)
@@ -86,6 +89,7 @@ class Wasserstein:
     Attributes:
         _wasserstein_algorithm: Orchestrates the WGAN-GP training process
         _wasserstein_model: Stores the generator and critic/discriminator models
+        _original_input_shape: Stores the original shape of input data for reconstruction
 
         # WGAN Architecture Parameters
         _wasserstein_latent_dimension: Dimensionality of the latent space
@@ -233,6 +237,9 @@ class Wasserstein:
         self._has_external_algorithm: bool = algorithm is not None
         self._has_external_model: bool = model is not None
 
+        # Storage for original input shape (for multi-dimensional data)
+        self._original_input_shape = None
+
     def _get_wasserstein(self, input_shape: tuple[int, ...]) -> None:
         """
         Initializes and sets up a wasserstein GAN model.
@@ -315,27 +322,53 @@ class Wasserstein:
     def fit_model(
             self,
             input_shape: tuple[int, ...],
-            arguments: 'argparse.Namespace',
             x_real_samples: np.ndarray,
             y_real_samples: np.ndarray
     ) -> None:
         """
         Executes the complete training pipeline for wasserstein GAN with Gradient Penalty.
 
+        NOW SUPPORTS MULTI-DIMENSIONAL DATA:
+        - Automatically flattens N-D input data (1D, 2D, 3D, etc.)
+        - Converts labels to one-hot format
+        - Stores original shape for reconstruction during generation
+
         Process:
-        1. Initializes generator and critic models (or uses provided)
-        2. Configures optimizers with specified parameters
-        3. Trains using alternating critic/generator updates
-        4. Manages callbacks and monitoring
+        1. Flattens multi-dimensional input data
+        2. Converts labels to one-hot format
+        3. Initializes generator and critic models (or uses provided)
+        4. Configures optimizers with specified parameters
+        5. Trains using alternating critic/generator updates
+        6. Manages callbacks and monitoring
 
         Args:
-            input_shape: Input data shape
+            input_shape: Shape of input data samples (e.g., (784,) for 1D, (28, 28, 1) for 2D, (16, 16, 16) for 3D)
             arguments: Training configuration
-            x_real_samples: Training samples
-            y_real_samples: Corresponding labels
+            x_real_samples: Training samples (can be N-dimensional)
+            y_real_samples: Corresponding labels (1D array of class indices)
         """
-        # Initialize the wasserstein_gp model (or use provided)
-        self._get_wasserstein(input_shape)
+        # Store original input shape for later reconstruction
+        self._original_input_shape = input_shape
+
+        # Calculate total flattened dimension
+        flattened_dim = int(np.prod(input_shape))
+
+        # Prepare data
+        print(f"\nPreparing data for Wasserstein GAN...")
+        print(f"  - Original input shape: {input_shape}")
+        print(f"  - Input data shape: {x_real_samples.shape}")
+
+        # Flatten the input data if it has more than 2 dimensions
+        # (batch_size, ...) -> (batch_size, flattened_features)
+        if len(x_real_samples.shape) > 2:
+            x_real_samples_flat = x_real_samples.reshape(x_real_samples.shape[0], -1)
+            print(f"  - Flattened data shape: {x_real_samples_flat.shape}")
+        else:
+            x_real_samples_flat = x_real_samples
+            print(f"  - Data already flat: {x_real_samples_flat.shape}")
+
+        # Initialize the wasserstein_gp model (or use provided) with flattened dimension
+        self._get_wasserstein(flattened_dim)
 
         # Print the model summaries for the generator and discriminator if available
         if self._wasserstein_model is not None:
@@ -400,9 +433,9 @@ class Wasserstein:
         if hasattr(self, '_callback_model_monitor') and self._callback_model_monitor:
             callbacks_list.append(self._callback_model_monitor)
 
-        if hasattr(arguments, 'use_early_stop') and arguments.use_early_stop:
-            if hasattr(self, '_callback_early_stop') and self._callback_early_stop:
-                callbacks_list.append(self._callback_early_stop)
+
+        if hasattr(self, '_callback_early_stop') and self._callback_early_stop:
+            callbacks_list.append(self._callback_early_stop)
 
         # Ensure callbacks have proper initialization
         import time
@@ -426,15 +459,22 @@ class Wasserstein:
             y_one_hot = np.zeros((y_real_samples.shape[0], num_classes))
             y_one_hot[np.arange(y_real_samples.shape[0]), y_real_samples.astype(int)] = 1
             y_real_samples = y_one_hot
-            print(f"Converted labels to one-hot encoding: shape {y_real_samples.shape}")
+            print(f"  - Converted labels to one-hot encoding: shape {y_real_samples.shape}")
         elif y_real_samples.shape[1] != num_classes:
             raise ValueError(
                 f"Label shape mismatch: got {y_real_samples.shape} but expected "
                 f"either (N,) or (N, {num_classes}) for {num_classes} classes"
             )
 
+        print(f"\nStarting training...")
+        print(f"  - Epochs: {self._wasserstein_number_epochs}")
+        print(f"  - Batch size: {self._wasserstein_batch_size}")
+        print(f"  - Latent dimension: {self._wasserstein_latent_dimension}")
+        print(f"  - Discriminator steps: {self._wasserstein_discriminator_steps}")
+
+        # Fit the model with flattened real samples and the corresponding labels
         self._wasserstein_algorithm.fit(
-            x_real_samples,
+            x_real_samples_flat,
             y_real_samples,
             epochs=self._wasserstein_number_epochs,
             batch_size=self._wasserstein_batch_size,
@@ -443,7 +483,56 @@ class Wasserstein:
             verbose=1
         )
 
-        print("\nTraining completed successfully!")
+        print("\n✓ Training completed successfully!")
+
+    def get_samples(self, number_samples_per_class):
+        """
+        Generate synthetic samples and reshape them to original input shape.
+
+        NOW SUPPORTS MULTI-DIMENSIONAL OUTPUT:
+        - Automatically reshapes generated samples to original input dimensions
+        - Works with 1D, 2D, 3D, and N-D data
+
+        Args:
+            number_samples_per_class: Dictionary specifying number of samples per class
+                Format 1: {"number_classes": N, "classes": {0: n0, 1: n1, ...}}
+                Format 2 (simplified): {"number_classes": N, 0: n0, 1: n1, ...}
+
+        Returns:
+            np.ndarray: Generated samples reshaped to original input dimensions
+                - Shape: (total_samples, *original_input_shape)
+                - Example: For 3D input (16, 16, 16) with 100 total samples -> (100, 16, 16, 16)
+        """
+        # Generate flattened samples from algorithm
+        generated_data = self._wasserstein_algorithm.get_samples(number_samples_per_class)
+
+        # Check if we have stored original input shape
+        if not hasattr(self, '_original_input_shape') or self._original_input_shape is None:
+            # If no original shape stored, return flattened data
+            # Convert dict to array if needed
+            if isinstance(generated_data, dict):
+                all_samples = []
+                for label in sorted(generated_data.keys()):
+                    all_samples.append(generated_data[label])
+                return np.concatenate(all_samples, axis=0)
+            return generated_data
+
+        # Reshape generated samples to original input shape
+        reshaped_samples = []
+
+        if isinstance(generated_data, dict):
+            # If returned as dict, reshape each class
+            for label in sorted(generated_data.keys()):
+                samples = generated_data[label]
+                # Reshape from (n_samples, flattened_features) to (n_samples, *original_shape)
+                reshaped = samples.reshape(-1, *self._original_input_shape)
+                reshaped_samples.append(reshaped)
+
+            # Concatenate all classes
+            return np.concatenate(reshaped_samples, axis=0)
+        else:
+            # If returned as array, reshape directly
+            return generated_data.reshape(-1, *self._original_input_shape)
 
     # Additional getters for the algorithm and model
     @property
@@ -455,6 +544,11 @@ class Wasserstein:
     def wasserstein_model(self) -> WassersteinModel | None:
         """Get the wasserstein model instance."""
         return self._wasserstein_model
+
+    @property
+    def original_input_shape(self) -> tuple:
+        """Get the original input shape (before flattening)."""
+        return self._original_input_shape
 
     # Getter and setter for wasserstein_latent_dimension
     @property
@@ -730,7 +824,3 @@ class Wasserstein:
     def wasserstein_path_output_models(self, value: str) -> None:
         """Set the output models path."""
         self._wasserstein_path_output_models = value
-
-    def get_samples(self, number_samples_per_class):
-
-        return self._wasserstein_algorithm.get_samples(number_samples_per_class)
