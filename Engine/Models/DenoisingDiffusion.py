@@ -8,8 +8,6 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/12/13'
 __credits__ = ['Synthetic Ocean AI']
 
-from Engine.Algorithms.denoising_diffusion.AlgorithmDenoisingDiffusion import AlgorithmDenoisingDiffusion
-from Engine.Architectures.DenoisingDiffusion.DenoisingDiffusionUnetModel import DenoisingDiffusionUNetModel
 
 try:
     import sys
@@ -19,6 +17,8 @@ try:
     import torch
     from torch.utils.data import DataLoader, TensorDataset
     from Engine.Algorithms.denoising_diffusion.GaussianDenoisingDiffusion import GaussianDenoisingDiffusion
+    from Engine.Algorithms.denoising_diffusion.AlgorithmDenoisingDiffusion import AlgorithmDenoisingDiffusion
+    from Engine.Architectures.DenoisingDiffusion.DenoisingDiffusionUnetModel import DenoisingDiffusionUNetModel
 
 except ImportError as error:
     logging.error(error)
@@ -26,24 +26,24 @@ except ImportError as error:
 
 # Default values
 DEFAULT_DIFFUSION_UNET_LAST_LAYER_ACTIVATION = 'linear'
-DEFAULT_DIFFUSION_LATENT_DIMENSION = 32
+DEFAULT_DIFFUSION_LATENT_DIMENSION = 24
 DEFAULT_DIFFUSION_UNET_NUMBER_EMBEDDING_CHANNELS = 1
-DEFAULT_DIFFUSION_UNET_CHANNELS_PER_LEVEL = [1, 2, 4]
+DEFAULT_DIFFUSION_UNET_CHANNELS_PER_LEVEL = [1, 2]
 DEFAULT_DIFFUSION_UNET_BATCH_SIZE = 128
 DEFAULT_DIFFUSION_UNET_ATTENTION_MODE = [False, True, True]
-DEFAULT_DIFFUSION_UNET_NUMBER_RESIDUAL_BLOCKS = 2
+DEFAULT_DIFFUSION_UNET_NUMBER_RESIDUAL_BLOCKS = 1
 DEFAULT_DIFFUSION_UNET_GROUP_NORMALIZATION = 1
 DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION = 'swish'
 DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION_ALPHA = 0.05
-DEFAULT_DIFFUSION_UNET_NUMBER_EPOCHS = 1000
+DEFAULT_DIFFUSION_UNET_NUMBER_EPOCHS = 4000
 DEFAULT_DIFFUSION_GAUSSIAN_BETA_START = 1e-4
 DEFAULT_DIFFUSION_GAUSSIAN_BETA_END = 0.02
-DEFAULT_DIFFUSION_GAUSSIAN_TIME_STEPS = 1000
+DEFAULT_DIFFUSION_GAUSSIAN_TIME_STEPS = 500
 DEFAULT_DIFFUSION_GAUSSIAN_CLIP_MIN = -1.0
 DEFAULT_DIFFUSION_GAUSSIAN_CLIP_MAX = 1.0
 DEFAULT_DIFFUSION_MARGIN = 0.5
 DEFAULT_DIFFUSION_EMA = 0.999
-DEFAULT_DIFFUSION_TIME_STEPS = 1000
+DEFAULT_DIFFUSION_TIME_STEPS =  500
 
 
 class DenoisingDiffusion:
