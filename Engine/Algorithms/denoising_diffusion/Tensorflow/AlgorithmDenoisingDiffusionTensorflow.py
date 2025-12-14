@@ -190,6 +190,7 @@ class AlgorithmDenoisingDiffusionTensorflow(tensorflow.keras.Model):
         """
         self._train_stage = training_stage
 
+    @tensorflow.function
     def train_step(self, data):
         """
         Performs a single training step.

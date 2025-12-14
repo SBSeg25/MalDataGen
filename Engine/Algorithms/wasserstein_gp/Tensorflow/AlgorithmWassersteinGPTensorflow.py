@@ -195,7 +195,7 @@ class WassersteinGPAlgorithmTensorflow(Model):
 
     def gradient_penalty(self, batch_size, real_feature, real_label, synthetic_feature):
         """
-        Compute the gradient penalty for the wasserstein_gp GAN.
+        Compute the gradient penalty for the Wasserstein GAN.
 
         The gradient penalty is used to enforce the Lipschitz constraint on the discriminator's output.
 
@@ -204,34 +204,41 @@ class WassersteinGPAlgorithmTensorflow(Model):
                 The batch size of the input data.
             real_feature (Tensorflow.Tensor):
                 Real data features.
+            real_label (Tensorflow.Tensor):
+                Real data labels.
             synthetic_feature (Tensorflow.Tensor):
                 Synthetic (generated) data features.
-
         """
-        # Generate random noise for smoothing.
-        random_smooth = tensorflow.random.normal([batch_size, 1], 0.0, 0.1)
+        # Generate random epsilon for interpolation
+        # Shape deve ser (batch_size, 1) para broadcast correto com features (batch_size, feature_dim)
+        epsilon = tensorflow.random.uniform(
+            shape=[batch_size, 1],
+            minval=0.0,
+            maxval=1.0
+        )
 
-        # Calculate the linear distance between real and synthetic features.
-        linear_distance = synthetic_feature - real_feature
+        # Interpolate between real and synthetic features
+        # epsilon * real + (1 - epsilon) * synthetic
+        interpolated_feature = epsilon * real_feature + (1.0 - epsilon) * synthetic_feature
 
-        # Interpolate between real and synthetic features using the random noise.
-        interpolated_feature = real_feature + random_smooth * linear_distance
+        with tensorflow.GradientTape() as tape:
+            # Watch the interpolated features for gradient computation
+            tape.watch(interpolated_feature)
 
-        with tensorflow.GradientTape() as gradient_penalty:
-            # Watch the interpolated features for gradient computation.
-            gradient_penalty.watch(interpolated_feature)
-
-            # Get discriminator's output for the interpolated features.
+            # Get discriminator's output for the interpolated features
             labels_predicted = self.discriminator([interpolated_feature, real_label], training=True)
 
-        # Calculate the gradient of the discriminator's output with respect to the interpolated features.
-        gradient_computed = gradient_penalty.gradient(labels_predicted, [interpolated_feature])[0]
+        # Calculate the gradient of the discriminator's output with respect to the interpolated features
+        gradients = tape.gradient(labels_predicted, interpolated_feature)
 
-        # Compute the gradient magnitude and normalize it.
-        gradient_normalized = tensorflow.sqrt(tensorflow.reduce_sum(tensorflow.square(gradient_computed), axis=[1]))
+        # Compute the L2 norm of gradients
+        # Add small epsilon to avoid sqrt(0)
+        gradients_sqr = tensorflow.square(gradients)
+        gradients_sqr_sum = tensorflow.reduce_sum(gradients_sqr, axis=1)
+        gradient_l2_norm = tensorflow.sqrt(gradients_sqr_sum + 1e-12)
 
-        # Calculate the final gradient penalty as the mean squared difference from 1.0 and return.
-        gradient_penalty_final = tensorflow.reduce_mean((gradient_normalized - 1.0) ** 2)
+        # Calculate the gradient penalty as the mean squared difference from 1.0
+        gradient_penalty_final = tensorflow.reduce_mean(tensorflow.square(gradient_l2_norm - 1.0))
 
         return gradient_penalty_final
 
@@ -580,8 +587,6 @@ class WassersteinGPAlgorithmTensorflow(Model):
             generated_samples = self._generator.predict([latent_noise, label_samples_generated], verbose=0)
 
             # Round the generated samples to integer values
-            # (if samples are intended to be binary, e.g., images with pixel values 0 or 1).
-            generated_samples = numpy.rint(generated_samples)
 
             # Store generated samples for the current class.
             generated_data[label_class] = generated_samples

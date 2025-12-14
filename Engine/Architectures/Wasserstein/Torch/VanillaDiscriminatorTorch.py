@@ -283,6 +283,8 @@ class VanillaDiscriminatorTorch(nn.Module):
             'elu': nn.ELU(),
             'selu': nn.SELU(),
             'gelu': nn.GELU(),
+            'swish': nn.SiLU(),  # Swish is also known as SiLU
+            'silu': nn.SiLU(),
             'linear': nn.Identity(),  # Linear activation = no activation
             'none': nn.Identity(),  # Alternative name for no activation
             'identity': nn.Identity(),  # Another alternative

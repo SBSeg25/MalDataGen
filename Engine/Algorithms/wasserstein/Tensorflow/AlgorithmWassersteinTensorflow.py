@@ -155,6 +155,7 @@ class WassersteinAlgorithmTensorflow(Model):
         else:
             self._discriminator_loss_fn = loss_discriminator
 
+    @tensorflow.function
     def train_step(self, batch):
         real_feature, real_samples_label = batch
         batch_size = tensorflow.shape(real_feature)[0]
@@ -394,7 +395,6 @@ class WassersteinAlgorithmTensorflow(Model):
 
             # Round the generated samples to integer values
             # (if samples are intended to be binary, e.g., images with pixel values 0 or 1).
-            generated_samples = numpy.rint(generated_samples)
 
             # Store generated samples for the current class.
             generated_data[label_class] = generated_samples
@@ -551,28 +551,6 @@ class WassersteinAlgorithmTensorflow(Model):
         """
         self._generator_loss_fn = value
 
-    @property
-    def gradient_penalty_weight(self) -> float:
-        """Get the weight for gradient penalty in WGAN-GP.
-
-        Returns:
-            The weight factor for gradient penalty term.
-        """
-        return self._gradient_penalty_weight
-
-    @gradient_penalty_weight.setter
-    def gradient_penalty_weight(self, value: float) -> None:
-        """Set the weight for gradient penalty in WGAN-GP.
-
-        Args:
-            value: The penalty weight (must be non-negative).
-
-        Raises:
-            ValueError: If value is negative.
-        """
-        if value < 0:
-            raise ValueError("Gradient penalty weight cannot be negative")
-        self._gradient_penalty_weight = value
 
     @property
     def smooth_rate(self) -> float:

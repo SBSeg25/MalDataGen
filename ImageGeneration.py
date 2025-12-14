@@ -9,6 +9,10 @@ Ideal para validar VAEs condicionais
 
 import os
 import numpy as np
+
+from Engine.Models.Wasserstein import Wasserstein
+from Engine.Models.WassersteinGP import WassersteinGP
+
 os.environ["ML_FRAMEWORK"] = "tensorflow"
 from Engine.Models.Adversarial import Adversarial
 from Engine.Models.Autoencoder import Autoencoder
@@ -24,7 +28,7 @@ IMAGE_SIZE = (16, 16)
 INPUT_SHAPE = (16, 16, 1)
 
 N_CLASSES = 10
-BATCH_LIMIT = 3600
+BATCH_LIMIT = 1200
 
 
 try:
@@ -70,7 +74,7 @@ y_real_samples = np.array(y_real_samples, dtype=np.int32)
 # Modelo
 # =====================
 
-model = VariationalAutoencoder(number_classes=N_CLASSES)
+model = WassersteinGP(number_classes=N_CLASSES)
 
 model.fit_model(
     input_shape=INPUT_SHAPE,
@@ -195,7 +199,7 @@ y_real_samples = np.array(y_real_samples, dtype=np.int32)
 # Modelo
 # =====================
 
-model = VariationalAutoencoder(number_classes=N_CLASSES)
+model = WassersteinGP(number_classes=N_CLASSES)
 
 model.fit_model(
     input_shape=INPUT_SHAPE,

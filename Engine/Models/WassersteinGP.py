@@ -8,8 +8,6 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/12/13'
 __credits__ = ['Synthetic Ocean AI']
 
-from Engine.Architectures.WassersteinGP.WassersteinGPModel import WassersteinGPModel
-from Engine.Algorithms.wasserstein_gp.WassersteinGPAlgorithm import WassersteinGPAlgorithm
 
 # MIT License
 #
@@ -43,23 +41,25 @@ try:
     from tensorflow.keras.utils import to_categorical
     from Engine.Callbacks.CallbackEarlyStop import EarlyStopping
     from Engine.Callbacks.CallbackModel import ModelMonitorCallback
+    from Engine.Architectures.WassersteinGP.WassersteinGPModel import WassersteinGPModel
+    from Engine.Algorithms.wasserstein_gp.WassersteinGPAlgorithm import WassersteinGPAlgorithm
 
 except ImportError as error:
     logging.error(error)
     sys.exit(-1)
 
 # Default values from your constants file
-DEFAULT_WASSERSTEIN_GAN_GP_LATENT_DIMENSION = 128
+DEFAULT_WASSERSTEIN_GAN_GP_LATENT_DIMENSION = 64
 DEFAULT_WASSERSTEIN_GAN_GP_TRAINING_ALGORITHM = "Adam"
 DEFAULT_WASSERSTEIN_GAN_GP_ACTIVATION = "LeakyReLU"
-DEFAULT_WASSERSTEIN_GAN_GP_DROPOUT_DECAY_RATE_G = 0.2
-DEFAULT_WASSERSTEIN_GAN_GP_DROPOUT_DECAY_RATE_D = 0.4
-DEFAULT_WASSERSTEIN_GAN_GP_BATCH_SIZE = 32
+DEFAULT_WASSERSTEIN_GAN_GP_DROPOUT_DECAY_RATE_G = 0.0
+DEFAULT_WASSERSTEIN_GAN_GP_DROPOUT_DECAY_RATE_D = 0.1
+DEFAULT_WASSERSTEIN_GAN_GP_BATCH_SIZE = 512
 DEFAULT_WASSERSTEIN_GAN_GP_NUMBER_CLASSES = 2
-DEFAULT_WASSERSTEIN_GAN_GP_NUMBER_EPOCHS = 20
-DEFAULT_WASSERSTEIN_GAN_GP_DENSE_LAYERS_SETTINGS_GENERATOR = [128]
-DEFAULT_WASSERSTEIN_GAN_GP_DENSE_LAYERS_SETTINGS_DISCRIMINATOR = [128]
-DEFAULT_WASSERSTEIN_GAN_GP_LOSS = "binary_crossentropy"
+DEFAULT_WASSERSTEIN_GAN_GP_NUMBER_EPOCHS = 6000
+DEFAULT_WASSERSTEIN_GAN_GP_DENSE_LAYERS_SETTINGS_GENERATOR = [1024]
+DEFAULT_WASSERSTEIN_GAN_GP_DENSE_LAYERS_SETTINGS_DISCRIMINATOR = [256]
+DEFAULT_WASSERSTEIN_GAN_GP_LOSS = "wasserstein"
 DEFAULT_WASSERSTEIN_GAN_GP_MOMENTUM = 0.8
 DEFAULT_WASSERSTEIN_GAN_GP_LAST_ACTIVATION_LAYER = "sigmoid"
 DEFAULT_WASSERSTEIN_GAN_GP_INITIALIZER_MEAN = 0.0
@@ -72,8 +72,8 @@ DEFAULT_WASSERSTEIN_GAN_GP_ADAM_LEARNING_RATE = 0.0001
 DEFAULT_WASSERSTEIN_GAN_GP_ADAM_BETA = 0.5
 DEFAULT_WASSERSTEIN_GAN_GP_DISCRIMINATOR_STEPS = 3
 DEFAULT_WASSERSTEIN_GAN_GP_SMOOTHING_RATE = 0.15
-DEFAULT_WASSERSTEIN_GAN_GP_LATENT_MEAN_DISTRIBUTION = 0.0
-DEFAULT_WASSERSTEIN_GAN_GP_latent_standard_deviation = 0.125
+DEFAULT_WASSERSTEIN_GAN_GP_LATENT_MEAN_DISTRIBUTION = 0.5
+DEFAULT_WASSERSTEIN_GAN_GP_latent_standard_deviation = 0.5
 DEFAULT_WASSERSTEIN_GAN_GP_GRADIENT_PENALTY = 10.0
 DEFAULT_WASSERSTEIN_GAN_GP_FILE_NAME_DISCRIMINATOR = "discriminator_model"
 DEFAULT_WASSERSTEIN_GAN_GP_FILE_NAME_GENERATOR = "generator_model"
@@ -388,33 +388,20 @@ class WassersteinGP:
         # Calculate total flattened dimension
         flattened_dim = int(np.prod(input_shape))
 
-        # Prepare data
-        print(f"\nPreparing data for Wasserstein GAN-GP...")
-        print(f"  - Original input shape: {input_shape}")
-        print(f"  - Input data shape: {x_real_samples.shape}")
 
         # Flatten the input data if it has more than 2 dimensions
         # (batch_size, ...) -> (batch_size, flattened_features)
         if len(x_real_samples.shape) > 2:
             x_real_samples_flat = x_real_samples.reshape(x_real_samples.shape[0], -1)
-            print(f"  - Flattened data shape: {x_real_samples_flat.shape}")
+
         else:
             x_real_samples_flat = x_real_samples
-            print(f"  - Data already flat: {x_real_samples_flat.shape}")
 
         # Calculate number_samples_per_class automatically from labels
         number_samples_per_class = self._calculate_samples_per_class(y_real_samples)
-        print(f"  - Auto-calculated class distribution: {number_samples_per_class}")
 
         # Initialize the wasserstein_gp model (or use provided) with flattened dimension
         self._get_wasserstein_gp(flattened_dim, number_samples_per_class)
-
-        # Print the model summaries for the generator and discriminator if available
-        if self._wasserstein_gp_model is not None:
-            print("\nGenerator Model:")
-            print(self._wasserstein_gp_model.get_generator())
-            print("\nDiscriminator Model:")
-            print(self._wasserstein_gp_model.get_discriminator())
 
         # Ensure we have an algorithm
         if self._wasserstein_gp_algorithm is None:
@@ -455,13 +442,6 @@ class WassersteinGP:
         if hasattr(self, '_callback_early_stop'):
             callbacks_list.append(self._callback_early_stop)
 
-        print(f"\nStarting training...")
-        print(f"  - Epochs: {self._wasserstein_gp_number_epochs}")
-        print(f"  - Batch size: {self._wasserstein_gp_batch_size}")
-        print(f"  - Latent dimension: {self._wasserstein_gp_latent_dimension}")
-        print(f"  - Discriminator steps: {self._wasserstein_gp_discriminator_steps}")
-        print(f"  - Gradient penalty weight: {self._wasserstein_gp_gradient_penalty}")
-
         # Fit the wasserstein_gp GAN model with flattened samples
         self._wasserstein_gp_algorithm.fit(
             x_real_samples_flat,
@@ -471,7 +451,6 @@ class WassersteinGP:
             callbacks=callbacks_list if callbacks_list else None
         )
 
-        print(f"\n✓ Training completed successfully!")
 
     def get_samples(self, number_samples_per_class):
         """

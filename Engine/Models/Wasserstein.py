@@ -47,26 +47,26 @@ except ImportError as error:
 DEFAULT_WASSERSTEIN_LATENT_DIMENSION = 64
 DEFAULT_WASSERSTEIN_TRAINING_ALGORITHM = "Adam"
 DEFAULT_WASSERSTEIN_ACTIVATION_FUNCTION = "swish"
-DEFAULT_WASSERSTEIN_DROPOUT_DECAY_RATE_G = 0.25
-DEFAULT_WASSERSTEIN_DROPOUT_DECAY_RATE_D = 0.25
-DEFAULT_WASSERSTEIN_BATCH_SIZE = 64
-DEFAULT_WASSERSTEIN_NUMBER_EPOCHS = 50
+DEFAULT_WASSERSTEIN_DROPOUT_DECAY_RATE_G = 0.0
+DEFAULT_WASSERSTEIN_DROPOUT_DECAY_RATE_D = 0.1
+DEFAULT_WASSERSTEIN_BATCH_SIZE = 512
+DEFAULT_WASSERSTEIN_NUMBER_EPOCHS = 6000
 DEFAULT_WASSERSTEIN_NUMBER_CLASSES = 2
-DEFAULT_WASSERSTEIN_DENSE_LAYERS_SETTINGS_GENERATOR = [256, 128, 64]
-DEFAULT_WASSERSTEIN_DENSE_LAYERS_SETTINGS_DISCRIMINATOR = [64, 128, 256]
+DEFAULT_WASSERSTEIN_DENSE_LAYERS_SETTINGS_GENERATOR = [2048]
+DEFAULT_WASSERSTEIN_DENSE_LAYERS_SETTINGS_DISCRIMINATOR = [512]
 DEFAULT_WASSERSTEIN_LOSS_FUNCTION = "wasserstein"
 DEFAULT_WASSERSTEIN_MOMENTUM = 0.5
-DEFAULT_WASSERSTEIN_LAST_ACTIVATION_LAYER = "sigmoid"
+DEFAULT_WASSERSTEIN_LAST_ACTIVATION_LAYER = "linear"
 DEFAULT_WASSERSTEIN_INITIALIZER_MEAN = 0.0
-DEFAULT_WASSERSTEIN_INITIALIZER_DEVIATION = 0.02
-DEFAULT_WASSERSTEIN_OPTIMIZER_GENERATOR_LEARNING_RATE = 0.0002
-DEFAULT_WASSERSTEIN_OPTIMIZER_DISCRIMINATOR_LEARNING_RATE = 0.0002
+DEFAULT_WASSERSTEIN_INITIALIZER_DEVIATION = 0.15
+DEFAULT_WASSERSTEIN_OPTIMIZER_GENERATOR_LEARNING_RATE = 0.001
+DEFAULT_WASSERSTEIN_OPTIMIZER_DISCRIMINATOR_LEARNING_RATE = 0.001
 DEFAULT_WASSERSTEIN_OPTIMIZER_GENERATOR_BETA = 0.5
 DEFAULT_WASSERSTEIN_OPTIMIZER_DISCRIMINATOR_BETA = 0.5
 DEFAULT_WASSERSTEIN_DISCRIMINATOR_STEPS = 5
 DEFAULT_WASSERSTEIN_SMOOTHING_RATE = 0.0
-DEFAULT_WASSERSTEIN_LATENT_MEAN_DISTRIBUTION = 0.0
-DEFAULT_WASSERSTEIN_LATENT_STANDARD_DEVIATION = 1.0
+DEFAULT_WASSERSTEIN_LATENT_MEAN_DISTRIBUTION = 0.5
+DEFAULT_WASSERSTEIN_LATENT_STANDARD_DEVIATION = 0.5
 DEFAULT_WASSERSTEIN_FILE_NAME_DISCRIMINATOR = "discriminator_model"
 DEFAULT_WASSERSTEIN_FILE_NAME_GENERATOR = "generator_model"
 DEFAULT_WASSERSTEIN_PATH_OUTPUT_MODELS = "models_saved/"
@@ -353,34 +353,15 @@ class Wasserstein:
         # Calculate total flattened dimension
         flattened_dim = int(np.prod(input_shape))
 
-        # Prepare data
-        print(f"\nPreparing data for Wasserstein GAN...")
-        print(f"  - Original input shape: {input_shape}")
-        print(f"  - Input data shape: {x_real_samples.shape}")
-
         # Flatten the input data if it has more than 2 dimensions
         # (batch_size, ...) -> (batch_size, flattened_features)
         if len(x_real_samples.shape) > 2:
             x_real_samples_flat = x_real_samples.reshape(x_real_samples.shape[0], -1)
-            print(f"  - Flattened data shape: {x_real_samples_flat.shape}")
         else:
             x_real_samples_flat = x_real_samples
-            print(f"  - Data already flat: {x_real_samples_flat.shape}")
 
         # Initialize the wasserstein_gp model (or use provided) with flattened dimension
         self._get_wasserstein(flattened_dim)
-
-        # Print the model summaries for the generator and discriminator if available
-        if self._wasserstein_model is not None:
-            print("\n" + "=" * 60)
-            print("GENERATOR ARCHITECTURE")
-            print("=" * 60)
-            print(self._wasserstein_model.get_generator())
-            print("\n" + "=" * 60)
-            print("DISCRIMINATOR/CRITIC ARCHITECTURE")
-            print("=" * 60)
-            print(self._wasserstein_model.get_discriminator())
-            print("=" * 60 + "\n")
 
         # Ensure we have an algorithm
         if self._wasserstein_algorithm is None:
@@ -459,18 +440,12 @@ class Wasserstein:
             y_one_hot = np.zeros((y_real_samples.shape[0], num_classes))
             y_one_hot[np.arange(y_real_samples.shape[0]), y_real_samples.astype(int)] = 1
             y_real_samples = y_one_hot
-            print(f"  - Converted labels to one-hot encoding: shape {y_real_samples.shape}")
+
         elif y_real_samples.shape[1] != num_classes:
             raise ValueError(
                 f"Label shape mismatch: got {y_real_samples.shape} but expected "
                 f"either (N,) or (N, {num_classes}) for {num_classes} classes"
             )
-
-        print(f"\nStarting training...")
-        print(f"  - Epochs: {self._wasserstein_number_epochs}")
-        print(f"  - Batch size: {self._wasserstein_batch_size}")
-        print(f"  - Latent dimension: {self._wasserstein_latent_dimension}")
-        print(f"  - Discriminator steps: {self._wasserstein_discriminator_steps}")
 
         # Fit the model with flattened real samples and the corresponding labels
         self._wasserstein_algorithm.fit(
@@ -483,7 +458,6 @@ class Wasserstein:
             verbose=1
         )
 
-        print("\n✓ Training completed successfully!")
 
     def get_samples(self, number_samples_per_class):
         """
