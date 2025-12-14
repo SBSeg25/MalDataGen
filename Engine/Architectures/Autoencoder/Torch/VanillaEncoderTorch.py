@@ -41,6 +41,7 @@ try:
 
     import torch
     import torch.nn as nn
+    import torch.nn.functional as F
 
     from Engine.Activations.Activations import Activations
 
@@ -49,14 +50,88 @@ except ImportError as error:
     sys.exit(-1)
 
 
+class CrossAttentionLayer(nn.Module):
+    """
+    Cross-Attention layer for conditioning on label information.
+
+    The input features act as Query, while the label embedding provides Key and Value.
+    """
+
+    def __init__(self, embed_dim, num_heads=4):
+        super(CrossAttentionLayer, self).__init__()
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.head_dim = embed_dim // num_heads
+
+        assert self.head_dim * num_heads == embed_dim, "embed_dim must be divisible by num_heads"
+
+        # Query projection (from input features)
+        self.query_dense = nn.Linear(embed_dim, embed_dim)
+
+        # Key and Value projections (from label embedding)
+        self.key_dense = nn.Linear(embed_dim, embed_dim)
+        self.value_dense = nn.Linear(embed_dim, embed_dim)
+
+        # Output projection
+        self.out_dense = nn.Linear(embed_dim, embed_dim)
+
+    def split_heads(self, x, batch_size):
+        """Split the last dimension into (num_heads, head_dim)"""
+        x = x.view(batch_size, -1, self.num_heads, self.head_dim)
+        return x.permute(0, 2, 1, 3)
+
+    def forward(self, query_input, key_value_input):
+        batch_size = query_input.size(0)
+
+        # Ensure inputs have sequence dimension
+        if len(query_input.shape) == 2:
+            query_input = query_input.unsqueeze(1)
+        if len(key_value_input.shape) == 2:
+            key_value_input = key_value_input.unsqueeze(1)
+
+        # Linear projections
+        Q = self.query_dense(query_input)
+        K = self.key_dense(key_value_input)
+        V = self.value_dense(key_value_input)
+
+        # Split heads
+        Q = self.split_heads(Q, batch_size)
+        K = self.split_heads(K, batch_size)
+        V = self.split_heads(V, batch_size)
+
+        # Scaled dot-product attention
+        matmul_qk = torch.matmul(Q, K.transpose(-2, -1))
+        dk = torch.tensor(self.head_dim, dtype=torch.float32)
+        scaled_attention_logits = matmul_qk / torch.sqrt(dk)
+
+        attention_weights = F.softmax(scaled_attention_logits, dim=-1)
+
+        # Apply attention to values
+        attention_output = torch.matmul(attention_weights, V)
+
+        # Concatenate heads
+        attention_output = attention_output.permute(0, 2, 1, 3).contiguous()
+        concat_attention = attention_output.view(batch_size, -1, self.embed_dim)
+
+        # Final linear projection
+        output = self.out_dense(concat_attention)
+
+        # Remove sequence dimension if it was added
+        output = output.squeeze(1)
+
+        return output
+
+
 class VanillaEncoderTorch(Activations, nn.Module):
     """
-    VanillaEncoder
+    VanillaEncoder with Cross-Attention
 
-    A class representing a Vanilla Encoder model for deep learning applications. The encoder
-    is designed to process inputs and labels, apply a series of dense layers with activations
-    and dropout, and output a latent representation of the input data. This model is typically
-    used in applications such as autoencoders, variational autoencoders, or other generative models.
+    A class representing a Vanilla Encoder model with cross-attention mechanism for label conditioning.
+    Instead of simple concatenation, the encoder uses cross-attention where the input features query
+    the label embedding information. The encoder is designed to process inputs and labels, apply a
+    series of dense layers with activations and dropout, and output a latent representation of the
+    input data. This model is typically used in applications such as autoencoders, variational
+    autoencoders, or other generative models.
 
     Attributes:
         @encoder_latent_dimension (int):
@@ -79,6 +154,10 @@ class VanillaEncoderTorch(Activations, nn.Module):
             The standard deviation for the normal distribution used to initialize the weights.
         @encoder_number_samples_per_class (Optional[dict]):
             An optional dictionary containing metadata about the number of samples per class.
+        @encoder_attention_embed_dim (int):
+            Embedding dimension for cross-attention mechanism.
+        @encoder_attention_num_heads (int):
+            Number of attention heads in cross-attention layer.
 
     Raises:
         ValueError:
@@ -88,9 +167,10 @@ class VanillaEncoderTorch(Activations, nn.Module):
             - `dropout_decay_encoder` is outside the valid range [0, 1].
             - `number_neurons_encoder` is not a non-empty list or contains non-positive integers.
             - `number_samples_per_class` is provided but is not a dictionary.
+            - `attention_embed_dim` is not divisible by `attention_num_heads`.
 
     Example:
-        >>> encoder = VanillaEncoder(
+        >>> encoder = VanillaEncoderTorch(
         ...     latent_dimension=128,
         ...     output_shape=(64, 64, 1),
         ...     activation_function='ReLU',
@@ -100,16 +180,19 @@ class VanillaEncoderTorch(Activations, nn.Module):
         ...     last_layer_activation='sigmoid',
         ...     number_neurons_encoder=[512, 256, 128],
         ...     dataset_type=numpy.float32,
-        ...     number_samples_per_class={"number_classes": 10}
+        ...     number_samples_per_class={"number_classes": 10},
+        ...     attention_embed_dim=128,
+        ...     attention_num_heads=4
         ... )
     """
 
     def __init__(self, latent_dimension: int, output_shape: tuple, activation_function: str, initializer_mean: float,
                  initializer_deviation: float, dropout_decay_encoder: float, last_layer_activation: str,
                  number_neurons_encoder: list, dataset_type: Any = numpy.float32,
-                 number_samples_per_class: Optional[Dict[str, Any]] = None):
+                 number_samples_per_class: Optional[Dict[str, Any]] = None,
+                 attention_embed_dim: int = 128, attention_num_heads: int = 4):
         """
-        Initializes the VanillaEncoder with the provided parameters.
+        Initializes the VanillaEncoder with cross-attention and the provided parameters.
 
         Args:
             latent_dimension (int): The dimension of the latent space.
@@ -122,6 +205,8 @@ class VanillaEncoderTorch(Activations, nn.Module):
             number_neurons_encoder (list): List specifying the number of neurons in each encoder layer.
             dataset_type (dtype, optional): The data type of the input dataset. Defaults to numpy.float32.
             number_samples_per_class (dict, optional): Specifies the number of samples per class.
+            attention_embed_dim (int, optional): Embedding dimension for cross-attention (default: 128).
+            attention_num_heads (int, optional): Number of attention heads (default: 4).
         """
         # Initialize Activations first (if it's a class with __init__)
         try:
@@ -155,6 +240,15 @@ class VanillaEncoderTorch(Activations, nn.Module):
             if not isinstance(number_samples_per_class, dict):
                 raise ValueError("number_samples_per_class must be a dictionary.")
 
+        if not isinstance(attention_embed_dim, int) or attention_embed_dim <= 0:
+            raise ValueError(f"Invalid value for attention_embed_dim: {attention_embed_dim}. It must be a positive integer.")
+
+        if not isinstance(attention_num_heads, int) or attention_num_heads <= 0:
+            raise ValueError(f"Invalid value for attention_num_heads: {attention_num_heads}. It must be a positive integer.")
+
+        if attention_embed_dim % attention_num_heads != 0:
+            raise ValueError(f"attention_embed_dim ({attention_embed_dim}) must be divisible by attention_num_heads ({attention_num_heads}).")
+
         self._encoder_latent_dimension = latent_dimension
         self._encoder_output_shape = output_shape
         self._encoder_activation_function = activation_function
@@ -165,41 +259,61 @@ class VanillaEncoderTorch(Activations, nn.Module):
         self._encoder_initializer_deviation = initializer_deviation
         self._encoder_number_neurons_encoder = number_neurons_encoder
         self._encoder_number_samples_per_class = number_samples_per_class
+        self._encoder_attention_embed_dim = attention_embed_dim
+        self._encoder_attention_num_heads = attention_num_heads
 
     def get_encoder(self, input_shape: int) -> nn.Module:
         """
-        Creates and returns the encoder model.
+        Creates and returns the encoder model with cross-attention.
+
+        The model uses cross-attention to condition the input features on label information,
+        where the input features act as Query and the label embedding provides Key and Value.
 
         This method constructs the neural network by stacking dense layers with the provided
-        configurations (neurons, dropout, and activation). It also concatenates the input data
-        and labels before passing through the layers.
+        configurations (neurons, dropout, and activation).
 
         Args:
             input_shape (int): The shape of the input data.
 
         Returns:
-            nn.Module: The encoder model which takes input data and labels and outputs the
-                       encoded latent representation and labels.
+            nn.Module: The encoder model with cross-attention which takes input data and labels
+                       and outputs the encoded latent representation and labels.
         """
 
         class EncoderModule(nn.Module):
             def __init__(self, latent_dim, num_classes, input_dim, number_neurons,
                          init_mean, init_std, dropout_rate, activation_fn, last_activation_fn,
-                         get_activation_func):
+                         get_activation_func, attention_embed_dim, attention_num_heads):
                 super().__init__()
 
                 # Store only the necessary configuration, not the parent object
                 self.latent_dim = latent_dim
                 self.num_classes = num_classes
                 self.get_activation_func = get_activation_func
+                self.attention_embed_dim = attention_embed_dim
+                self.attention_num_heads = attention_num_heads
+
+                # Label embedding layer
+                self.label_embedding = nn.Linear(num_classes, attention_embed_dim)
+                self._init_weights(self.label_embedding, init_mean, init_std)
+
+                # Project input features to attention embedding dimension
+                self.input_projection = nn.Linear(input_dim, attention_embed_dim)
+                self._init_weights(self.input_projection, init_mean, init_std)
+
+                # Cross-attention: input features query label information
+                self.cross_attention = CrossAttentionLayer(
+                    embed_dim=attention_embed_dim,
+                    num_heads=attention_num_heads
+                )
 
                 # Build layers
                 self.layers = nn.ModuleList()
                 self.dropouts = nn.ModuleList()
                 self.activations = []
 
-                # First layer
-                layer = nn.Linear(input_dim, number_neurons[0])
+                # First layer after attention
+                layer = nn.Linear(attention_embed_dim, number_neurons[0])
                 self._init_weights(layer, init_mean, init_std)
                 self.layers.append(layer)
                 self.dropouts.append(nn.Dropout(dropout_rate))
@@ -230,7 +344,7 @@ class VanillaEncoderTorch(Activations, nn.Module):
 
             def forward(self, x):
                 """
-                Forward pass through the encoder.
+                Forward pass through the encoder with cross-attention.
 
                 Args:
                     x: List/tuple of [data_input, label_input]
@@ -240,10 +354,17 @@ class VanillaEncoderTorch(Activations, nn.Module):
                 """
                 data_input, label_input = x
 
-                # Concatenate data and labels
-                x = torch.cat([data_input, label_input], dim=1)
+                # Embed labels
+                label_embedded = F.relu(self.label_embedding(label_input))
 
-                # Pass through layers
+                # Project input features to attention embedding dimension
+                input_projected = self.input_projection(data_input)
+
+                # Cross-attention: input features query label information
+                attended_features = self.cross_attention(input_projected, label_embedded)
+
+                # Pass through encoder layers
+                x = attended_features
                 for layer, dropout, activation_name in zip(self.layers, self.dropouts, self.activations):
                     x = layer(x)
                     x = dropout(x)
@@ -257,19 +378,20 @@ class VanillaEncoderTorch(Activations, nn.Module):
 
         # Create encoder with configuration values instead of parent reference
         num_classes = self._encoder_number_samples_per_class["number_classes"]
-        input_dim = input_shape + num_classes
 
         return EncoderModule(
             latent_dim=self._encoder_latent_dimension,
             num_classes=num_classes,
-            input_dim=input_dim,
+            input_dim=input_shape,
             number_neurons=self._encoder_number_neurons_encoder,
             init_mean=self._encoder_initializer_mean,
             init_std=self._encoder_initializer_deviation,
             dropout_rate=self._encoder_dropout_decay_rate_encoder,
             activation_fn=self._encoder_activation_function,
             last_activation_fn=self._encoder_last_layer_activation,
-            get_activation_func=self._get_activation
+            get_activation_func=self._get_activation,
+            attention_embed_dim=self._encoder_attention_embed_dim,
+            attention_num_heads=self._encoder_attention_num_heads
         )
 
     def _get_activation(self, activation_name: str):
@@ -326,6 +448,16 @@ class VanillaEncoderTorch(Activations, nn.Module):
             list: A list specifying the number of neurons in each encoder layer.
         """
         return self._encoder_number_neurons_encoder
+
+    @property
+    def attention_embed_dim(self) -> int:
+        """int: Gets the embedding dimension for cross-attention."""
+        return self._encoder_attention_embed_dim
+
+    @property
+    def attention_num_heads(self) -> int:
+        """int: Gets the number of attention heads."""
+        return self._encoder_attention_num_heads
 
     @dropout_decay_rate_encoder.setter
     def dropout_decay_rate_encoder(self, dropout_decay_rate_generator: float) -> None:

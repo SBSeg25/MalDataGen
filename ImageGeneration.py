@@ -10,6 +10,7 @@ Ideal para validar VAEs condicionais
 import os
 import numpy as np
 
+from Engine.Models.Autoencoder import Autoencoder
 from Engine.Models.VariationalAutoencoder import VariationalAutoencoder
 os.environ["ML_FRAMEWORK"] = "tensorflow"
 
@@ -68,7 +69,7 @@ y_real_samples = np.array(y_real_samples, dtype=np.int32)
 # Modelo
 # =====================
 
-model = VariationalAutoencoder(number_classes=N_CLASSES)
+model = Autoencoder(number_classes=N_CLASSES)
 
 model.fit_model(
     input_shape=INPUT_SHAPE,
