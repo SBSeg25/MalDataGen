@@ -51,11 +51,6 @@ except ImportError as error:
     logging.error(error)
     sys.exit(-1)
 
-# Debug: Check what we're actually importing
-print(f"Framework selected: {framework}")
-print(f"AdversarialModelBase type: {type(AdversarialModelBase)}")
-print(f"AdversarialModelBase: {AdversarialModelBase}")
-
 class AdversarialModel(AdversarialModelBase):
     def __init__(self, *args, **kwargs):
 

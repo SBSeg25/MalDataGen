@@ -38,121 +38,39 @@ try:
     from typing import List
     from typing import Dict
     from typing import Union
+
     from typing import Optional
 
     from tensorflow.keras.layers import Input
     from tensorflow.keras.layers import Dense
     from tensorflow.keras.models import Model
-    from tensorflow.keras.layers import Layer
+
     from tensorflow.keras.layers import Flatten
     from tensorflow.keras.layers import Dropout
-    from tensorflow.keras.layers import Concatenate
-    from tensorflow.keras.initializers import RandomNormal
 
-    import tensorflow as tf
+    from tensorflow.keras.layers import Concatenate
 
     from Engine.Activations.Activations import Activations
+    from tensorflow.keras.initializers import RandomNormal
+
 
 except ImportError as error:
     print(error)
     sys.exit(-1)
 
 
-class CrossAttentionLayer(Layer):
-    """
-    Cross-Attention layer for conditioning on label information (Keras implementation).
-
-    The input features act as Query, while the label embedding provides Key and Value.
-    """
-
-    def __init__(self, embed_dim, num_heads=4, **kwargs):
-        super(CrossAttentionLayer, self).__init__(**kwargs)
-        self.embed_dim = embed_dim
-        self.num_heads = num_heads
-        self.head_dim = embed_dim // num_heads
-
-        if self.head_dim * num_heads != embed_dim:
-            raise ValueError("embed_dim must be divisible by num_heads")
-
-    def build(self, input_shape):
-        # Query projection (from input features)
-        self.query_dense = Dense(self.embed_dim, name='query')
-
-        # Key and Value projections (from label embedding)
-        self.key_dense = Dense(self.embed_dim, name='key')
-        self.value_dense = Dense(self.embed_dim, name='value')
-
-        # Output projection
-        self.out_dense = Dense(self.embed_dim, name='output')
-
-        super(CrossAttentionLayer, self).build(input_shape)
-
-    def split_heads(self, x, batch_size):
-        """Split the last dimension into (num_heads, head_dim)"""
-        x = tf.reshape(x, (batch_size, -1, self.num_heads, self.head_dim))
-        return tf.transpose(x, perm=[0, 2, 1, 3])
-
-    def call(self, inputs):
-        query_input, key_value_input = inputs
-        batch_size = tf.shape(query_input)[0]
-
-        # Ensure inputs have sequence dimension
-        if len(query_input.shape) == 2:
-            query_input = tf.expand_dims(query_input, 1)
-        if len(key_value_input.shape) == 2:
-            key_value_input = tf.expand_dims(key_value_input, 1)
-
-        # Linear projections
-        Q = self.query_dense(query_input)
-        K = self.key_dense(key_value_input)
-        V = self.value_dense(key_value_input)
-
-        # Split heads
-        Q = self.split_heads(Q, batch_size)
-        K = self.split_heads(K, batch_size)
-        V = self.split_heads(V, batch_size)
-
-        # Scaled dot-product attention
-        matmul_qk = tf.matmul(Q, K, transpose_b=True)
-        dk = tf.cast(self.head_dim, tf.float32)
-        scaled_attention_logits = matmul_qk / tf.sqrt(dk)
-
-        attention_weights = tf.nn.softmax(scaled_attention_logits, axis=-1)
-
-        # Apply attention to values
-        attention_output = tf.matmul(attention_weights, V)
-
-        # Concatenate heads
-        attention_output = tf.transpose(attention_output, perm=[0, 2, 1, 3])
-        concat_attention = tf.reshape(attention_output, (batch_size, -1, self.embed_dim))
-
-        # Final linear projection
-        output = self.out_dense(concat_attention)
-
-        # Remove sequence dimension if it was added
-        output = tf.squeeze(output, axis=1)
-
-        return output
-
-    def get_config(self):
-        config = super(CrossAttentionLayer, self).get_config()
-        config.update({
-            'embed_dim': self.embed_dim,
-            'num_heads': self.num_heads
-        })
-        return config
-
-
 class VanillaDiscriminator(Activations):
     """
-     VanillaDiscriminator with Cross-Attention
+     VanillaDiscriminator
 
-     Implements a fully-connected (dense) discriminator network with cross-attention mechanism
-     for use in generative models, such as Generative Adversarial Networks (GANs). Instead of
-     simple concatenation, the discriminator uses cross-attention where the input features query
-     the label embedding information. This class provides flexibility in the design of the
-     architecture, including customizable latent dimensions, output shapes, activation functions,
-     dropout rates, and layer sizes.
+     Implements a fully-connected (dense) discriminator network for use in generative models,
+     such as Generative adversarial Networks (GANs). This class provides flexibility in the design
+     of the architecture, including customizable latent dimensions, output shapes, activation functions,
+     dropout rates, and layer sizes. It allows easy adaptation to various GAN tasks where a discriminator
+     or critic network is required.
+
+     This class focuses on defining the model architecture and does not directly handle training
+     or loss computation.
 
      Attributes:
          @discriminator_latent_dimension (int):
@@ -175,10 +93,6 @@ class VanillaDiscriminator(Activations):
              Standard deviation of the normal distribution used for weight initialization.
          @discriminator_number_samples_per_class (Optional[Dict[str, int]]):
              Optional dictionary containing the number of samples per class.
-         @discriminator_attention_embed_dim (int):
-             Embedding dimension for cross-attention mechanism.
-         @discriminator_attention_num_heads (int):
-             Number of attention heads in cross-attention layer.
          @discriminator_model_dense (Optional[Model]):
              Placeholder for the compiled Keras model after building the network.
 
@@ -189,12 +103,11 @@ class VanillaDiscriminator(Activations):
              - Dropout rate outside the range [0, 1]
              - Empty or invalid `dense_layer_sizes_d`
              - Missing required key "number_classes" in `number_samples_per_class`, if provided
-             - `attention_embed_dim` not divisible by `attention_num_heads`
 
      Example:
          >>> discriminator = VanillaDiscriminator(
          ...     latent_dimension=100,
-         ...     output_shape=784,
+         ...     output_shape=(28, 28, 1),
          ...     activation_function='leaky_relu',
          ...     initializer_mean=0.0,
          ...     initializer_deviation=0.02,
@@ -202,11 +115,9 @@ class VanillaDiscriminator(Activations):
          ...     last_layer_activation='sigmoid',
          ...     dense_layer_sizes_d=[512, 256, 128],
          ...     dataset_type=numpy.float32,
-         ...     number_samples_per_class={"number_classes": 10},
-         ...     attention_embed_dim=128,
-         ...     attention_num_heads=4
+         ...     number_samples_per_class={"number_classes": 10}
          ... )
-         >>> model = discriminator.get_discriminator()
+         >>> discriminator.build()  # Example method call if present
      """
 
     def __init__(self,
@@ -219,29 +130,43 @@ class VanillaDiscriminator(Activations):
                  last_layer_activation: str,
                  dense_layer_sizes_d: List[int],
                  dataset_type: numpy.dtype = numpy.float32,
-                 number_samples_per_class: Optional[Dict[str, int]] = None,
-                 attention_embed_dim: int = 128,
-                 attention_num_heads: int = 4):
+                 number_samples_per_class: Optional[Dict[str, int]] = None):
         """
-        Initializes the VanillaDiscriminator with cross-attention and the provided parameters.
+        Initializes the VanillaDiscriminator class with the provided parameters.
+
+        This constructor sets up the architecture of the discriminator, including the latent
+        dimension, output shape, activation functions, weight initializers, dropout rates,
+        and any additional information like class distribution metadata.
 
         Args:
-            latent_dimension (int): The dimensionality of the input latent space.
-            output_shape (int): The shape of the expected output data (e.g., flattened image size).
-            activation_function (str): The activation function to apply to all hidden layers.
-            initializer_mean (float): The mean for weight initialization.
-            initializer_deviation (float): The standard deviation for weight initialization.
-            dropout_decay_rate_d (float): Dropout rate for dense layers (should be between 0 and 1).
-            last_layer_activation (str): The activation function for the last output layer.
-            dense_layer_sizes_d (List[int]): A list of integers specifying the number of units in each dense layer.
-            dataset_type (numpy.dtype, optional): The data type of the input data (default is numpy.float32).
-            number_samples_per_class (Optional[Dict[str, int]], optional): A dictionary containing metadata
-                about class distribution. It should include the key "number_classes" if provided.
-            attention_embed_dim (int, optional): Embedding dimension for cross-attention (default: 128).
-            attention_num_heads (int, optional): Number of attention heads (default: 4).
+            latent_dimension (int):
+                The dimensionality of the input latent space.
+            output_shape (int):
+                The shape of the expected output data (e.g., image size).
+            activation_function (str):
+                The activation function to apply to all hidden layers.
+            initializer_mean (float):
+                The mean for weight initialization.
+            initializer_deviation (float):
+                The standard deviation for weight initialization.
+            dropout_decay_rate_d (float):
+                Dropout rate for dense layers (should be between 0 and 1).
+            last_layer_activation (str):
+                The activation function for the last output layer.
+            dense_layer_sizes_d (List[int]):
+                A list of integers specifying the number of units in each dense layer.
+            dataset_type (numpy.dtype, optional):
+                The data type of the input data (default is numpy.float32).
+            number_samples_per_class (Optional[Dict[str, int]], optional):
+                A dictionary containing metadata about class distribution. It should
+                include the key "number_classes" if provided.
 
         Raises:
-            ValueError: If any parameter validation fails.
+            ValueError:
+                If `latent_dimension` is <= 0.
+                If `dropout_decay_rate_d` is not within the range [0, 1].
+                If `dense_layer_sizes_d` is empty or contains invalid values.
+                If `number_samples_per_class` is provided but does not contain the key "number_classes".
         """
 
         if not isinstance(latent_dimension, int) or latent_dimension <= 0:
@@ -265,24 +190,12 @@ class VanillaDiscriminator(Activations):
         if not isinstance(last_layer_activation, str):
             raise ValueError("last_layer_activation must be a string.")
 
-        if not isinstance(dense_layer_sizes_d, list) or not all(
-                isinstance(n, int) and n > 0 for n in dense_layer_sizes_d):
+        if not isinstance(dense_layer_sizes_d, list) or not all(isinstance(n, int) and n > 0 for n in dense_layer_sizes_d):
             raise ValueError("dense_layer_sizes_d must be a list of positive integers.")
 
         if number_samples_per_class is not None and not isinstance(number_samples_per_class, dict):
             raise ValueError("number_samples_per_class must be a dictionary if provided.")
 
-        if not isinstance(attention_embed_dim, int) or attention_embed_dim <= 0:
-            raise ValueError(
-                f"Invalid value for attention_embed_dim: {attention_embed_dim}. It must be a positive integer.")
-
-        if not isinstance(attention_num_heads, int) or attention_num_heads <= 0:
-            raise ValueError(
-                f"Invalid value for attention_num_heads: {attention_num_heads}. It must be a positive integer.")
-
-        if attention_embed_dim % attention_num_heads != 0:
-            raise ValueError(
-                f"attention_embed_dim ({attention_embed_dim}) must be divisible by attention_num_heads ({attention_num_heads}).")
 
         self._discriminator_number_samples_per_class = number_samples_per_class
         self._discriminator_latent_dimension = latent_dimension
@@ -294,102 +207,52 @@ class VanillaDiscriminator(Activations):
         self._discriminator_dataset_type = dataset_type
         self._discriminator_initializer_mean = initializer_mean
         self._discriminator_initializer_deviation = initializer_deviation
-        self._discriminator_attention_embed_dim = attention_embed_dim
-        self._discriminator_attention_num_heads = attention_num_heads
         self._discriminator_model_dense = None
 
     def get_discriminator(self) -> Model:
         """
-        Build and return the complete discriminator model with cross-attention.
+        Build and return the complete discriminator model.
 
-        This method constructs a neural network model using cross-attention to condition the
-        input features on label information, where the input features act as Query and the
-        label embedding provides Key and Value.
+        This method constructs a neural network model using dense layers with dropout and activation functions
+        as specified during initialization. The model is built for the purpose of classifying inputs as real or fake.
 
         Returns:
-            Model: A Keras Model instance representing the discriminator with cross-attention.
+            Model: A Keras Model instance representing the discriminator.
         """
-        # Weight initializer
-        weight_initializer = RandomNormal(
-            mean=self._discriminator_initializer_mean,
-            stddev=self._discriminator_initializer_deviation
-        )
-
         # Define the input layers
-        discriminator_shape_input = Input(
-            shape=(self._discriminator_output_shape,),
-            dtype=self._discriminator_dataset_type,
-            name='data_input'
-        )
-        label_input = Input(
-            shape=(self._discriminator_number_samples_per_class["number_classes"],),
-            dtype=self._discriminator_dataset_type,
-            name='label_input'
-        )
+        neural_model_input = Input(shape=(self._discriminator_output_shape,), dtype=self._discriminator_dataset_type)
+        discriminator_shape_input = Input(shape=(self._discriminator_output_shape,))
+        label_input = Input(shape=(self._discriminator_number_samples_per_class["number_classes"],), dtype=self._discriminator_dataset_type)
 
-        # Label embedding layer
-        label_embedded = Dense(
-            self._discriminator_attention_embed_dim,
-            activation='relu',
-            kernel_initializer=weight_initializer,
-            name='label_embedding'
-        )(label_input)
-
-        # Project input features to attention embedding dimension
-        input_projected = Dense(
-            self._discriminator_attention_embed_dim,
-            kernel_initializer=weight_initializer,
-            name='input_projection'
-        )(discriminator_shape_input)
-
-        # Cross-attention: input features query label information
-        cross_attention = CrossAttentionLayer(
-            embed_dim=self._discriminator_attention_embed_dim,
-            num_heads=self._discriminator_attention_num_heads,
-            name='cross_attention'
-        )
-        attended_features = cross_attention([input_projected, label_embedded])
-
-        # Build the discriminator model with dense layers
-        discriminator_model = Dense(
-            self._discriminator_dense_layer_sizes_d[0],
-            kernel_initializer=weight_initializer
-        )(attended_features)
+        # Build the discriminator model
+        discriminator_model = Dense(self._discriminator_dense_layer_sizes_d[0])(neural_model_input)
         discriminator_model = Dropout(self._discriminator_dropout_decay_rate_d)(discriminator_model)
-        discriminator_model = self._add_activation_layer(
-            discriminator_model,
-            self._discriminator_activation_function
-        )
+        discriminator_model = self._add_activation_layer(discriminator_model, self._discriminator_activation_function)
 
         # Add additional dense layers with dropout and activations
         for layer_size in self._discriminator_dense_layer_sizes_d[1:]:
-            discriminator_model = Dense(
-                layer_size,
-                kernel_initializer=weight_initializer
-            )(discriminator_model)
+            discriminator_model = Dense(layer_size)(discriminator_model)
             discriminator_model = Dropout(self._discriminator_dropout_decay_rate_d)(discriminator_model)
-            discriminator_model = self._add_activation_layer(
-                discriminator_model,
-                self._discriminator_activation_function
-            )
+            discriminator_model = self._add_activation_layer(discriminator_model, self._discriminator_activation_function)
 
         # Final output layer with specified activation function
-        discriminator_model = Dense(1, kernel_initializer=weight_initializer)(discriminator_model)
-        validity = self._add_activation_layer(
-            discriminator_model,
-            "sigmoid"
-        )
+        discriminator_model = Dense(1)(discriminator_model)
+        discriminator_model = self._add_activation_layer(discriminator_model, self._discriminator_last_layer_activation)
+        discriminator_model = Model(inputs=neural_model_input, outputs=discriminator_model)
 
-        # Create the final model
-        model = Model(
-            inputs=[discriminator_shape_input, label_input],
-            outputs=validity,
-            name='Discriminator'
-        )
+        # Save the discriminator model for later use
+        self._discriminator_model_dense = discriminator_model
 
-        self._discriminator_model_dense = model
+        # Concatenate the input label and shape input, then process with a dense layer
+        concatenate_output = Concatenate()([discriminator_shape_input, label_input])
+        label_embedding = Flatten()(concatenate_output)
+        model_input = Dense(self._discriminator_output_shape)(label_embedding)
+        model_input = self._add_activation_layer(model_input, self._discriminator_activation_function)
 
-        return model
+        # Get the final output of the discriminator model
+        validity = discriminator_model(model_input)
+
+        return Model(inputs=[discriminator_shape_input, label_input], outputs=validity, name='Discriminator')
 
     def get_dense_discriminator_model(self) -> Optional[Model]:
         """
@@ -400,29 +263,13 @@ class VanillaDiscriminator(Activations):
         """
         return self._discriminator_model_dense
 
-    @property
-    def attention_embed_dim(self) -> int:
-        """int: Gets the embedding dimension for cross-attention."""
-        return self._discriminator_attention_embed_dim
-
-    @property
-    def attention_num_heads(self) -> int:
-        """int: Gets the number of attention heads."""
-        return self._discriminator_attention_num_heads
-
     def set_dropout_decay_rate_discriminator(self, dropout_decay_rate_discriminator: float):
         """
         Set the dropout decay rate for the discriminator network.
 
         Args:
             dropout_decay_rate_discriminator (float): The new dropout decay rate.
-
-        Raises:
-            ValueError: If the value is not between 0 and 1.
         """
-        if not (0 <= dropout_decay_rate_discriminator <= 1):
-            raise ValueError("dropout_decay_rate_discriminator must be a float between 0 and 1.")
-
         self._discriminator_dropout_decay_rate_d = dropout_decay_rate_discriminator
 
     def set_dense_layer_sizes_discriminator(self, dense_layer_sizes_discriminator: List[int]):
@@ -431,13 +278,5 @@ class VanillaDiscriminator(Activations):
 
         Args:
             dense_layer_sizes_discriminator (List[int]): A list of integers specifying the layer sizes.
-
-        Raises:
-            ValueError: If the list is empty or contains invalid values.
         """
-        if not isinstance(dense_layer_sizes_discriminator, list) or not all(
-                isinstance(n, int) and n > 0 for n in dense_layer_sizes_discriminator
-        ):
-            raise ValueError("dense_layer_sizes_discriminator must be a list of positive integers.")
-
         self._discriminator_dense_layer_sizes_d = dense_layer_sizes_discriminator
