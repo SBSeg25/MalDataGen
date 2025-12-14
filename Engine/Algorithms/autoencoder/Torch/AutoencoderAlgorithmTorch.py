@@ -534,9 +534,6 @@ class AutoencoderAlgorithmTorch(nn.Module):
                 # Use the decoder to generate synthetic samples from the latent space and class labels
                 generated_samples = self._decoder([latent_noise, label_samples_generated])
 
-                # Round the output values to the nearest integer
-                generated_samples = torch.round(generated_samples)
-
                 # Convert to numpy and store
                 generated_data[label_class] = generated_samples.cpu().numpy()
 

@@ -77,12 +77,14 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
         """
         Perform a training step for the Variational AutoEncoder (VAE).
         """
-        # Simplificar: assumir que batch é (x, y, labels) nessa ordem
+        # Unpack batch based on its length
         if len(batch) == 3:
             batch_x, batch_y, batch_y_labels = batch
-        else:
+        elif len(batch) == 2:
             batch_x, batch_y = batch
             batch_y_labels = None
+        else:
+            raise ValueError(f"Unexpected batch length: {len(batch)}")
 
         # Move to device
         device = next(self.parameters()).device
@@ -91,19 +93,29 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
         if batch_y_labels is not None:
             batch_y_labels = batch_y_labels.to(device)
 
+        # IMPORTANTE: Em um VAE, queremos reconstruir batch_x
+        # Se batch_y tem dimensão diferente de batch_x, então batch_y são os labels
+        # e devemos usar batch_x como alvo de reconstrução
+        if batch_x.shape != batch_y.shape:
+            # batch_y são labels, usar batch_x como target
+            reconstruction_target = batch_x
+            if batch_y_labels is None:
+                batch_y_labels = batch_y
+        else:
+            # batch_y é o target correto
+            reconstruction_target = batch_y
+
         # Zero gradients
         self.optimizer.zero_grad()
 
         try:
-            # CORREÇÃO: Passar os argumentos corretamente para o encoder
-            # O encoder espera (x, label) como dois argumentos separados, não uma tupla
+            # Passar argumentos corretamente para o encoder
             if batch_y_labels is not None:
-                # Chamar encoder com dois argumentos separados
                 encoder_output = self._encoder(batch_x, batch_y_labels)
             else:
                 encoder_output = self._encoder(batch_x)
 
-            # O encoder retorna uma tupla: (z_mean, z_log_var, z, label)
+            # O encoder retorna: (z_mean, z_log_var, z, label)
             if isinstance(encoder_output, tuple) and len(encoder_output) >= 3:
                 z_mean, z_log_var, latent, label_output = encoder_output[:4]
             else:
@@ -117,7 +129,7 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
                 batch_size = latent.shape[0]
                 label_output = torch.zeros((batch_size, 2)).to(device)
 
-            # Decoder - agora usando latent e label_output
+            # Decoder
             reconstruction_data = self._decoder(latent, label_output)
 
         except Exception as e:
@@ -126,16 +138,13 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
             traceback.print_exc()
             raise
 
-        # Calcular reconstruction loss
-        reconstruction_loss = F.binary_cross_entropy(reconstruction_data, batch_y, reduction='mean')
+        # Calcular reconstruction loss usando o target correto
+        reconstruction_loss = F.binary_cross_entropy(reconstruction_data, reconstruction_target, reduction='mean')
 
         # Calcular KL divergence se temos z_mean e z_log_var
         if z_mean is not None and z_log_var is not None:
-            # CORRIGIDO: Removida divisão extra por batch_x.size(0)
-            # torch.mean já calcula a média sobre o batch
             kl_loss = -0.5 * torch.mean(torch.sum(1 + z_log_var - z_mean.pow(2) - z_log_var.exp(), dim=1))
         else:
-            # Para autoencoder simples, KL loss = 0
             kl_loss = torch.tensor(0.0).to(device)
 
         # Total loss
@@ -158,6 +167,288 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
             "kl_loss": self._kl_loss_tracker
         }
 
+    def train_step(self, batch):
+        """
+        Perform a training step for the Variational AutoEncoder (VAE).
+        """
+        # Unpack batch based on its length
+        if len(batch) == 3:
+            batch_x, batch_y, batch_y_labels = batch
+        elif len(batch) == 2:
+            batch_x, batch_y = batch
+            batch_y_labels = None
+        else:
+            raise ValueError(f"Unexpected batch length: {len(batch)}")
+
+        # Move to device
+        device = next(self.parameters()).device
+        batch_x = batch_x.to(device)
+        batch_y = batch_y.to(device)
+        if batch_y_labels is not None:
+            batch_y_labels = batch_y_labels.to(device)
+
+        # IMPORTANTE: Em um VAE, queremos reconstruir batch_x
+        # Se batch_y tem dimensão diferente de batch_x, então batch_y são os labels
+        # e devemos usar batch_x como alvo de reconstrução
+        if batch_x.shape != batch_y.shape:
+            # batch_y são labels, usar batch_x como target
+            reconstruction_target = batch_x
+            if batch_y_labels is None:
+                batch_y_labels = batch_y
+        else:
+            # batch_y é o target correto
+            reconstruction_target = batch_y
+
+        # Zero gradients
+        self.optimizer.zero_grad()
+
+        try:
+            # Passar argumentos corretamente para o encoder
+            if batch_y_labels is not None:
+                encoder_output = self._encoder(batch_x, batch_y_labels)
+            else:
+                encoder_output = self._encoder(batch_x)
+
+            # O encoder retorna: (z_mean, z_log_var, z, label)
+            if isinstance(encoder_output, tuple) and len(encoder_output) >= 3:
+                z_mean, z_log_var, latent, label_output = encoder_output[:4]
+            else:
+                # Se for apenas um tensor, usar como latent
+                latent = encoder_output
+                label_output = batch_y_labels if batch_y_labels is not None else None
+                z_mean = z_log_var = None
+
+            # Se não temos label_output, criar um dummy
+            if label_output is None:
+                batch_size = latent.shape[0]
+                label_output = torch.zeros((batch_size, 2)).to(device)
+
+            # Decoder
+            reconstruction_data = self._decoder(latent, label_output)
+
+        except Exception as e:
+            print(f"ERROR in forward pass: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
+
+        # Calcular reconstruction loss usando o target correto
+        reconstruction_loss = F.binary_cross_entropy(reconstruction_data, reconstruction_target, reduction='mean')
+
+        # Calcular KL divergence se temos z_mean e z_log_var
+        if z_mean is not None and z_log_var is not None:
+            kl_loss = -0.5 * torch.mean(torch.sum(1 + z_log_var - z_mean.pow(2) - z_log_var.exp(), dim=1))
+        else:
+            kl_loss = torch.tensor(0.0).to(device)
+
+        # Total loss
+        total_loss = reconstruction_loss + kl_loss
+
+        # Backward pass
+        total_loss.backward()
+
+        # Update weights
+        self.optimizer.step()
+
+        # Update loss metrics
+        self._total_loss_tracker = total_loss.item()
+        self._reconstruction_loss_tracker = reconstruction_loss.item()
+        self._kl_loss_tracker = kl_loss.item()
+
+        return {
+            "loss": self._total_loss_tracker,
+            "reconstruction_loss": self._reconstruction_loss_tracker,
+            "kl_loss": self._kl_loss_tracker
+        }
+
+    def fit(self, x=None, y=None, batch_size=32, epochs=1, verbose=1,
+            callbacks=None, validation_data=None, shuffle=True,
+            initial_epoch=0, steps_per_epoch=None, validation_steps=None,
+            validation_freq=1, optimizer=None, learning_rate=0.001, **kwargs):
+        """
+        Train the model with a simplified progress bar.
+
+        Args:
+            x: Input data (can be numpy array, tensor, tuple, or DataLoader).
+            y: Target data or labels (can be numpy array, tensor, or tuple).
+            batch_size: Number of samples per gradient update.
+            epochs: Number of epochs to train.
+            verbose: 0 = silent, 1 = progress bar, 2 = one line per epoch.
+            callbacks: List of callbacks to apply during training.
+            validation_data: Data for validation.
+            shuffle: Whether to shuffle data before each epoch.
+            initial_epoch: Epoch at which to start training.
+            steps_per_epoch: Number of steps per epoch.
+            validation_steps: Number of validation steps.
+            validation_freq: Validation frequency.
+            optimizer: PyTorch optimizer (if None, uses already compiled optimizer).
+            learning_rate: Learning rate for optimizer (only used if optimizer is None).
+
+        Returns:
+            A History object with training metrics.
+        """
+        device = next(self.parameters()).device
+
+        # Set optimizer if provided
+        if optimizer is not None:
+            self.optimizer = optimizer
+        elif self.optimizer is None:
+            self.optimizer = torch.optim.Adam(self.parameters(), lr=learning_rate)
+
+        # Prepare the dataset
+        if isinstance(x, DataLoader):
+            train_dataloader = x
+        else:
+            # Handle different input formats
+            if isinstance(x, tuple):
+                # x is tuple: (data, target) or (data, target, labels)
+                if len(x) == 3:
+                    x_data, y_data, labels = x
+                elif len(x) == 2:
+                    x_data, y_data = x
+                    labels = None
+                else:
+                    x_data = x[0]
+                    y_data = x[0]  # Autoencoder: reconstruct input
+                    labels = None
+            else:
+                x_data = x
+                if y is None:
+                    y_data = x  # Autoencoder: reconstruct input
+                    labels = None
+                elif isinstance(y, tuple):
+                    if len(y) == 2:
+                        y_data, labels = y
+                    else:
+                        y_data = y[0]
+                        labels = None
+                else:
+                    # Se y tem dimensão diferente de x, y são os labels
+                    if isinstance(y, numpy.ndarray):
+                        y_np = y
+                    elif torch.is_tensor(y):
+                        y_np = y.cpu().numpy()
+                    else:
+                        y_np = numpy.array(y)
+
+                    if isinstance(x, numpy.ndarray):
+                        x_np = x
+                    elif torch.is_tensor(x):
+                        x_np = x.cpu().numpy()
+                    else:
+                        x_np = numpy.array(x)
+
+                    # Verificar se dimensões são compatíveis
+                    if y_np.shape[1:] != x_np.shape[1:]:
+                        # y são labels, x é tanto input quanto target
+                        y_data = x
+                        labels = y
+                    else:
+                        y_data = y
+                        labels = None
+
+            # Convert to tensors
+            if isinstance(x_data, numpy.ndarray):
+                x_data = torch.from_numpy(x_data).float()
+            if isinstance(y_data, numpy.ndarray):
+                y_data = torch.from_numpy(y_data).float()
+            if labels is not None and isinstance(labels, numpy.ndarray):
+                labels = torch.from_numpy(labels).float()
+
+            # Create TensorDataset
+            if labels is not None:
+                dataset = TensorDataset(x_data, y_data, labels)
+            else:
+                dataset = TensorDataset(x_data, y_data)
+
+            train_dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+
+        # Calculate steps per epoch
+        if steps_per_epoch is None:
+            steps_per_epoch = len(train_dataloader)
+
+        # History to store metrics
+        history = {'loss': [], 'reconstruction_loss': [], 'kl_loss': []}
+
+        # Training loop
+        for epoch in range(initial_epoch, epochs):
+            self._total_loss_tracker = 0.0
+            self._reconstruction_loss_tracker = 0.0
+            self._kl_loss_tracker = 0.0
+
+            epoch_losses = []
+            epoch_recon_losses = []
+            epoch_kl_losses = []
+
+            if verbose == 1:
+                print(f'\nEpoch {epoch + 1}/{epochs}')
+
+            step = 0
+            for batch_data in train_dataloader:
+                step += 1
+
+                # Perform training step
+                metrics = self.train_step(batch_data)
+                current_loss = float(metrics['loss'])
+                current_recon_loss = float(metrics['reconstruction_loss'])
+                current_kl_loss = float(metrics['kl_loss'])
+
+                epoch_losses.append(current_loss)
+                epoch_recon_losses.append(current_recon_loss)
+                epoch_kl_losses.append(current_kl_loss)
+
+                # Progress bar
+                if verbose == 1:
+                    progress = int(50 * step / steps_per_epoch)
+                    bar = '=' * progress + '>' + '.' * (50 - progress - 1)
+                    print(
+                        f'\r[{bar}] {step}/{steps_per_epoch} - loss: {current_loss:.4f} - recon_loss: {current_recon_loss:.4f} - kl_loss: {current_kl_loss:.4f}',
+                        end='', flush=True)
+
+                if step >= steps_per_epoch:
+                    break
+
+            # Store epoch metrics
+            epoch_loss = self._total_loss_tracker
+            epoch_recon_loss = numpy.mean(epoch_recon_losses) if epoch_recon_losses else 0.0
+            epoch_kl_loss = numpy.mean(epoch_kl_losses) if epoch_kl_losses else 0.0
+
+            history['loss'].append(epoch_loss)
+            history['reconstruction_loss'].append(epoch_recon_loss)
+            history['kl_loss'].append(epoch_kl_loss)
+
+            if verbose == 1:
+                print(f' - loss: {epoch_loss:.4f} - recon_loss: {epoch_recon_loss:.4f} - kl_loss: {epoch_kl_loss:.4f}')
+            elif verbose == 2:
+                print(
+                    f'Epoch {epoch + 1}/{epochs} - loss: {epoch_loss:.4f} - recon_loss: {epoch_recon_loss:.4f} - kl_loss: {epoch_kl_loss:.4f}')
+
+            # Validation
+            if validation_data is not None and (epoch + 1) % validation_freq == 0:
+                val_loss = self._evaluate_validation(validation_data, validation_steps)
+                if 'val_loss' not in history:
+                    history['val_loss'] = []
+                history['val_loss'].append(val_loss)
+
+                if verbose >= 1:
+                    print(f' - val_loss: {val_loss:.4f}')
+
+            # Callbacks
+            if callbacks is not None:
+                for callback in callbacks:
+                    if hasattr(callback, 'on_epoch_end'):
+                        callback.on_epoch_end(epoch, {
+                            'loss': epoch_loss,
+                            'reconstruction_loss': epoch_recon_loss,
+                            'kl_loss': epoch_kl_loss
+                        })
+
+        # Return history
+        class History:
+            def __init__(self, history_dict):
+                self.history = history_dict
+
+        return History(history)
     def configure_optimizer(self,
                             learning_rate=0.001,
                             beta_1=0.9,
@@ -323,146 +614,6 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
         """
         self.optimizer = optimizer
 
-    def fit(self, x=None, y=None, batch_size=32, epochs=1, verbose=1,
-            callbacks=None, validation_data=None, shuffle=True,
-            initial_epoch=0, steps_per_epoch=None, validation_steps=None,
-            validation_freq=1, optimizer=None, learning_rate=0.001, **kwargs):
-        """
-        Train the model with a simplified progress bar.
-
-        Args:
-            x: Input data.
-            y: Target data.
-            batch_size: Number of samples per gradient update.
-            epochs: Number of epochs to train.
-            verbose: 0 = silent, 1 = progress bar, 2 = one line per epoch.
-            callbacks: List of callbacks to apply during training.
-            validation_data: Data for validation.
-            shuffle: Whether to shuffle data before each epoch.
-            initial_epoch: Epoch at which to start training.
-            steps_per_epoch: Number of steps per epoch.
-            validation_steps: Number of validation steps.
-            validation_freq: Validation frequency.
-            optimizer: PyTorch optimizer (if None, uses already compiled optimizer).
-            learning_rate: Learning rate for optimizer (only used if optimizer is None).
-
-        Returns:
-            A History object with training metrics.
-        """
-        device = next(self.parameters()).device
-
-        # Set optimizer if provided
-        if optimizer is not None:
-            self.optimizer = optimizer
-        elif self.optimizer is None:
-            # Create default optimizer if none exists
-            self.optimizer = torch.optim.Adam(self.parameters(), lr=learning_rate)
-
-        # Prepare the dataset
-        if isinstance(x, DataLoader):
-            train_dataloader = x
-        else:
-            if y is None:
-                y = x
-
-            # Convert to tensors
-            if isinstance(x, numpy.ndarray):
-                x = torch.from_numpy(x).float()
-            if isinstance(y, numpy.ndarray):
-                y = torch.from_numpy(y).float()
-
-            dataset = TensorDataset(x, y)
-            train_dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
-
-        # Calculate steps per epoch if not provided
-        if steps_per_epoch is None:
-            steps_per_epoch = len(train_dataloader)
-
-        # History to store metrics
-        history = {'loss': [], 'reconstruction_loss': [], 'kl_loss': []}
-
-        # Training loop
-        for epoch in range(initial_epoch, epochs):
-            self._total_loss_tracker = 0.0
-            self._reconstruction_loss_tracker = 0.0
-            self._kl_loss_tracker = 0.0
-
-            # Trackers for epoch metrics
-            epoch_losses = []
-            epoch_recon_losses = []
-            epoch_kl_losses = []
-
-            if verbose == 1:
-                print(f'\nEpoch {epoch + 1}/{epochs}')
-
-            # Progress tracking
-            step = 0
-            for batch_data in train_dataloader:
-                step += 1
-
-                # Perform training step
-                metrics = self.train_step(batch_data)
-                current_loss = float(metrics['loss'])
-                current_recon_loss = float(metrics['reconstruction_loss'])
-                current_kl_loss = float(metrics['kl_loss'])
-
-                # Track losses for this epoch
-                epoch_losses.append(current_loss)
-                epoch_recon_losses.append(current_recon_loss)
-                epoch_kl_losses.append(current_kl_loss)
-
-                # Simple progress bar
-                if verbose == 1:
-                    progress = int(50 * step / steps_per_epoch)
-                    bar = '=' * progress + '>' + '.' * (50 - progress - 1)
-                    print(
-                        f'\r[{bar}] {step}/{steps_per_epoch} - loss: {current_loss:.4f} - recon_loss: {current_recon_loss:.4f} - kl_loss: {current_kl_loss:.4f}',
-                        end='', flush=True)
-
-                if step >= steps_per_epoch:
-                    break
-
-            # Store epoch losses
-            epoch_loss = self._total_loss_tracker
-            epoch_recon_loss = numpy.mean(epoch_recon_losses) if epoch_recon_losses else 0.0
-            epoch_kl_loss = numpy.mean(epoch_kl_losses) if epoch_kl_losses else 0.0
-
-            history['loss'].append(epoch_loss)
-            history['reconstruction_loss'].append(epoch_recon_loss)
-            history['kl_loss'].append(epoch_kl_loss)
-
-            if verbose == 1:
-                print(f' - loss: {epoch_loss:.4f} - recon_loss: {epoch_recon_loss:.4f} - kl_loss: {epoch_kl_loss:.4f}')
-            elif verbose == 2:
-                print(
-                    f'Epoch {epoch + 1}/{epochs} - loss: {epoch_loss:.4f} - recon_loss: {epoch_recon_loss:.4f} - kl_loss: {epoch_kl_loss:.4f}')
-
-            # Validation
-            if validation_data is not None and (epoch + 1) % validation_freq == 0:
-                val_loss = self._evaluate_validation(validation_data, validation_steps)
-                if 'val_loss' not in history:
-                    history['val_loss'] = []
-                history['val_loss'].append(val_loss)
-
-                if verbose >= 1:
-                    print(f' - val_loss: {val_loss:.4f}')
-
-            # Callbacks
-            if callbacks is not None:
-                for callback in callbacks:
-                    if hasattr(callback, 'on_epoch_end'):
-                        callback.on_epoch_end(epoch, {
-                            'loss': epoch_loss,
-                            'reconstruction_loss': epoch_recon_loss,
-                            'kl_loss': epoch_kl_loss
-                        })
-
-        # Return history object
-        class History:
-            def __init__(self, history_dict):
-                self.history = history_dict
-
-        return History(history)
 
     def _evaluate_validation(self, validation_data, validation_steps=None):
         """

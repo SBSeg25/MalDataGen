@@ -44,16 +44,16 @@ except ImportError as error:
     sys.exit(-1)
 
 # Default values from your constants file
-DEFAULT_VARIATIONAL_AUTOENCODER_LATENT_DIMENSION = 128
+DEFAULT_VARIATIONAL_AUTOENCODER_LATENT_DIMENSION = 64
 DEFAULT_VARIATIONAL_AUTOENCODER_TRAINING_ALGORITHM = "Adam"
 DEFAULT_VARIATIONAL_AUTOENCODER_ACTIVATION_INTERMEDIARY = "swish"
 DEFAULT_VARIATIONAL_AUTOENCODER_DROPOUT_DECAY_RATE_ENCODER = 0.0
 DEFAULT_VARIATIONAL_AUTOENCODER_DROPOUT_DECAY_RATE_DECODER = 0.0
-DEFAULT_VARIATIONAL_AUTOENCODER_BATCH_SIZE = 128
-DEFAULT_VARIATIONAL_AUTOENCODER_NUMBER_EPOCHS = 100
+DEFAULT_VARIATIONAL_AUTOENCODER_BATCH_SIZE = 256
+DEFAULT_VARIATIONAL_AUTOENCODER_NUMBER_EPOCHS = 200
 DEFAULT_VARIATIONAL_AUTOENCODER_NUMBER_CLASSES = 2
-DEFAULT_VARIATIONAL_AUTOENCODER_DENSE_LAYERS_SETTINGS_ENCODER = [256]
-DEFAULT_VARIATIONAL_AUTOENCODER_DENSE_LAYERS_SETTINGS_DECODER = [256]
+DEFAULT_VARIATIONAL_AUTOENCODER_DENSE_LAYERS_SETTINGS_ENCODER = [512]
+DEFAULT_VARIATIONAL_AUTOENCODER_DENSE_LAYERS_SETTINGS_DECODER = [512]
 DEFAULT_VARIATIONAL_AUTOENCODER_LOSS = "mse"
 DEFAULT_VARIATIONAL_AUTOENCODER_MOMENTUM = 0.8
 DEFAULT_VARIATIONAL_AUTOENCODER_LAST_ACTIVATION_LAYER = "sigmoid"
@@ -344,29 +344,16 @@ class VariationalAutoencoder:
         # Calculate total flattened dimension
         flattened_dim = int(np.prod(input_shape))
 
-        # Prepare data
-        print(f"\nPreparing data for Variational Autoencoder...")
-        print(f"  - Original input shape: {input_shape}")
-        print(f"  - Input data shape: {x_real_samples.shape}")
-
         # Flatten the input data if it has more than 2 dimensions
         # (batch_size, ...) -> (batch_size, flattened_features)
         if len(x_real_samples.shape) > 2:
             x_real_samples_flat = x_real_samples.reshape(x_real_samples.shape[0], -1)
-            print(f"  - Flattened data shape: {x_real_samples_flat.shape}")
         else:
             x_real_samples_flat = x_real_samples
-            print(f"  - Data already flat: {x_real_samples_flat.shape}")
 
         # Initialize the variational autoencoder model (or use provided) with flattened dimension
         self._get_variational(flattened_dim)
 
-        # Print the model summaries for the encoder and decoder if available
-        if self._variational_model is not None:
-            print("\nEncoder Model:")
-            print(self._variational_model.get_encoder(flattened_dim))
-            print("\nDecoder Model:")
-            print(self._variational_model.get_decoder(flattened_dim))
 
         # Ensure we have an algorithm
         if self._variational_algorithm is None:
@@ -398,11 +385,6 @@ class VariationalAutoencoder:
         # The target (y_data) should be x_real_samples_flat for reconstruction
         y_data = x_real_samples_flat
 
-        print(f"\nStarting training...")
-        print(f"  - Epochs: {self._variational_number_epochs}")
-        print(f"  - Batch size: {self._variational_batch_size}")
-        print(f"  - Latent dimension: {self._variational_latent_dimension}")
-
         # Fit the variational autoencoder model with flattened samples
         self._variational_algorithm.fit(
             (x_real_samples_flat, y_labels_one_hot),  # x and labels
@@ -411,8 +393,6 @@ class VariationalAutoencoder:
             batch_size=self._variational_batch_size,
             callbacks=callbacks_list if callbacks_list else None
         )
-
-        print(f"\n✓ Training completed successfully!")
 
     def _one_hot_encode(self, labels: np.ndarray | torch.Tensor, num_classes: int) -> torch.Tensor:
         """
