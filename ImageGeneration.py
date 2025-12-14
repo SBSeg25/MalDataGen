@@ -135,7 +135,7 @@ Ideal para validar VAEs / GANs condicionais em imagens RGB
 
 import os
 import numpy as np
-os.environ["ML_FRAMEWORK"] = "tensorflow"
+os.environ["ML_FRAMEWORK"] = "pytorch"
 
 from Engine.Models.Adversarial import Adversarial
 from Engine.Models.Autoencoder import Autoencoder
@@ -146,11 +146,11 @@ from Engine.Models.VariationalAutoencoder import VariationalAutoencoder
 # Configurações CIFAR-10
 # =====================
 
-IMAGE_SIZE = (16, 16)
-INPUT_SHAPE = (16, 16, 3)
+IMAGE_SIZE = (32, 32)
+INPUT_SHAPE = (32, 32, 3)
 
 N_CLASSES = 10
-BATCH_LIMIT = 2600
+BATCH_LIMIT = 4600
 
 
 try:

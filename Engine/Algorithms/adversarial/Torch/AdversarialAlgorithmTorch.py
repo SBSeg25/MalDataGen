@@ -213,7 +213,6 @@ class AdversarialAlgorithmTorch(nn.Module):
                 return loss_map[loss_name]
 
         # If it's a TensorFlow/Keras loss or unknown type, default to BCELoss
-        logging.warning(f"Non-PyTorch loss function detected: {type(loss)}. Using BCELoss() as default.")
         return nn.BCELoss()
 
     def compile(self, optimizer_generator, optimizer_discriminator,

@@ -358,19 +358,12 @@ class Adversarial:
         # Calculate total flattened dimension
         flattened_dim = int(np.prod(input_shape))
 
-        # Prepare data
-        print(f"\nPreparing data for Conditional GAN...")
-        print(f"  - Original input shape: {input_shape}")
-        print(f"  - Input data shape: {x_real_samples.shape}")
-
         # Flatten the input data if it has more than 2 dimensions
         # (batch_size, ...) -> (batch_size, flattened_features)
         if len(x_real_samples.shape) > 2:
             x_real_samples_flat = x_real_samples.reshape(x_real_samples.shape[0], -1)
-            print(f"  - Flattened data shape: {x_real_samples_flat.shape}")
         else:
             x_real_samples_flat = x_real_samples
-            print(f"  - Data already flat: {x_real_samples_flat.shape}")
 
         # Auto-detect number_samples_per_class if not set
         if not self._number_samples_per_class:
@@ -379,20 +372,15 @@ class Adversarial:
                 "number_classes": len(unique_classes),
                 "classes": {int(cls): np.sum(y_real_samples == cls) for cls in unique_classes}
             }
-            print(f"  - Auto-detected classes: {self._number_samples_per_class}")
 
         # Convert labels to categorical format
         y_categorical = to_categorical(y_real_samples, num_classes=self._number_samples_per_class["number_classes"])
-        print(f"  - Categorical labels shape: {y_categorical.shape}")
-
         # Initialize the adversarial model with flattened dimension
         self._get_adversarial_model(flattened_dim)
 
         # Print the model summaries for the generator and discriminator if available
         if self._adversarial_model is not None:
-            print(f"\nGenerator Model:")
             self._adversarial_model.get_generator()
-            print(f"\nDiscriminator Model:")
             self._adversarial_model.get_discriminator()
 
         # Ensure we have an algorithm
@@ -401,7 +389,7 @@ class Adversarial:
 
         # Set up optimizers for the generator and discriminator
         generator_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001, beta_1=0.5, beta_2=0.9)
-        discriminator_optimizer = tf.keras.optimizers.Adam(learning_rate=0.002, beta_1=0.5, beta_2=0.9)
+        discriminator_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0005, beta_1=0.5, beta_2=0.9)
 
         # Compile the adversarial algorithm with binary cross-entropy loss
         self._adversarial_algorithm.compile(
@@ -423,11 +411,6 @@ class Adversarial:
         if self._callback_early_stop is not None:
             callbacks_list.append(self._callback_early_stop)
 
-        print(f"\nStarting training...")
-        print(f"  - Epochs: {self._adversarial_number_epochs}")
-        print(f"  - Batch size: {self._adversarial_batch_size}")
-        print(f"  - Latent dimension: {self._adversarial_latent_dimension}")
-
         # Fit the model with flattened real samples and the corresponding labels
         self._adversarial_algorithm.fit(
             x_real_samples_flat,
@@ -436,8 +419,6 @@ class Adversarial:
             batch_size=self._adversarial_batch_size,
             callbacks=callbacks_list if callbacks_list else None
         )
-
-        print(f"\n✓ Training completed successfully!")
 
     def get_samples(self, number_samples_per_class):
         """
