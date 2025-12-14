@@ -2,35 +2,42 @@
 # -*- coding: utf-8 -*-
 
 """
-Exemplo Condicional: Geração de Imagens 128x128x3
-Dataset: CIFAR-10 (torchvision)
-Estável, pequeno e ideal para Latent Diffusion
+Exemplo Condicional: Geração de Imagens MNIST
+Dataset: MNIST (torchvision)
+Ideal para validar VAEs condicionais
 """
 
 import os
 import numpy as np
-os.environ["ML_FRAMEWORK"] = "pytorch"
+
 from Engine.Models.VariationalAutoencoder import VariationalAutoencoder
+os.environ["ML_FRAMEWORK"] = "tensorflow"
 
 
+# =====================
+# Configurações MNIST
+# =====================
 
-
-
-IMAGE_SIZE = (32, 32)
-INPUT_SHAPE = (32, 32, 3)
+IMAGE_SIZE = (28, 28)
+INPUT_SHAPE = (28, 28, 1)
 
 N_CLASSES = 10
-BATCH_LIMIT = 10000
+BATCH_LIMIT = 20000
 
 
 try:
-    from torchvision.datasets import CIFAR10
+    from torchvision.datasets import MNIST
 except ImportError:
     raise ImportError("Instale torchvision: pip install torchvision")
 
 from PIL import Image
 
-dataset = CIFAR10(
+
+# =====================
+# Carregamento Dataset
+# =====================
+
+dataset = MNIST(
     root="./data",
     train=True,
     download=True
@@ -40,10 +47,12 @@ x_real_samples = []
 y_real_samples = []
 
 for img, label in dataset:
-    # CIFAR-10 já vem como PIL.Image
-    img = img.convert("RGB")
+    # MNIST vem como PIL.Image em grayscale
+    img = img.convert("L")  # garante 1 canal
     img = img.resize(IMAGE_SIZE)
+
     img = np.asarray(img, dtype=np.float32) / 255.0
+    img = np.expand_dims(img, axis=-1)  # (28, 28, 1)
 
     x_real_samples.append(img)
     y_real_samples.append(int(label))
@@ -55,14 +64,22 @@ x_real_samples = np.array(x_real_samples, dtype=np.float32)
 y_real_samples = np.array(y_real_samples, dtype=np.int32)
 
 
-model = VariationalAutoencoder(number_classes=N_CLASSES)
+# =====================
+# Modelo
+# =====================
 
+model = VariationalAutoencoder(number_classes=N_CLASSES)
 
 model.fit_model(
     input_shape=INPUT_SHAPE,
     x_real_samples=x_real_samples,
     y_real_samples=y_real_samples
 )
+
+
+# =====================
+# Geração Condicional
+# =====================
 
 number_samples_per_class = {
     "number_classes": N_CLASSES,
@@ -72,6 +89,10 @@ number_samples_per_class = {
 synthetic_samples = model.get_samples(number_samples_per_class)
 
 
+# =====================
+# Visualização
+# =====================
+
 try:
     import matplotlib.pyplot as plt
 
@@ -79,13 +100,16 @@ try:
     cols = 5
     rows = n // cols
 
-    fig, axes = plt.subplots(rows, cols, figsize=(12, 12))
-    fig.suptitle("CIFAR-10 Sintético (128x128)", fontsize=16)
+    fig, axes = plt.subplots(rows, cols, figsize=(10, 10))
+    fig.suptitle("MNIST Sintético (VAE Condicional)", fontsize=16)
 
     idx = 0
     for i in range(rows):
         for j in range(cols):
-            axes[i, j].imshow(synthetic_samples[idx])
+            axes[i, j].imshow(
+                synthetic_samples[idx].squeeze(),
+                cmap="gray"
+            )
             axes[i, j].axis("off")
             idx += 1
 

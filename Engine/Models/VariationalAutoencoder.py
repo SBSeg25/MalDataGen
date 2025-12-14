@@ -44,27 +44,27 @@ except ImportError as error:
     sys.exit(-1)
 
 # Default values from your constants file
-DEFAULT_VARIATIONAL_AUTOENCODER_LATENT_DIMENSION = 128
+DEFAULT_VARIATIONAL_AUTOENCODER_LATENT_DIMENSION = 512
 DEFAULT_VARIATIONAL_AUTOENCODER_TRAINING_ALGORITHM = "Adam"
 DEFAULT_VARIATIONAL_AUTOENCODER_ACTIVATION_INTERMEDIARY = "swish"
-DEFAULT_VARIATIONAL_AUTOENCODER_DROPOUT_DECAY_RATE_ENCODER = 0.25
-DEFAULT_VARIATIONAL_AUTOENCODER_DROPOUT_DECAY_RATE_DECODER = 0.25
+DEFAULT_VARIATIONAL_AUTOENCODER_DROPOUT_DECAY_RATE_ENCODER = 0.0
+DEFAULT_VARIATIONAL_AUTOENCODER_DROPOUT_DECAY_RATE_DECODER = 0.0
 DEFAULT_VARIATIONAL_AUTOENCODER_BATCH_SIZE = 128
-DEFAULT_VARIATIONAL_AUTOENCODER_NUMBER_EPOCHS = 30
+DEFAULT_VARIATIONAL_AUTOENCODER_NUMBER_EPOCHS = 50
 DEFAULT_VARIATIONAL_AUTOENCODER_NUMBER_CLASSES = 2
-DEFAULT_VARIATIONAL_AUTOENCODER_DENSE_LAYERS_SETTINGS_ENCODER = [320, 160, 80]
-DEFAULT_VARIATIONAL_AUTOENCODER_DENSE_LAYERS_SETTINGS_DECODER = [80, 160, 320]
-DEFAULT_VARIATIONAL_AUTOENCODER_LOSS = "binary_crossentropy"
+DEFAULT_VARIATIONAL_AUTOENCODER_DENSE_LAYERS_SETTINGS_ENCODER = [128]
+DEFAULT_VARIATIONAL_AUTOENCODER_DENSE_LAYERS_SETTINGS_DECODER = [128]
+DEFAULT_VARIATIONAL_AUTOENCODER_LOSS = "mse"
 DEFAULT_VARIATIONAL_AUTOENCODER_MOMENTUM = 0.8
 DEFAULT_VARIATIONAL_AUTOENCODER_LAST_ACTIVATION_LAYER = "sigmoid"
 DEFAULT_VARIATIONAL_AUTOENCODER_INITIALIZER_MEAN = 0
 DEFAULT_VARIATIONAL_AUTOENCODER_INITIALIZER_DEVIATION = 0.125
-DEFAULT_VARIATIONAL_AUTOENCODER_LOSS_FUNCTION = 'binary_crossentropy'
+DEFAULT_VARIATIONAL_AUTOENCODER_LOSS_FUNCTION = 'mse'
 DEFAULT_VARIATIONAL_AUTOENCODER_FILE_NAME_ENCODER = "encoder_model"
 DEFAULT_VARIATIONAL_AUTOENCODER_FILE_NAME_DECODER = "decoder_model"
 DEFAULT_VARIATIONAL_AUTOENCODER_PATH_OUTPUT_MODELS = "models_saved/"
 DEFAULT_VARIATIONAL_AUTOENCODER_MEAN_DISTRIBUTION = 0.5
-DEFAULT_VARIATIONAL_AUTOENCODER_STANDER_DEVIATION = 0.125
+DEFAULT_VARIATIONAL_AUTOENCODER_STANDER_DEVIATION = 0.5
 
 
 class VariationalAutoencoder:
@@ -125,7 +125,7 @@ class VariationalAutoencoder:
             initializer_mean: float = DEFAULT_VARIATIONAL_AUTOENCODER_INITIALIZER_MEAN,
             initializer_deviation: float = DEFAULT_VARIATIONAL_AUTOENCODER_INITIALIZER_DEVIATION,
             latent_mean_distribution: float = DEFAULT_VARIATIONAL_AUTOENCODER_MEAN_DISTRIBUTION,
-            latent_stander_deviation: float = DEFAULT_VARIATIONAL_AUTOENCODER_STANDER_DEVIATION,
+            latent_standard_deviation: float = DEFAULT_VARIATIONAL_AUTOENCODER_STANDER_DEVIATION,
             file_name_encoder: str = DEFAULT_VARIATIONAL_AUTOENCODER_FILE_NAME_ENCODER,
             file_name_decoder: str = DEFAULT_VARIATIONAL_AUTOENCODER_FILE_NAME_DECODER,
             path_output_models: str = DEFAULT_VARIATIONAL_AUTOENCODER_PATH_OUTPUT_MODELS,
@@ -212,7 +212,7 @@ class VariationalAutoencoder:
         self._variational_initializer_mean: float = initializer_mean
         self._variational_initializer_deviation: float = initializer_deviation
         self._variational_latent_mean_distribution: float = latent_mean_distribution
-        self._variational_latent_stander_deviation: float = latent_stander_deviation
+        self._variational_latent_standard_deviation: float = latent_standard_deviation
         self._variational_file_name_encoder: str = file_name_encoder
         self._variational_file_name_decoder: str = file_name_decoder
         self._variational_path_output_models: str = path_output_models
@@ -285,7 +285,7 @@ class VariationalAutoencoder:
                 latent_dimension=self._variational_latent_dimension,
                 decoder_latent_dimension=self._variational_latent_dimension,
                 latent_mean_distribution=self._variational_latent_mean_distribution,
-                latent_stander_deviation=self._variational_latent_stander_deviation,
+                latent_standard_deviation=self._variational_latent_standard_deviation,
                 file_name_encoder=self._variational_file_name_encoder,
                 file_name_decoder=self._variational_file_name_decoder,
                 models_saved_path=self._variational_path_output_models
@@ -300,8 +300,8 @@ class VariationalAutoencoder:
                 self._variational_algorithm.decoder_latent_dimension = self._variational_latent_dimension
             if hasattr(self._variational_algorithm, 'latent_mean_distribution'):
                 self._variational_algorithm.latent_mean_distribution = self._variational_latent_mean_distribution
-            if hasattr(self._variational_algorithm, 'latent_stander_deviation'):
-                self._variational_algorithm.latent_stander_deviation = self._variational_latent_stander_deviation
+            if hasattr(self._variational_algorithm, 'latent_standard_deviation'):
+                self._variational_algorithm.latent_standard_deviation = self._variational_latent_standard_deviation
             if hasattr(self._variational_algorithm, 'file_name_encoder'):
                 self._variational_algorithm.file_name_encoder = self._variational_file_name_encoder
             if hasattr(self._variational_algorithm, 'file_name_decoder'):
@@ -689,14 +689,14 @@ class VariationalAutoencoder:
         self._variational_latent_mean_distribution = value
 
     @property
-    def variational_latent_stander_deviation(self) -> float:
+    def variational_latent_standard_deviation(self) -> float:
         """Get the latent stander deviation."""
-        return self._variational_latent_stander_deviation
+        return self._variational_latent_standard_deviation
 
-    @variational_latent_stander_deviation.setter
-    def variational_latent_stander_deviation(self, value: float) -> None:
+    @variational_latent_standard_deviation.setter
+    def variational_latent_standard_deviation(self, value: float) -> None:
         """Set the latent stander deviation."""
-        self._variational_latent_stander_deviation = value
+        self._variational_latent_standard_deviation = value
 
     @property
     def variational_file_name_encoder(self) -> str:
