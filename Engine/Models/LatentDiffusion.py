@@ -477,8 +477,6 @@ class LatentDiffusion:
         self._encoder_latent_diffusion = self._latent_variational_algorithm.get_encoder_trained()
         self._decoder_latent_diffusion = self._latent_variational_algorithm.get_decoder_trained()
 
-        self._encoder_latent_diffusion.summary()
-        self._decoder_latent_diffusion.summary()
 
         # Initialize the final diffusion algorithm
         self._latent_diffusion_algorithm = LatentDiffusionAlgorithm(
@@ -524,7 +522,7 @@ class LatentDiffusion:
             epochs=self._latent_diffusion_unet_epochs,
             batch_size=self._latent_diffusion_unet_batch_size,
             callbacks=callbacks_list,
-            verbose=2
+            verbose=1
         )
 
     # ========================================================================

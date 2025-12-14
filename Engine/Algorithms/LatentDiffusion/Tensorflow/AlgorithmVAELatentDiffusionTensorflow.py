@@ -435,7 +435,7 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
         Returns:
             ndarray: Latent space representations.
         """
-        return self._encoder.predict(data, batch_size=32)[0]
+        return self._encoder.predict(data, batch_size=32, verbose=0)[0]
 
 
     def get_samples(self, number_samples_per_class):
