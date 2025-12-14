@@ -3,7 +3,7 @@
 2025-05-31 00:40:40,846	***	Retrieved DataGenerated path: outputs/out_2025-05-30_23-51-46/reduced_balanced_androcrawl/autoencoder/combination_1/DataGenerated
 2025-05-31 00:40:40,856	***	All GPUs disabled. Running on CPU.
 2025-05-31 00:40:40,857	***	Command:
-	main.py --data_load_path_file_input Datasets/SBSeg_2025/reduced_balanced_androcrawl.csv --verbosity 20 --output_dir outputs/out_2025-05-30_23-51-46/reduced_balanced_androcrawl/autoencoder/combination_1 --classifier RandomForest SupportVectorMachine KNN DecisionTree NaiveBayes GradientBoosting StochasticGradientDescent --model_type autoencoder --number_samples_per_class 0:2000,1:2000 --number_k_folds 5 --save_data True --autoencoder_number_epochs 300 --autoencoder_latent_dimension 128 --autoencoder_activation_function elu --autoencoder_dropout_decay_rate_encoder 0.1 --autoencoder_dropout_decay_rate_decoder 0.1 --autoencoder_dense_layer_sizes_encoder 128 128 --autoencoder_dense_layer_sizes_decoder 128 128 --autoencoder_batch_size 256 --autoencoder_number_classes 2 --autoencoder_loss_function binary_crossentropy --autoencoder_momentum 0.8 --autoencoder_last_activation_layer sigmoid --autoencoder_initializer_mean 0.0 --autoencoder_initializer_deviation 0.125 --autoencoder_latent_mean_distribution 0.5 --autoencoder_latent_stander_deviation 0.5
+	main.py --data_load_path_file_input Datasets/SBSeg_2025/reduced_balanced_androcrawl.csv --verbosity 20 --output_dir outputs/out_2025-05-30_23-51-46/reduced_balanced_androcrawl/autoencoder/combination_1 --classifier RandomForest SupportVectorMachine KNN DecisionTree NaiveBayes GradientBoosting StochasticGradientDescent --model_type autoencoder --number_samples_per_class 0:2000,1:2000 --number_k_folds 5 --save_data True --autoencoder_number_epochs 300 --autoencoder_latent_dimension 128 --autoencoder_activation_function elu --autoencoder_dropout_decay_rate_encoder 0.1 --autoencoder_dropout_decay_rate_decoder 0.1 --autoencoder_dense_layer_sizes_encoder 128 128 --autoencoder_dense_layer_sizes_decoder 128 128 --autoencoder_batch_size 256 --autoencoder_number_classes 2 --autoencoder_loss_function binary_crossentropy --autoencoder_momentum 0.8 --autoencoder_last_activation_layer sigmoid --autoencoder_initializer_mean 0.0 --autoencoder_initializer_deviation 0.125 --autoencoder_latent_mean_distribution 0.5 --autoencoder_latent_standard_deviation 0.5
 
 2025-05-31 00:40:40,857	***	Settings:
 2025-05-31 00:40:40,857	***		adam_optimizer_amsgrad                                           : False
@@ -24,7 +24,7 @@
 2025-05-31 00:40:40,857	***		autoencoder_last_activation_layer                                : sigmoid
 2025-05-31 00:40:40,857	***		autoencoder_latent_dimension                                     : 128
 2025-05-31 00:40:40,857	***		autoencoder_latent_mean_distribution                             : 0.5
-2025-05-31 00:40:40,857	***		autoencoder_latent_stander_deviation                             : 0.5
+2025-05-31 00:40:40,857	***		autoencoder_latent_standard_deviation                             : 0.5
 2025-05-31 00:40:40,857	***		autoencoder_loss_function                                        : binary_crossentropy
 2025-05-31 00:40:40,857	***		autoencoder_momentum                                             : 0.8
 2025-05-31 00:40:40,857	***		autoencoder_number_classes                                       : 2

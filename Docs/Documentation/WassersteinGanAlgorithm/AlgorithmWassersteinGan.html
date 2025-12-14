@@ -77,7 +77,7 @@
                                 <a class="variable" href="#WassersteinAlgorithm.latent_mean_distribution">latent_mean_distribution</a>
                         </li>
                         <li>
-                                <a class="variable" href="#WassersteinAlgorithm.latent_stander_deviation">latent_stander_deviation</a>
+                                <a class="variable" href="#WassersteinAlgorithm.latent_standard_deviation">latent_standard_deviation</a>
                         </li>
                 </ul>
 
@@ -158,7 +158,7 @@ AlgorithmWassersteinGan    </h1>
 </span><span id="L-59"><a href="#L-59"><span class="linenos"> 59</span></a><span class="sd">            Loss function used for training the discriminator.</span>
 </span><span id="L-60"><a href="#L-60"><span class="linenos"> 60</span></a><span class="sd">        @_latent_mean_distribution (float):</span>
 </span><span id="L-61"><a href="#L-61"><span class="linenos"> 61</span></a><span class="sd">            Mean of the latent space distribution.</span>
-</span><span id="L-62"><a href="#L-62"><span class="linenos"> 62</span></a><span class="sd">        @_latent_stander_deviation (float):</span>
+</span><span id="L-62"><a href="#L-62"><span class="linenos"> 62</span></a><span class="sd">        @_latent_standard_deviation (float):</span>
 </span><span id="L-63"><a href="#L-63"><span class="linenos"> 63</span></a><span class="sd">            Standard deviation of the latent space distribution.</span>
 </span><span id="L-64"><a href="#L-64"><span class="linenos"> 64</span></a><span class="sd">        @_smoothing_rate (float):</span>
 </span><span id="L-65"><a href="#L-65"><span class="linenos"> 65</span></a><span class="sd">            Rate for label smoothing applied to the discriminator&#39;s true labels.</span>
@@ -194,7 +194,7 @@ AlgorithmWassersteinGan    </h1>
 </span><span id="L-95"><a href="#L-95"><span class="linenos"> 95</span></a><span class="sd">        ...     file_name_generator=&#39;generator_model.h5&#39;,</span>
 </span><span id="L-96"><a href="#L-96"><span class="linenos"> 96</span></a><span class="sd">        ...     models_saved_path=&#39;./models/&#39;,</span>
 </span><span id="L-97"><a href="#L-97"><span class="linenos"> 97</span></a><span class="sd">        ...     latent_mean_distribution=0.0,</span>
-</span><span id="L-98"><a href="#L-98"><span class="linenos"> 98</span></a><span class="sd">        ...     latent_stander_deviation=1.0,</span>
+</span><span id="L-98"><a href="#L-98"><span class="linenos"> 98</span></a><span class="sd">        ...     latent_standard_deviation=1.0,</span>
 </span><span id="L-99"><a href="#L-99"><span class="linenos"> 99</span></a><span class="sd">        ...     smoothing_rate=0.1,</span>
 </span><span id="L-100"><a href="#L-100"><span class="linenos">100</span></a><span class="sd">        ...     gradient_penalty_weight=10.0,</span>
 </span><span id="L-101"><a href="#L-101"><span class="linenos">101</span></a><span class="sd">        ...     discriminator_steps=5</span>
@@ -212,7 +212,7 @@ AlgorithmWassersteinGan    </h1>
 </span><span id="L-113"><a href="#L-113"><span class="linenos">113</span></a>                 <span class="n">file_name_generator</span><span class="p">,</span>
 </span><span id="L-114"><a href="#L-114"><span class="linenos">114</span></a>                 <span class="n">models_saved_path</span><span class="p">,</span>
 </span><span id="L-115"><a href="#L-115"><span class="linenos">115</span></a>                 <span class="n">latent_mean_distribution</span><span class="p">,</span>
-</span><span id="L-116"><a href="#L-116"><span class="linenos">116</span></a>                 <span class="n">latent_stander_deviation</span><span class="p">,</span>
+</span><span id="L-116"><a href="#L-116"><span class="linenos">116</span></a>                 <span class="n">latent_standard_deviation</span><span class="p">,</span>
 </span><span id="L-117"><a href="#L-117"><span class="linenos">117</span></a>                 <span class="n">smoothing_rate</span><span class="p">,</span>
 </span><span id="L-118"><a href="#L-118"><span class="linenos">118</span></a>                 <span class="n">gradient_penalty_weight</span><span class="p">,</span>
 </span><span id="L-119"><a href="#L-119"><span class="linenos">119</span></a>                 <span class="n">discriminator_steps</span><span class="p">,</span>
@@ -232,7 +232,7 @@ AlgorithmWassersteinGan    </h1>
 </span><span id="L-133"><a href="#L-133"><span class="linenos">133</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_gradient_penalty_weight</span> <span class="o">=</span> <span class="n">gradient_penalty_weight</span>
 </span><span id="L-134"><a href="#L-134"><span class="linenos">134</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_smooth_rate</span> <span class="o">=</span> <span class="n">smoothing_rate</span>
 </span><span id="L-135"><a href="#L-135"><span class="linenos">135</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_latent_mean_distribution</span> <span class="o">=</span> <span class="n">latent_mean_distribution</span>
-</span><span id="L-136"><a href="#L-136"><span class="linenos">136</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_latent_stander_deviation</span> <span class="o">=</span> <span class="n">latent_stander_deviation</span>
+</span><span id="L-136"><a href="#L-136"><span class="linenos">136</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_latent_standard_deviation</span> <span class="o">=</span> <span class="n">latent_standard_deviation</span>
 </span><span id="L-137"><a href="#L-137"><span class="linenos">137</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_file_name_discriminator</span> <span class="o">=</span> <span class="n">file_name_discriminator</span>
 </span><span id="L-138"><a href="#L-138"><span class="linenos">138</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_file_name_generator</span> <span class="o">=</span> <span class="n">file_name_generator</span>
 </span><span id="L-139"><a href="#L-139"><span class="linenos">139</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_models_saved_path</span> <span class="o">=</span> <span class="n">models_saved_path</span>
@@ -338,7 +338,7 @@ AlgorithmWassersteinGan    </h1>
 </span><span id="L-239"><a href="#L-239"><span class="linenos">239</span></a>            <span class="c1"># Generate random noise vectors for the latent space.</span>
 </span><span id="L-240"><a href="#L-240"><span class="linenos">240</span></a>            <span class="n">latent_space</span> <span class="o">=</span> <span class="n">tensorflow</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">((</span><span class="n">batch_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_latent_dimension</span><span class="p">),</span>
 </span><span id="L-241"><a href="#L-241"><span class="linenos">241</span></a>                                                    <span class="n">mean</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_latent_mean_distribution</span><span class="p">,</span>
-</span><span id="L-242"><a href="#L-242"><span class="linenos">242</span></a>                                                    <span class="n">stddev</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_latent_stander_deviation</span><span class="p">)</span>
+</span><span id="L-242"><a href="#L-242"><span class="linenos">242</span></a>                                                    <span class="n">stddev</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_latent_standard_deviation</span><span class="p">)</span>
 </span><span id="L-243"><a href="#L-243"><span class="linenos">243</span></a>
 </span><span id="L-244"><a href="#L-244"><span class="linenos">244</span></a>            <span class="k">with</span> <span class="n">tensorflow</span><span class="o">.</span><span class="n">GradientTape</span><span class="p">()</span> <span class="k">as</span> <span class="n">discriminator_gradient</span><span class="p">:</span>
 </span><span id="L-245"><a href="#L-245"><span class="linenos">245</span></a>                <span class="c1"># Generate synthetic samples from the generator using noise and labels.</span>
@@ -371,7 +371,7 @@ AlgorithmWassersteinGan    </h1>
 </span><span id="L-272"><a href="#L-272"><span class="linenos">272</span></a>        <span class="c1"># Generate fresh random noise vectors for the latent space.</span>
 </span><span id="L-273"><a href="#L-273"><span class="linenos">273</span></a>        <span class="n">latent_space</span> <span class="o">=</span> <span class="n">tensorflow</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">((</span><span class="n">batch_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_latent_dimension</span><span class="p">),</span>
 </span><span id="L-274"><a href="#L-274"><span class="linenos">274</span></a>                                                <span class="n">mean</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_latent_mean_distribution</span><span class="p">,</span>
-</span><span id="L-275"><a href="#L-275"><span class="linenos">275</span></a>                                                <span class="n">stddev</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_latent_stander_deviation</span><span class="p">)</span>
+</span><span id="L-275"><a href="#L-275"><span class="linenos">275</span></a>                                                <span class="n">stddev</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_latent_standard_deviation</span><span class="p">)</span>
 </span><span id="L-276"><a href="#L-276"><span class="linenos">276</span></a>
 </span><span id="L-277"><a href="#L-277"><span class="linenos">277</span></a>        <span class="k">with</span> <span class="n">tensorflow</span><span class="o">.</span><span class="n">GradientTape</span><span class="p">()</span> <span class="k">as</span> <span class="n">generator_gradient</span><span class="p">:</span>
 </span><span id="L-278"><a href="#L-278"><span class="linenos">278</span></a>            <span class="c1"># Generate synthetic samples from the generator.</span>
@@ -417,7 +417,7 @@ AlgorithmWassersteinGan    </h1>
 </span><span id="L-318"><a href="#L-318"><span class="linenos">318</span></a>
 </span><span id="L-319"><a href="#L-319"><span class="linenos">319</span></a>            <span class="c1"># Sample random noise vectors from a normal distribution.</span>
 </span><span id="L-320"><a href="#L-320"><span class="linenos">320</span></a>            <span class="n">latent_noise</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">loc</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_latent_mean_distribution</span><span class="p">,</span>
-</span><span id="L-321"><a href="#L-321"><span class="linenos">321</span></a>                                               <span class="n">scale</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_latent_stander_deviation</span><span class="p">,</span>
+</span><span id="L-321"><a href="#L-321"><span class="linenos">321</span></a>                                               <span class="n">scale</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_latent_standard_deviation</span><span class="p">,</span>
 </span><span id="L-322"><a href="#L-322"><span class="linenos">322</span></a>                                               <span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="n">number_instances</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_latent_dimension</span><span class="p">))</span>
 </span><span id="L-323"><a href="#L-323"><span class="linenos">323</span></a>
 </span><span id="L-324"><a href="#L-324"><span class="linenos">324</span></a>            <span class="c1"># Generate synthetic samples using the generator.</span>
@@ -524,8 +524,8 @@ AlgorithmWassersteinGan    </h1>
 </span><span id="L-425"><a href="#L-425"><span class="linenos">425</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_latent_mean_distribution</span>
 </span><span id="L-426"><a href="#L-426"><span class="linenos">426</span></a>
 </span><span id="L-427"><a href="#L-427"><span class="linenos">427</span></a>    <span class="nd">@property</span>
-</span><span id="L-428"><a href="#L-428"><span class="linenos">428</span></a>    <span class="k">def</span> <span class="nf">latent_stander_deviation</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-</span><span id="L-429"><a href="#L-429"><span class="linenos">429</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_latent_stander_deviation</span>
+</span><span id="L-428"><a href="#L-428"><span class="linenos">428</span></a>    <span class="k">def</span> <span class="nf">latent_standard_deviation</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="L-429"><a href="#L-429"><span class="linenos">429</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_latent_standard_deviation</span>
 </span><span id="L-430"><a href="#L-430"><span class="linenos">430</span></a>
 </span><span id="L-431"><a href="#L-431"><span class="linenos">431</span></a>    <span class="nd">@generator</span><span class="o">.</span><span class="n">setter</span>
 </span><span id="L-432"><a href="#L-432"><span class="linenos">432</span></a>    <span class="k">def</span> <span class="nf">generator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">generator</span><span class="p">):</span>
@@ -547,9 +547,9 @@ AlgorithmWassersteinGan    </h1>
 </span><span id="L-448"><a href="#L-448"><span class="linenos">448</span></a>    <span class="k">def</span> <span class="nf">latent_mean_distribution</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">latent_mean_distribution</span><span class="p">):</span>
 </span><span id="L-449"><a href="#L-449"><span class="linenos">449</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_latent_mean_distribution</span> <span class="o">=</span> <span class="n">latent_mean_distribution</span>
 </span><span id="L-450"><a href="#L-450"><span class="linenos">450</span></a>
-</span><span id="L-451"><a href="#L-451"><span class="linenos">451</span></a>    <span class="nd">@latent_stander_deviation</span><span class="o">.</span><span class="n">setter</span>
-</span><span id="L-452"><a href="#L-452"><span class="linenos">452</span></a>    <span class="k">def</span> <span class="nf">latent_stander_deviation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">latent_stander_deviation</span><span class="p">):</span>
-</span><span id="L-453"><a href="#L-453"><span class="linenos">453</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_latent_stander_deviation</span> <span class="o">=</span> <span class="n">latent_stander_deviation</span>
+</span><span id="L-451"><a href="#L-451"><span class="linenos">451</span></a>    <span class="nd">@latent_standard_deviation</span><span class="o">.</span><span class="n">setter</span>
+</span><span id="L-452"><a href="#L-452"><span class="linenos">452</span></a>    <span class="k">def</span> <span class="nf">latent_standard_deviation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">latent_standard_deviation</span><span class="p">):</span>
+</span><span id="L-453"><a href="#L-453"><span class="linenos">453</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_latent_standard_deviation</span> <span class="o">=</span> <span class="n">latent_standard_deviation</span>
 </span></pre></div>
 
 
@@ -594,7 +594,7 @@ AlgorithmWassersteinGan    </h1>
 </span><span id="WassersteinAlgorithm-60"><a href="#WassersteinAlgorithm-60"><span class="linenos"> 60</span></a><span class="sd">            Loss function used for training the discriminator.</span>
 </span><span id="WassersteinAlgorithm-61"><a href="#WassersteinAlgorithm-61"><span class="linenos"> 61</span></a><span class="sd">        @_latent_mean_distribution (float):</span>
 </span><span id="WassersteinAlgorithm-62"><a href="#WassersteinAlgorithm-62"><span class="linenos"> 62</span></a><span class="sd">            Mean of the latent space distribution.</span>
-</span><span id="WassersteinAlgorithm-63"><a href="#WassersteinAlgorithm-63"><span class="linenos"> 63</span></a><span class="sd">        @_latent_stander_deviation (float):</span>
+</span><span id="WassersteinAlgorithm-63"><a href="#WassersteinAlgorithm-63"><span class="linenos"> 63</span></a><span class="sd">        @_latent_standard_deviation (float):</span>
 </span><span id="WassersteinAlgorithm-64"><a href="#WassersteinAlgorithm-64"><span class="linenos"> 64</span></a><span class="sd">            Standard deviation of the latent space distribution.</span>
 </span><span id="WassersteinAlgorithm-65"><a href="#WassersteinAlgorithm-65"><span class="linenos"> 65</span></a><span class="sd">        @_smoothing_rate (float):</span>
 </span><span id="WassersteinAlgorithm-66"><a href="#WassersteinAlgorithm-66"><span class="linenos"> 66</span></a><span class="sd">            Rate for label smoothing applied to the discriminator&#39;s true labels.</span>
@@ -630,7 +630,7 @@ AlgorithmWassersteinGan    </h1>
 </span><span id="WassersteinAlgorithm-96"><a href="#WassersteinAlgorithm-96"><span class="linenos"> 96</span></a><span class="sd">        ...     file_name_generator=&#39;generator_model.h5&#39;,</span>
 </span><span id="WassersteinAlgorithm-97"><a href="#WassersteinAlgorithm-97"><span class="linenos"> 97</span></a><span class="sd">        ...     models_saved_path=&#39;./models/&#39;,</span>
 </span><span id="WassersteinAlgorithm-98"><a href="#WassersteinAlgorithm-98"><span class="linenos"> 98</span></a><span class="sd">        ...     latent_mean_distribution=0.0,</span>
-</span><span id="WassersteinAlgorithm-99"><a href="#WassersteinAlgorithm-99"><span class="linenos"> 99</span></a><span class="sd">        ...     latent_stander_deviation=1.0,</span>
+</span><span id="WassersteinAlgorithm-99"><a href="#WassersteinAlgorithm-99"><span class="linenos"> 99</span></a><span class="sd">        ...     latent_standard_deviation=1.0,</span>
 </span><span id="WassersteinAlgorithm-100"><a href="#WassersteinAlgorithm-100"><span class="linenos">100</span></a><span class="sd">        ...     smoothing_rate=0.1,</span>
 </span><span id="WassersteinAlgorithm-101"><a href="#WassersteinAlgorithm-101"><span class="linenos">101</span></a><span class="sd">        ...     gradient_penalty_weight=10.0,</span>
 </span><span id="WassersteinAlgorithm-102"><a href="#WassersteinAlgorithm-102"><span class="linenos">102</span></a><span class="sd">        ...     discriminator_steps=5</span>
@@ -648,7 +648,7 @@ AlgorithmWassersteinGan    </h1>
 </span><span id="WassersteinAlgorithm-114"><a href="#WassersteinAlgorithm-114"><span class="linenos">114</span></a>                 <span class="n">file_name_generator</span><span class="p">,</span>
 </span><span id="WassersteinAlgorithm-115"><a href="#WassersteinAlgorithm-115"><span class="linenos">115</span></a>                 <span class="n">models_saved_path</span><span class="p">,</span>
 </span><span id="WassersteinAlgorithm-116"><a href="#WassersteinAlgorithm-116"><span class="linenos">116</span></a>                 <span class="n">latent_mean_distribution</span><span class="p">,</span>
-</span><span id="WassersteinAlgorithm-117"><a href="#WassersteinAlgorithm-117"><span class="linenos">117</span></a>                 <span class="n">latent_stander_deviation</span><span class="p">,</span>
+</span><span id="WassersteinAlgorithm-117"><a href="#WassersteinAlgorithm-117"><span class="linenos">117</span></a>                 <span class="n">latent_standard_deviation</span><span class="p">,</span>
 </span><span id="WassersteinAlgorithm-118"><a href="#WassersteinAlgorithm-118"><span class="linenos">118</span></a>                 <span class="n">smoothing_rate</span><span class="p">,</span>
 </span><span id="WassersteinAlgorithm-119"><a href="#WassersteinAlgorithm-119"><span class="linenos">119</span></a>                 <span class="n">gradient_penalty_weight</span><span class="p">,</span>
 </span><span id="WassersteinAlgorithm-120"><a href="#WassersteinAlgorithm-120"><span class="linenos">120</span></a>                 <span class="n">discriminator_steps</span><span class="p">,</span>
@@ -668,7 +668,7 @@ AlgorithmWassersteinGan    </h1>
 </span><span id="WassersteinAlgorithm-134"><a href="#WassersteinAlgorithm-134"><span class="linenos">134</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_gradient_penalty_weight</span> <span class="o">=</span> <span class="n">gradient_penalty_weight</span>
 </span><span id="WassersteinAlgorithm-135"><a href="#WassersteinAlgorithm-135"><span class="linenos">135</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_smooth_rate</span> <span class="o">=</span> <span class="n">smoothing_rate</span>
 </span><span id="WassersteinAlgorithm-136"><a href="#WassersteinAlgorithm-136"><span class="linenos">136</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_latent_mean_distribution</span> <span class="o">=</span> <span class="n">latent_mean_distribution</span>
-</span><span id="WassersteinAlgorithm-137"><a href="#WassersteinAlgorithm-137"><span class="linenos">137</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_latent_stander_deviation</span> <span class="o">=</span> <span class="n">latent_stander_deviation</span>
+</span><span id="WassersteinAlgorithm-137"><a href="#WassersteinAlgorithm-137"><span class="linenos">137</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_latent_standard_deviation</span> <span class="o">=</span> <span class="n">latent_standard_deviation</span>
 </span><span id="WassersteinAlgorithm-138"><a href="#WassersteinAlgorithm-138"><span class="linenos">138</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_file_name_discriminator</span> <span class="o">=</span> <span class="n">file_name_discriminator</span>
 </span><span id="WassersteinAlgorithm-139"><a href="#WassersteinAlgorithm-139"><span class="linenos">139</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_file_name_generator</span> <span class="o">=</span> <span class="n">file_name_generator</span>
 </span><span id="WassersteinAlgorithm-140"><a href="#WassersteinAlgorithm-140"><span class="linenos">140</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_models_saved_path</span> <span class="o">=</span> <span class="n">models_saved_path</span>
@@ -774,7 +774,7 @@ AlgorithmWassersteinGan    </h1>
 </span><span id="WassersteinAlgorithm-240"><a href="#WassersteinAlgorithm-240"><span class="linenos">240</span></a>            <span class="c1"># Generate random noise vectors for the latent space.</span>
 </span><span id="WassersteinAlgorithm-241"><a href="#WassersteinAlgorithm-241"><span class="linenos">241</span></a>            <span class="n">latent_space</span> <span class="o">=</span> <span class="n">tensorflow</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">((</span><span class="n">batch_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_latent_dimension</span><span class="p">),</span>
 </span><span id="WassersteinAlgorithm-242"><a href="#WassersteinAlgorithm-242"><span class="linenos">242</span></a>                                                    <span class="n">mean</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_latent_mean_distribution</span><span class="p">,</span>
-</span><span id="WassersteinAlgorithm-243"><a href="#WassersteinAlgorithm-243"><span class="linenos">243</span></a>                                                    <span class="n">stddev</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_latent_stander_deviation</span><span class="p">)</span>
+</span><span id="WassersteinAlgorithm-243"><a href="#WassersteinAlgorithm-243"><span class="linenos">243</span></a>                                                    <span class="n">stddev</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_latent_standard_deviation</span><span class="p">)</span>
 </span><span id="WassersteinAlgorithm-244"><a href="#WassersteinAlgorithm-244"><span class="linenos">244</span></a>
 </span><span id="WassersteinAlgorithm-245"><a href="#WassersteinAlgorithm-245"><span class="linenos">245</span></a>            <span class="k">with</span> <span class="n">tensorflow</span><span class="o">.</span><span class="n">GradientTape</span><span class="p">()</span> <span class="k">as</span> <span class="n">discriminator_gradient</span><span class="p">:</span>
 </span><span id="WassersteinAlgorithm-246"><a href="#WassersteinAlgorithm-246"><span class="linenos">246</span></a>                <span class="c1"># Generate synthetic samples from the generator using noise and labels.</span>
@@ -807,7 +807,7 @@ AlgorithmWassersteinGan    </h1>
 </span><span id="WassersteinAlgorithm-273"><a href="#WassersteinAlgorithm-273"><span class="linenos">273</span></a>        <span class="c1"># Generate fresh random noise vectors for the latent space.</span>
 </span><span id="WassersteinAlgorithm-274"><a href="#WassersteinAlgorithm-274"><span class="linenos">274</span></a>        <span class="n">latent_space</span> <span class="o">=</span> <span class="n">tensorflow</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">((</span><span class="n">batch_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_latent_dimension</span><span class="p">),</span>
 </span><span id="WassersteinAlgorithm-275"><a href="#WassersteinAlgorithm-275"><span class="linenos">275</span></a>                                                <span class="n">mean</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_latent_mean_distribution</span><span class="p">,</span>
-</span><span id="WassersteinAlgorithm-276"><a href="#WassersteinAlgorithm-276"><span class="linenos">276</span></a>                                                <span class="n">stddev</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_latent_stander_deviation</span><span class="p">)</span>
+</span><span id="WassersteinAlgorithm-276"><a href="#WassersteinAlgorithm-276"><span class="linenos">276</span></a>                                                <span class="n">stddev</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_latent_standard_deviation</span><span class="p">)</span>
 </span><span id="WassersteinAlgorithm-277"><a href="#WassersteinAlgorithm-277"><span class="linenos">277</span></a>
 </span><span id="WassersteinAlgorithm-278"><a href="#WassersteinAlgorithm-278"><span class="linenos">278</span></a>        <span class="k">with</span> <span class="n">tensorflow</span><span class="o">.</span><span class="n">GradientTape</span><span class="p">()</span> <span class="k">as</span> <span class="n">generator_gradient</span><span class="p">:</span>
 </span><span id="WassersteinAlgorithm-279"><a href="#WassersteinAlgorithm-279"><span class="linenos">279</span></a>            <span class="c1"># Generate synthetic samples from the generator.</span>
@@ -853,7 +853,7 @@ AlgorithmWassersteinGan    </h1>
 </span><span id="WassersteinAlgorithm-319"><a href="#WassersteinAlgorithm-319"><span class="linenos">319</span></a>
 </span><span id="WassersteinAlgorithm-320"><a href="#WassersteinAlgorithm-320"><span class="linenos">320</span></a>            <span class="c1"># Sample random noise vectors from a normal distribution.</span>
 </span><span id="WassersteinAlgorithm-321"><a href="#WassersteinAlgorithm-321"><span class="linenos">321</span></a>            <span class="n">latent_noise</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">loc</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_latent_mean_distribution</span><span class="p">,</span>
-</span><span id="WassersteinAlgorithm-322"><a href="#WassersteinAlgorithm-322"><span class="linenos">322</span></a>                                               <span class="n">scale</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_latent_stander_deviation</span><span class="p">,</span>
+</span><span id="WassersteinAlgorithm-322"><a href="#WassersteinAlgorithm-322"><span class="linenos">322</span></a>                                               <span class="n">scale</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_latent_standard_deviation</span><span class="p">,</span>
 </span><span id="WassersteinAlgorithm-323"><a href="#WassersteinAlgorithm-323"><span class="linenos">323</span></a>                                               <span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="n">number_instances</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_latent_dimension</span><span class="p">))</span>
 </span><span id="WassersteinAlgorithm-324"><a href="#WassersteinAlgorithm-324"><span class="linenos">324</span></a>
 </span><span id="WassersteinAlgorithm-325"><a href="#WassersteinAlgorithm-325"><span class="linenos">325</span></a>            <span class="c1"># Generate synthetic samples using the generator.</span>
@@ -960,8 +960,8 @@ AlgorithmWassersteinGan    </h1>
 </span><span id="WassersteinAlgorithm-426"><a href="#WassersteinAlgorithm-426"><span class="linenos">426</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_latent_mean_distribution</span>
 </span><span id="WassersteinAlgorithm-427"><a href="#WassersteinAlgorithm-427"><span class="linenos">427</span></a>
 </span><span id="WassersteinAlgorithm-428"><a href="#WassersteinAlgorithm-428"><span class="linenos">428</span></a>    <span class="nd">@property</span>
-</span><span id="WassersteinAlgorithm-429"><a href="#WassersteinAlgorithm-429"><span class="linenos">429</span></a>    <span class="k">def</span> <span class="nf">latent_stander_deviation</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-</span><span id="WassersteinAlgorithm-430"><a href="#WassersteinAlgorithm-430"><span class="linenos">430</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_latent_stander_deviation</span>
+</span><span id="WassersteinAlgorithm-429"><a href="#WassersteinAlgorithm-429"><span class="linenos">429</span></a>    <span class="k">def</span> <span class="nf">latent_standard_deviation</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="WassersteinAlgorithm-430"><a href="#WassersteinAlgorithm-430"><span class="linenos">430</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_latent_standard_deviation</span>
 </span><span id="WassersteinAlgorithm-431"><a href="#WassersteinAlgorithm-431"><span class="linenos">431</span></a>
 </span><span id="WassersteinAlgorithm-432"><a href="#WassersteinAlgorithm-432"><span class="linenos">432</span></a>    <span class="nd">@generator</span><span class="o">.</span><span class="n">setter</span>
 </span><span id="WassersteinAlgorithm-433"><a href="#WassersteinAlgorithm-433"><span class="linenos">433</span></a>    <span class="k">def</span> <span class="nf">generator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">generator</span><span class="p">):</span>
@@ -983,9 +983,9 @@ AlgorithmWassersteinGan    </h1>
 </span><span id="WassersteinAlgorithm-449"><a href="#WassersteinAlgorithm-449"><span class="linenos">449</span></a>    <span class="k">def</span> <span class="nf">latent_mean_distribution</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">latent_mean_distribution</span><span class="p">):</span>
 </span><span id="WassersteinAlgorithm-450"><a href="#WassersteinAlgorithm-450"><span class="linenos">450</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_latent_mean_distribution</span> <span class="o">=</span> <span class="n">latent_mean_distribution</span>
 </span><span id="WassersteinAlgorithm-451"><a href="#WassersteinAlgorithm-451"><span class="linenos">451</span></a>
-</span><span id="WassersteinAlgorithm-452"><a href="#WassersteinAlgorithm-452"><span class="linenos">452</span></a>    <span class="nd">@latent_stander_deviation</span><span class="o">.</span><span class="n">setter</span>
-</span><span id="WassersteinAlgorithm-453"><a href="#WassersteinAlgorithm-453"><span class="linenos">453</span></a>    <span class="k">def</span> <span class="nf">latent_stander_deviation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">latent_stander_deviation</span><span class="p">):</span>
-</span><span id="WassersteinAlgorithm-454"><a href="#WassersteinAlgorithm-454"><span class="linenos">454</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_latent_stander_deviation</span> <span class="o">=</span> <span class="n">latent_stander_deviation</span>
+</span><span id="WassersteinAlgorithm-452"><a href="#WassersteinAlgorithm-452"><span class="linenos">452</span></a>    <span class="nd">@latent_standard_deviation</span><span class="o">.</span><span class="n">setter</span>
+</span><span id="WassersteinAlgorithm-453"><a href="#WassersteinAlgorithm-453"><span class="linenos">453</span></a>    <span class="k">def</span> <span class="nf">latent_standard_deviation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">latent_standard_deviation</span><span class="p">):</span>
+</span><span id="WassersteinAlgorithm-454"><a href="#WassersteinAlgorithm-454"><span class="linenos">454</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_latent_standard_deviation</span> <span class="o">=</span> <span class="n">latent_standard_deviation</span>
 </span></pre></div>
 
 
@@ -1016,7 +1016,7 @@ It implements the Wasserstein loss with gradient penalty to improve the training
         Loss function used for training the discriminator.
     @_latent_mean_distribution (float):
         Mean of the latent space distribution.
-    @_latent_stander_deviation (float):
+    @_latent_standard_deviation (float):
         Standard deviation of the latent space distribution.
     @_smoothing_rate (float):
         Rate for label smoothing applied to the discriminator's true labels.
@@ -1056,7 +1056,7 @@ It implements the Wasserstein loss with gradient penalty to improve the training
           ...     file_name_generator='generator_model.h5',
           ...     models_saved_path='./models/',
           ...     latent_mean_distribution=0.0,
-          ...     latent_stander_deviation=1.0,
+          ...     latent_standard_deviation=1.0,
           ...     smoothing_rate=0.1,
           ...     gradient_penalty_weight=10.0,
           ...     discriminator_steps=5
@@ -1072,7 +1072,7 @@ It implements the Wasserstein loss with gradient penalty to improve the training
                                         <input id="WassersteinAlgorithm.__init__-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
-        <span class="name">WassersteinAlgorithm</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="n">generator_model</span>,</span><span class="param">	<span class="n">discriminator_model</span>,</span><span class="param">	<span class="n">latent_dimension</span>,</span><span class="param">	<span class="n">generator_loss_fn</span>,</span><span class="param">	<span class="n">discriminator_loss_fn</span>,</span><span class="param">	<span class="n">file_name_discriminator</span>,</span><span class="param">	<span class="n">file_name_generator</span>,</span><span class="param">	<span class="n">models_saved_path</span>,</span><span class="param">	<span class="n">latent_mean_distribution</span>,</span><span class="param">	<span class="n">latent_stander_deviation</span>,</span><span class="param">	<span class="n">smoothing_rate</span>,</span><span class="param">	<span class="n">gradient_penalty_weight</span>,</span><span class="param">	<span class="n">discriminator_steps</span>,</span><span class="param">	<span class="o">*</span><span class="n">args</span>,</span><span class="param">	<span class="o">**</span><span class="n">kwargs</span></span>)</span>
+        <span class="name">WassersteinAlgorithm</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="n">generator_model</span>,</span><span class="param">	<span class="n">discriminator_model</span>,</span><span class="param">	<span class="n">latent_dimension</span>,</span><span class="param">	<span class="n">generator_loss_fn</span>,</span><span class="param">	<span class="n">discriminator_loss_fn</span>,</span><span class="param">	<span class="n">file_name_discriminator</span>,</span><span class="param">	<span class="n">file_name_generator</span>,</span><span class="param">	<span class="n">models_saved_path</span>,</span><span class="param">	<span class="n">latent_mean_distribution</span>,</span><span class="param">	<span class="n">latent_standard_deviation</span>,</span><span class="param">	<span class="n">smoothing_rate</span>,</span><span class="param">	<span class="n">gradient_penalty_weight</span>,</span><span class="param">	<span class="n">discriminator_steps</span>,</span><span class="param">	<span class="o">*</span><span class="n">args</span>,</span><span class="param">	<span class="o">**</span><span class="n">kwargs</span></span>)</span>
 
                 <label class="view-source-button" for="WassersteinAlgorithm.__init__-view-source"><span>View Source</span></label>
 
@@ -1088,7 +1088,7 @@ It implements the Wasserstein loss with gradient penalty to improve the training
 </span><span id="WassersteinAlgorithm.__init__-114"><a href="#WassersteinAlgorithm.__init__-114"><span class="linenos">114</span></a>                 <span class="n">file_name_generator</span><span class="p">,</span>
 </span><span id="WassersteinAlgorithm.__init__-115"><a href="#WassersteinAlgorithm.__init__-115"><span class="linenos">115</span></a>                 <span class="n">models_saved_path</span><span class="p">,</span>
 </span><span id="WassersteinAlgorithm.__init__-116"><a href="#WassersteinAlgorithm.__init__-116"><span class="linenos">116</span></a>                 <span class="n">latent_mean_distribution</span><span class="p">,</span>
-</span><span id="WassersteinAlgorithm.__init__-117"><a href="#WassersteinAlgorithm.__init__-117"><span class="linenos">117</span></a>                 <span class="n">latent_stander_deviation</span><span class="p">,</span>
+</span><span id="WassersteinAlgorithm.__init__-117"><a href="#WassersteinAlgorithm.__init__-117"><span class="linenos">117</span></a>                 <span class="n">latent_standard_deviation</span><span class="p">,</span>
 </span><span id="WassersteinAlgorithm.__init__-118"><a href="#WassersteinAlgorithm.__init__-118"><span class="linenos">118</span></a>                 <span class="n">smoothing_rate</span><span class="p">,</span>
 </span><span id="WassersteinAlgorithm.__init__-119"><a href="#WassersteinAlgorithm.__init__-119"><span class="linenos">119</span></a>                 <span class="n">gradient_penalty_weight</span><span class="p">,</span>
 </span><span id="WassersteinAlgorithm.__init__-120"><a href="#WassersteinAlgorithm.__init__-120"><span class="linenos">120</span></a>                 <span class="n">discriminator_steps</span><span class="p">,</span>
@@ -1108,7 +1108,7 @@ It implements the Wasserstein loss with gradient penalty to improve the training
 </span><span id="WassersteinAlgorithm.__init__-134"><a href="#WassersteinAlgorithm.__init__-134"><span class="linenos">134</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_gradient_penalty_weight</span> <span class="o">=</span> <span class="n">gradient_penalty_weight</span>
 </span><span id="WassersteinAlgorithm.__init__-135"><a href="#WassersteinAlgorithm.__init__-135"><span class="linenos">135</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_smooth_rate</span> <span class="o">=</span> <span class="n">smoothing_rate</span>
 </span><span id="WassersteinAlgorithm.__init__-136"><a href="#WassersteinAlgorithm.__init__-136"><span class="linenos">136</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_latent_mean_distribution</span> <span class="o">=</span> <span class="n">latent_mean_distribution</span>
-</span><span id="WassersteinAlgorithm.__init__-137"><a href="#WassersteinAlgorithm.__init__-137"><span class="linenos">137</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_latent_stander_deviation</span> <span class="o">=</span> <span class="n">latent_stander_deviation</span>
+</span><span id="WassersteinAlgorithm.__init__-137"><a href="#WassersteinAlgorithm.__init__-137"><span class="linenos">137</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_latent_standard_deviation</span> <span class="o">=</span> <span class="n">latent_standard_deviation</span>
 </span><span id="WassersteinAlgorithm.__init__-138"><a href="#WassersteinAlgorithm.__init__-138"><span class="linenos">138</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_file_name_discriminator</span> <span class="o">=</span> <span class="n">file_name_discriminator</span>
 </span><span id="WassersteinAlgorithm.__init__-139"><a href="#WassersteinAlgorithm.__init__-139"><span class="linenos">139</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_file_name_generator</span> <span class="o">=</span> <span class="n">file_name_generator</span>
 </span><span id="WassersteinAlgorithm.__init__-140"><a href="#WassersteinAlgorithm.__init__-140"><span class="linenos">140</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_models_saved_path</span> <span class="o">=</span> <span class="n">models_saved_path</span>
@@ -1294,7 +1294,7 @@ It sets the optimizer and loss for both the generator and discriminator.</p>
 </span><span id="WassersteinAlgorithm.train_step-240"><a href="#WassersteinAlgorithm.train_step-240"><span class="linenos">240</span></a>            <span class="c1"># Generate random noise vectors for the latent space.</span>
 </span><span id="WassersteinAlgorithm.train_step-241"><a href="#WassersteinAlgorithm.train_step-241"><span class="linenos">241</span></a>            <span class="n">latent_space</span> <span class="o">=</span> <span class="n">tensorflow</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">((</span><span class="n">batch_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_latent_dimension</span><span class="p">),</span>
 </span><span id="WassersteinAlgorithm.train_step-242"><a href="#WassersteinAlgorithm.train_step-242"><span class="linenos">242</span></a>                                                    <span class="n">mean</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_latent_mean_distribution</span><span class="p">,</span>
-</span><span id="WassersteinAlgorithm.train_step-243"><a href="#WassersteinAlgorithm.train_step-243"><span class="linenos">243</span></a>                                                    <span class="n">stddev</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_latent_stander_deviation</span><span class="p">)</span>
+</span><span id="WassersteinAlgorithm.train_step-243"><a href="#WassersteinAlgorithm.train_step-243"><span class="linenos">243</span></a>                                                    <span class="n">stddev</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_latent_standard_deviation</span><span class="p">)</span>
 </span><span id="WassersteinAlgorithm.train_step-244"><a href="#WassersteinAlgorithm.train_step-244"><span class="linenos">244</span></a>
 </span><span id="WassersteinAlgorithm.train_step-245"><a href="#WassersteinAlgorithm.train_step-245"><span class="linenos">245</span></a>            <span class="k">with</span> <span class="n">tensorflow</span><span class="o">.</span><span class="n">GradientTape</span><span class="p">()</span> <span class="k">as</span> <span class="n">discriminator_gradient</span><span class="p">:</span>
 </span><span id="WassersteinAlgorithm.train_step-246"><a href="#WassersteinAlgorithm.train_step-246"><span class="linenos">246</span></a>                <span class="c1"># Generate synthetic samples from the generator using noise and labels.</span>
@@ -1327,7 +1327,7 @@ It sets the optimizer and loss for both the generator and discriminator.</p>
 </span><span id="WassersteinAlgorithm.train_step-273"><a href="#WassersteinAlgorithm.train_step-273"><span class="linenos">273</span></a>        <span class="c1"># Generate fresh random noise vectors for the latent space.</span>
 </span><span id="WassersteinAlgorithm.train_step-274"><a href="#WassersteinAlgorithm.train_step-274"><span class="linenos">274</span></a>        <span class="n">latent_space</span> <span class="o">=</span> <span class="n">tensorflow</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">((</span><span class="n">batch_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_latent_dimension</span><span class="p">),</span>
 </span><span id="WassersteinAlgorithm.train_step-275"><a href="#WassersteinAlgorithm.train_step-275"><span class="linenos">275</span></a>                                                <span class="n">mean</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_latent_mean_distribution</span><span class="p">,</span>
-</span><span id="WassersteinAlgorithm.train_step-276"><a href="#WassersteinAlgorithm.train_step-276"><span class="linenos">276</span></a>                                                <span class="n">stddev</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_latent_stander_deviation</span><span class="p">)</span>
+</span><span id="WassersteinAlgorithm.train_step-276"><a href="#WassersteinAlgorithm.train_step-276"><span class="linenos">276</span></a>                                                <span class="n">stddev</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_latent_standard_deviation</span><span class="p">)</span>
 </span><span id="WassersteinAlgorithm.train_step-277"><a href="#WassersteinAlgorithm.train_step-277"><span class="linenos">277</span></a>
 </span><span id="WassersteinAlgorithm.train_step-278"><a href="#WassersteinAlgorithm.train_step-278"><span class="linenos">278</span></a>        <span class="k">with</span> <span class="n">tensorflow</span><span class="o">.</span><span class="n">GradientTape</span><span class="p">()</span> <span class="k">as</span> <span class="n">generator_gradient</span><span class="p">:</span>
 </span><span id="WassersteinAlgorithm.train_step-279"><a href="#WassersteinAlgorithm.train_step-279"><span class="linenos">279</span></a>            <span class="c1"># Generate synthetic samples from the generator.</span>
@@ -1403,7 +1403,7 @@ while the generator is updated once.</p>
 </span><span id="WassersteinAlgorithm.get_samples-319"><a href="#WassersteinAlgorithm.get_samples-319"><span class="linenos">319</span></a>
 </span><span id="WassersteinAlgorithm.get_samples-320"><a href="#WassersteinAlgorithm.get_samples-320"><span class="linenos">320</span></a>            <span class="c1"># Sample random noise vectors from a normal distribution.</span>
 </span><span id="WassersteinAlgorithm.get_samples-321"><a href="#WassersteinAlgorithm.get_samples-321"><span class="linenos">321</span></a>            <span class="n">latent_noise</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">loc</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_latent_mean_distribution</span><span class="p">,</span>
-</span><span id="WassersteinAlgorithm.get_samples-322"><a href="#WassersteinAlgorithm.get_samples-322"><span class="linenos">322</span></a>                                               <span class="n">scale</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_latent_stander_deviation</span><span class="p">,</span>
+</span><span id="WassersteinAlgorithm.get_samples-322"><a href="#WassersteinAlgorithm.get_samples-322"><span class="linenos">322</span></a>                                               <span class="n">scale</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_latent_standard_deviation</span><span class="p">,</span>
 </span><span id="WassersteinAlgorithm.get_samples-323"><a href="#WassersteinAlgorithm.get_samples-323"><span class="linenos">323</span></a>                                               <span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="n">number_instances</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_latent_dimension</span><span class="p">))</span>
 </span><span id="WassersteinAlgorithm.get_samples-324"><a href="#WassersteinAlgorithm.get_samples-324"><span class="linenos">324</span></a>
 </span><span id="WassersteinAlgorithm.get_samples-325"><a href="#WassersteinAlgorithm.get_samples-325"><span class="linenos">325</span></a>            <span class="c1"># Generate synthetic samples using the generator.</span>
@@ -1683,18 +1683,18 @@ and the generator to produce the samples.</p>
     
 
                             </div>
-                            <div id="WassersteinAlgorithm.latent_stander_deviation" class="classattr">
-                                        <input id="WassersteinAlgorithm.latent_stander_deviation-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+                            <div id="WassersteinAlgorithm.latent_standard_deviation" class="classattr">
+                                        <input id="WassersteinAlgorithm.latent_standard_deviation-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr variable">
-            <span class="name">latent_stander_deviation</span>
+            <span class="name">latent_standard_deviation</span>
 
-                <label class="view-source-button" for="WassersteinAlgorithm.latent_stander_deviation-view-source"><span>View Source</span></label>
+                <label class="view-source-button" for="WassersteinAlgorithm.latent_standard_deviation-view-source"><span>View Source</span></label>
 
     </div>
-    <a class="headerlink" href="#WassersteinAlgorithm.latent_stander_deviation"></a>
-            <div class="pdoc-code codehilite"><pre><span></span><span id="WassersteinAlgorithm.latent_stander_deviation-428"><a href="#WassersteinAlgorithm.latent_stander_deviation-428"><span class="linenos">428</span></a>    <span class="nd">@property</span>
-</span><span id="WassersteinAlgorithm.latent_stander_deviation-429"><a href="#WassersteinAlgorithm.latent_stander_deviation-429"><span class="linenos">429</span></a>    <span class="k">def</span> <span class="nf">latent_stander_deviation</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-</span><span id="WassersteinAlgorithm.latent_stander_deviation-430"><a href="#WassersteinAlgorithm.latent_stander_deviation-430"><span class="linenos">430</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_latent_stander_deviation</span>
+    <a class="headerlink" href="#WassersteinAlgorithm.latent_standard_deviation"></a>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="WassersteinAlgorithm.latent_standard_deviation-428"><a href="#WassersteinAlgorithm.latent_standard_deviation-428"><span class="linenos">428</span></a>    <span class="nd">@property</span>
+</span><span id="WassersteinAlgorithm.latent_standard_deviation-429"><a href="#WassersteinAlgorithm.latent_standard_deviation-429"><span class="linenos">429</span></a>    <span class="k">def</span> <span class="nf">latent_standard_deviation</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="WassersteinAlgorithm.latent_standard_deviation-430"><a href="#WassersteinAlgorithm.latent_standard_deviation-430"><span class="linenos">430</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_latent_standard_deviation</span>
 </span></pre></div>
 
 

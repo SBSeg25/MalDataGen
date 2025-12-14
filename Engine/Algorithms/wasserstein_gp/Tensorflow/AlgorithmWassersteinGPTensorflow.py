@@ -84,7 +84,7 @@ class WassersteinGPAlgorithmTensorflow(Model):
             Loss function used for training the discriminator.
         @_latent_mean_distribution (float):
             Mean of the latent space distribution.
-        @_latent_stander_deviation (float):
+        @_latent_standard_deviation (float):
             Standard deviation of the latent space distribution.
         @_smoothing_rate (float):
             Rate for label smoothing applied to the discriminator's true labels.
@@ -120,7 +120,7 @@ class WassersteinGPAlgorithmTensorflow(Model):
         ...     file_name_generator='generator_model.h5',
         ...     models_saved_path='./models/',
         ...     latent_mean_distribution=0.0,
-        ...     latent_stander_deviation=1.0,
+        ...     latent_standard_deviation=1.0,
         ...     smoothing_rate=0.1,
         ...     gradient_penalty_weight=10.0,
         ...     discriminator_steps=5

@@ -117,7 +117,7 @@ class Wasserstein:
 
         _wasserstein_smoothing_rate: Label smoothing rate
         _wasserstein_latent_mean_distribution: Distribution type for latent space
-        _wasserstein_latent_stander_deviation: Std dev for latent distribution
+        _wasserstein_latent_standard_deviation: Std dev for latent distribution
         _wasserstein_file_name_discriminator: Filename for saving critic
         _wasserstein_file_name_generator: Filename for saving generator
         _wasserstein_path_output_models: Path for saving models
@@ -147,7 +147,7 @@ class Wasserstein:
             discriminator_steps: int = DEFAULT_WASSERSTEIN_DISCRIMINATOR_STEPS,
             smoothing_rate: float = DEFAULT_WASSERSTEIN_SMOOTHING_RATE,
             latent_mean_distribution: float = DEFAULT_WASSERSTEIN_LATENT_MEAN_DISTRIBUTION,
-            latent_stander_deviation: float = DEFAULT_WASSERSTEIN_LATENT_STANDARD_DEVIATION,
+            latent_standard_deviation: float = DEFAULT_WASSERSTEIN_LATENT_STANDARD_DEVIATION,
             file_name_discriminator: str = DEFAULT_WASSERSTEIN_FILE_NAME_DISCRIMINATOR,
             file_name_generator: str = DEFAULT_WASSERSTEIN_FILE_NAME_GENERATOR,
             path_output_models: str = DEFAULT_WASSERSTEIN_PATH_OUTPUT_MODELS,
@@ -180,7 +180,7 @@ class Wasserstein:
             discriminator_steps: Critic steps per generator (default: 5)
             smoothing_rate: Label smoothing rate (default: 0.0)
             latent_mean_distribution: Latent mean (default: 0.0)
-            latent_stander_deviation: Latent std dev (default: 1.0)
+            latent_standard_deviation: Latent std dev (default: 1.0)
             file_name_discriminator: Critic filename (default: "discriminator_model")
             file_name_generator: Generator filename (default: "generator_model")
             path_output_models: Model save path (default: "models_saved/")
@@ -781,7 +781,7 @@ class Wasserstein:
         """Set the latent mean distribution."""
         self._wasserstein_latent_mean_distribution = value
 
-    # Getter and setter for wasserstein_latent_stander_deviation
+    # Getter and setter for wasserstein_latent_standard_deviation
     @property
     def wasserstein_latent_standard_deviation(self) -> float:
         """Get the latent standard deviation."""

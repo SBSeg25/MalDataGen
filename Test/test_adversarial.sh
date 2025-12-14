@@ -13,7 +13,7 @@ pipenv run python main.py \
 	--adversarial_initializer_deviation 0.02 \
 	--adversarial_initializer_mean 0 \
 	--adversarial_latent_dimension 128 \
-	--adversarial_latent_stander_deviation 1 \
+	--adversarial_latent_standard_deviation 1 \
 	--adversarial_training_algorithm Adam \
 	--adversarial_activation_function LeakyReLU \
 	--adversarial_latent_mean_distribution  0.0 \

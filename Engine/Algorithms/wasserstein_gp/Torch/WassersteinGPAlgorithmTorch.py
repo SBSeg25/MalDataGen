@@ -88,7 +88,7 @@ class WassersteinGPAlgorithmTorch(nn.Module):
             Loss function used for training the discriminator.
         @_latent_mean_distribution (float):
             Mean of the latent space distribution.
-        @_latent_stander_deviation (float):
+        @_latent_standard_deviation (float):
             Standard deviation of the latent space distribution.
         @_smoothing_rate (float):
             Rate for label smoothing applied to the discriminator's true labels.
@@ -124,7 +124,7 @@ class WassersteinGPAlgorithmTorch(nn.Module):
         ...     file_name_generator='generator_model.pt',
         ...     models_saved_path='./models/',
         ...     latent_mean_distribution=0.0,
-        ...     latent_stander_deviation=1.0,
+        ...     latent_standard_deviation=1.0,
         ...     smoothing_rate=0.1,
         ...     gradient_penalty_weight=10.0,
         ...     discriminator_steps=5
@@ -143,7 +143,7 @@ class WassersteinGPAlgorithmTorch(nn.Module):
                  file_name_generator,
                  models_saved_path,
                  latent_mean_distribution,
-                 latent_stander_deviation,
+                 latent_standard_deviation,
                  smoothing_rate,
                  gradient_penalty_weight,
                  discriminator_steps,
@@ -163,7 +163,7 @@ class WassersteinGPAlgorithmTorch(nn.Module):
         self._gradient_penalty_weight = gradient_penalty_weight
         self._smooth_rate = smoothing_rate
         self._latent_mean_distribution = latent_mean_distribution
-        self._latent_stander_deviation = latent_stander_deviation
+        self._latent_standard_deviation = latent_standard_deviation
         self._file_name_discriminator = file_name_discriminator
         self._file_name_generator = file_name_generator
         self._models_saved_path = models_saved_path
@@ -552,7 +552,7 @@ class WassersteinGPAlgorithmTorch(nn.Module):
 
                 # Generate synthetic samples
                 latent_space = torch.randn(batch_size, self._latent_dimension, device=self._device) * \
-                               self._latent_stander_deviation + self._latent_mean_distribution
+                               self._latent_standard_deviation + self._latent_mean_distribution
 
                 synthetic_feature = self._generator([latent_space, labels_for_model])
 
@@ -634,7 +634,7 @@ class WassersteinGPAlgorithmTorch(nn.Module):
         for _ in range(self._discriminator_steps):
             # Generate random noise vectors for the latent space.
             latent_space = torch.randn(batch_size, self._latent_dimension, device=self._device) * \
-                           self._latent_stander_deviation + self._latent_mean_distribution
+                           self._latent_standard_deviation + self._latent_mean_distribution
 
             # Zero discriminator gradients
             self._discriminator_optimizer.zero_grad()
@@ -667,7 +667,7 @@ class WassersteinGPAlgorithmTorch(nn.Module):
         # === Generator Training Step ===
         # Generate fresh random noise vectors for the latent space.
         latent_space = torch.randn(batch_size, self._latent_dimension, device=self._device) * \
-                       self._latent_stander_deviation + self._latent_mean_distribution
+                       self._latent_standard_deviation + self._latent_mean_distribution
 
         # Zero generator gradients
         self._generator_optimizer.zero_grad()
@@ -726,7 +726,7 @@ class WassersteinGPAlgorithmTorch(nn.Module):
 
                 # Sample random noise vectors from a normal distribution.
                 latent_noise = torch.randn(number_instances, self._latent_dimension, device=self._device) * \
-                               self._latent_stander_deviation + self._latent_mean_distribution
+                               self._latent_standard_deviation + self._latent_mean_distribution
 
                 # Generate synthetic samples using the generator.
                 generated_samples = self._generator([latent_noise, label_samples_generated])
@@ -948,10 +948,10 @@ class WassersteinGPAlgorithmTorch(nn.Module):
         Returns:
             The standard deviation used for latent space sampling.
         """
-        return self._latent_stander_deviation
+        return self._latent_standard_deviation
 
     @latent_standard_deviation.setter
-    def latent_stander_deviation(self, value: float) -> None:
+    def latent_standard_deviation(self, value: float) -> None:
         """Set the standard deviation of the latent space distribution.
 
         Args:
@@ -962,7 +962,7 @@ class WassersteinGPAlgorithmTorch(nn.Module):
         """
         if value <= 0:
             raise ValueError("Standard deviation must be positive")
-        self._latent_stander_deviation = value
+        self._latent_standard_deviation = value
 
     @property
     def file_name_discriminator(self) -> str:

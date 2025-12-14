@@ -63,12 +63,12 @@ DEFAULT_ADVERSARIAL_INITIALIZER_DEVIATION = 0.250
 DEFAULT_ADVERSARIAL_BATCH_SIZE = 64
 DEFAULT_ADVERSARIAL_DENSE_LAYERS_SETTINGS_G = [2048]
 DEFAULT_ADVERSARIAL_DENSE_LAYERS_SETTINGS_D = [32]
-DEFAULT_ADVERSARIAL_RANDOM_LATENT_STANDER_DEVIATION = 0.250
+DEFAULT_ADVERSARIAL_RANDOM_latent_standard_deviation = 0.250
 DEFAULT_ADVERSARIAL_LOSS_GENERATOR = 'binary_crossentropy'
 DEFAULT_ADVERSARIAL_LOSS_DISCRIMINATOR = 'binary_crossentropy'
 DEFAULT_ADVERSARIAL_SMOOTHING_RATE = 0.15
 DEFAULT_ADVERSARIAL_LATENT_MEAN_DISTRIBUTION = 0.0
-DEFAULT_ADVERSARIAL_LATENT_STANDER_DEVIATION = 0.250
+DEFAULT_ADVERSARIAL_latent_standard_deviation = 0.250
 DEFAULT_ADVERSARIAL_FILE_NAME_DISCRIMINATOR = "discriminator_model"
 DEFAULT_ADVERSARIAL_FILE_NAME_GENERATOR = "generator_model"
 DEFAULT_ADVERSARIAL_PATH_OUTPUT_MODELS = "models_saved/"
@@ -105,7 +105,7 @@ class Adversarial:
         _adversarial_loss_discriminator (str): Discriminator loss function
         _adversarial_smoothing_rate (float): Label smoothing rate
         _adversarial_latent_mean_distribution (float): Latent space mean
-        _adversarial_latent_stander_deviation (float): Latent space std dev
+        _adversarial_latent_standard_deviation (float): Latent space std dev
         _adversarial_file_name_discriminator (str): Discriminator model filename
         _adversarial_file_name_generator (str): Generator model filename
         _adversarial_path_output_models (str): Path for saving models
@@ -134,7 +134,7 @@ class Adversarial:
                  loss_discriminator: str = DEFAULT_ADVERSARIAL_LOSS_DISCRIMINATOR,
                  smoothing_rate: float = DEFAULT_ADVERSARIAL_SMOOTHING_RATE,
                  latent_mean_distribution: float = DEFAULT_ADVERSARIAL_LATENT_MEAN_DISTRIBUTION,
-                 latent_stander_deviation: float = DEFAULT_ADVERSARIAL_LATENT_STANDER_DEVIATION,
+                 latent_standard_deviation: float = DEFAULT_ADVERSARIAL_latent_standard_deviation,
                  file_name_discriminator: str = DEFAULT_ADVERSARIAL_FILE_NAME_DISCRIMINATOR,
                  file_name_generator: str = DEFAULT_ADVERSARIAL_FILE_NAME_GENERATOR,
                  path_output_models: str = DEFAULT_ADVERSARIAL_PATH_OUTPUT_MODELS,
@@ -165,7 +165,7 @@ class Adversarial:
             loss_discriminator: Discriminator loss function (default: 'binary_crossentropy')
             smoothing_rate: Label smoothing rate (default: 0.15)
             latent_mean_distribution: Latent space mean (default: 0.0)
-            latent_stander_deviation: Latent space std dev (default: 1.0)
+            latent_standard_deviation: Latent space std dev (default: 1.0)
             file_name_discriminator: Discriminator model filename (default: "discriminator_model")
             file_name_generator: Generator model filename (default: "generator_model")
             path_output_models: Path for saving models (default: "models_saved/")
@@ -209,7 +209,7 @@ class Adversarial:
         self._adversarial_loss_discriminator: str = loss_discriminator
         self._adversarial_smoothing_rate: float = smoothing_rate
         self._adversarial_latent_mean_distribution: float = latent_mean_distribution
-        self._adversarial_latent_stander_deviation: float = latent_stander_deviation
+        self._adversarial_latent_standard_deviation: float = latent_standard_deviation
         self._adversarial_file_name_discriminator: str = file_name_discriminator
         self._adversarial_file_name_generator: str = file_name_generator
         self._adversarial_path_output_models: str = path_output_models
@@ -290,7 +290,7 @@ class Adversarial:
                 file_name_generator=self._adversarial_file_name_generator,
                 models_saved_path=self._adversarial_path_output_models,
                 latent_mean_distribution=self._adversarial_latent_mean_distribution,
-                latent_stander_deviation=self._adversarial_latent_stander_deviation,
+                latent_standard_deviation=self._adversarial_latent_standard_deviation,
                 smoothing_rate=self._adversarial_smoothing_rate
             )
         else:
@@ -316,8 +316,8 @@ class Adversarial:
             if hasattr(self._adversarial_algorithm, 'latent_mean_distribution'):
                 self._adversarial_algorithm.latent_mean_distribution = self._adversarial_latent_mean_distribution
 
-            if hasattr(self._adversarial_algorithm, 'latent_stander_deviation'):
-                self._adversarial_algorithm.latent_stander_deviation = self._adversarial_latent_stander_deviation
+            if hasattr(self._adversarial_algorithm, 'latent_standard_deviation'):
+                self._adversarial_algorithm.latent_standard_deviation = self._adversarial_latent_standard_deviation
 
             if hasattr(self._adversarial_algorithm, 'smoothing_rate'):
                 self._adversarial_algorithm.smoothing_rate = self._adversarial_smoothing_rate
@@ -697,16 +697,16 @@ class Adversarial:
         """Set the latent space mean distribution."""
         self._adversarial_latent_mean_distribution = value
 
-    # Getter and setter for adversarial_latent_stander_deviation
+    # Getter and setter for adversarial_latent_standard_deviation
     @property
-    def adversarial_latent_stander_deviation(self) -> float:
+    def adversarial_latent_standard_deviation(self) -> float:
         """Get the latent space standard deviation."""
-        return self._adversarial_latent_stander_deviation
+        return self._adversarial_latent_standard_deviation
 
-    @adversarial_latent_stander_deviation.setter
-    def adversarial_latent_stander_deviation(self, value: float) -> None:
+    @adversarial_latent_standard_deviation.setter
+    def adversarial_latent_standard_deviation(self, value: float) -> None:
         """Set the latent space standard deviation."""
-        self._adversarial_latent_stander_deviation = value
+        self._adversarial_latent_standard_deviation = value
 
     # Getter and setter for adversarial_file_name_discriminator
     @property

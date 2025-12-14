@@ -3,7 +3,7 @@
 2025-07-12 18:04:02,597	***	Retrieved DataGenerated path: outputs/out_2025-07-12_16-54-38/reduced_balanced_kronodroid_emulator/adversarial/combination_1/DataGenerated
 2025-07-12 18:04:02,604	***	All GPUs disabled. Running on CPU.
 2025-07-12 18:04:02,604	***	Command:
-	main.py --data_load_path_file_input Datasets/reduced_balanced_kronodroid_emulator.csv --verbosity 20 --output_dir outputs/out_2025-07-12_16-54-38/reduced_balanced_kronodroid_emulator/adversarial/combination_1 --classifier RandomForest SupportVectorMachine KNN DecisionTree NaiveBayes GradientBoosting StochasticGradientDescent --model_type adversarial --number_samples_per_class 0:2000,1:2000 --number_k_folds 5 --adversarial_number_epochs 300 --save_data True --adversarial_batch_size 64 --adversarial_dense_layer_sizes_g 256 --adversarial_dense_layer_sizes_d 64 --adversarial_dropout_decay_rate_g 0.2 --adversarial_dropout_decay_rate_d 0.4 --adversarial_initializer_deviation 0.5 --adversarial_initializer_mean 0 --adversarial_latent_dimension 32 --adversarial_latent_mean_distribution 0.5 --adversarial_latent_stander_deviation 0.125 --adversarial_training_algorithm Adam --adversarial_activation_function leakyrelu --adversarial_loss_generator binary_crossentropy --adversarial_loss_discriminator binary_crossentropy --adversarial_smoothing_rate 0.15
+	main.py --data_load_path_file_input Datasets/reduced_balanced_kronodroid_emulator.csv --verbosity 20 --output_dir outputs/out_2025-07-12_16-54-38/reduced_balanced_kronodroid_emulator/adversarial/combination_1 --classifier RandomForest SupportVectorMachine KNN DecisionTree NaiveBayes GradientBoosting StochasticGradientDescent --model_type adversarial --number_samples_per_class 0:2000,1:2000 --number_k_folds 5 --adversarial_number_epochs 300 --save_data True --adversarial_batch_size 64 --adversarial_dense_layer_sizes_g 256 --adversarial_dense_layer_sizes_d 64 --adversarial_dropout_decay_rate_g 0.2 --adversarial_dropout_decay_rate_d 0.4 --adversarial_initializer_deviation 0.5 --adversarial_initializer_mean 0 --adversarial_latent_dimension 32 --adversarial_latent_mean_distribution 0.5 --adversarial_latent_standard_deviation 0.125 --adversarial_training_algorithm Adam --adversarial_activation_function leakyrelu --adversarial_loss_generator binary_crossentropy --adversarial_loss_discriminator binary_crossentropy --adversarial_smoothing_rate 0.15
 
 2025-07-12 18:04:02,604	***	Settings:
 2025-07-12 18:04:02,604	***		adam_optimizer_amsgrad                                           : False
@@ -24,7 +24,7 @@
 2025-07-12 18:04:02,604	***		adversarial_last_layer_activation                                : Sigmoid
 2025-07-12 18:04:02,604	***		adversarial_latent_dimension                                     : 32
 2025-07-12 18:04:02,604	***		adversarial_latent_mean_distribution                             : 0.5
-2025-07-12 18:04:02,604	***		adversarial_latent_stander_deviation                             : 0.125
+2025-07-12 18:04:02,604	***		adversarial_latent_standard_deviation                             : 0.125
 2025-07-12 18:04:02,605	***		adversarial_loss_discriminator                                   : binary_crossentropy
 2025-07-12 18:04:02,605	***		adversarial_loss_generator                                       : binary_crossentropy
 2025-07-12 18:04:02,605	***		adversarial_number_epochs                                        : 300

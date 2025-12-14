@@ -74,7 +74,7 @@ class VAELatentDiffusionAlgorithmTorch(nn.Module):
             Tracks the KL divergence loss during training.
         @_latent_mean_distribution (float):
             Mean of the latent distribution.
-        @_latent_stander_deviation (float):
+        @_latent_standard_deviation (float):
             Standard deviation of the latent distribution.
         @_latent_dimension (int):
             Dimensionality of the latent space.
@@ -101,7 +101,7 @@ class VAELatentDiffusionAlgorithmTorch(nn.Module):
         ...     loss_function=custom_loss_function,
         ...     latent_dimension=128,
         ...     latent_mean_distribution=0.0,
-        ...     latent_stander_deviation=1.0,
+        ...     latent_standard_deviation=1.0,
         ...     file_name_encoder="encoder_model.pth",
         ...     file_name_decoder="decoder_model.pth",
         ...     models_saved_path="models/"
@@ -117,7 +117,7 @@ class VAELatentDiffusionAlgorithmTorch(nn.Module):
                  latent_dimension,
                  decoder_latent_dimension,
                  latent_mean_distribution,
-                 latent_stander_deviation,
+                 latent_standard_deviation,
                  file_name_encoder,
                  file_name_decoder,
                  models_saved_path,
@@ -142,7 +142,7 @@ class VAELatentDiffusionAlgorithmTorch(nn.Module):
                 The dimensionality of the latent space used by the decoder.
             @latent_mean_distribution (float):
                 The mean of the latent distribution (usually 0).
-            @latent_stander_deviation (float):
+            @latent_standard_deviation (float):
                 The standard deviation of the latent distribution (usually 1).
             @file_name_encoder (str):
                 The filename for saving the encoder model.
@@ -158,7 +158,7 @@ class VAELatentDiffusionAlgorithmTorch(nn.Module):
         Raises:
             ValueError:
                 If latent_dimension <= 0.
-                If latent_stander_deviation <= 0.
+                If latent_standard_deviation <= 0.
                 If file paths are invalid.
         """
         super().__init__(*args, **kwargs)
@@ -177,7 +177,7 @@ class VAELatentDiffusionAlgorithmTorch(nn.Module):
         self._loss_count = 0
 
         self._latent_mean_distribution = latent_mean_distribution
-        self._latent_stander_deviation = latent_stander_deviation
+        self._latent_standard_deviation = latent_standard_deviation
         self._latent_dimension = latent_dimension
         self._decoder_latent_dimension = decoder_latent_dimension
 
@@ -369,7 +369,7 @@ class VAELatentDiffusionAlgorithmTorch(nn.Module):
             number_samples_generate,
             latent_dimension,
             device=device
-        ) * self._latent_stander_deviation + self._latent_mean_distribution
+        ) * self._latent_standard_deviation + self._latent_mean_distribution
 
         # Create label vectors for the generated data
         label_list = torch.full(
@@ -484,4 +484,4 @@ class VAELatentDiffusionAlgorithmTorch(nn.Module):
 
     @property
     def latent_deviation(self):
-        return self._latent_stander_deviation
+        return self._latent_standard_deviation

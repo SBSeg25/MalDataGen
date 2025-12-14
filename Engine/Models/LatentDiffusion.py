@@ -410,7 +410,7 @@ class LatentDiffusion:
                 latent_dimension=self._latent_diffusion_latent_dimension,
                 decoder_latent_dimension=self._latent_diffusion_latent_dimension,
                 latent_mean_distribution=self._latent_diffusion_VAE_mean_distribution,
-                latent_stander_deviation=self._latent_diffusion_VAE_stander_deviation,
+                latent_standard_deviation=self._latent_diffusion_VAE_stander_deviation,
                 file_name_encoder=self._latent_diffusion_VAE_file_name_encoder,
                 file_name_decoder=self._latent_diffusion_VAE_file_name_decoder,
                 models_saved_path=self._latent_diffusion_VAE_path_output_models
@@ -440,7 +440,7 @@ class LatentDiffusion:
             latent_dimension=self._latent_diffusion_VAE_latent_dimension,
             decoder_latent_dimension=self._latent_diffusion_VAE_latent_dimension,
             latent_mean_distribution=self._latent_diffusion_VAE_mean_distribution,
-            latent_stander_deviation=self._latent_diffusion_VAE_stander_deviation,
+            latent_standard_deviation=self._latent_diffusion_VAE_stander_deviation,
             file_name_encoder=self._latent_diffusion_VAE_file_name_encoder,
             file_name_decoder=self._latent_diffusion_VAE_file_name_decoder,
             models_saved_path=self._latent_diffusion_VAE_path_output_models
@@ -583,7 +583,7 @@ class LatentDiffusion:
             latent_dimension=self._latent_diffusion_latent_dimension,
             decoder_latent_dimension=self._latent_diffusion_latent_dimension,
             latent_mean_distribution=self._latent_diffusion_VAE_mean_distribution,
-            latent_stander_deviation=self._latent_diffusion_VAE_stander_deviation,
+            latent_standard_deviation=self._latent_diffusion_VAE_stander_deviation,
             file_name_encoder=self._latent_diffusion_VAE_file_name_encoder,
             file_name_decoder=self._latent_diffusion_VAE_file_name_decoder,
             models_saved_path=self._latent_diffusion_VAE_path_output_models

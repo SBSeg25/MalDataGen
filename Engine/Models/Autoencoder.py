@@ -63,7 +63,7 @@ DEFAULT_AUTOENCODER_MOMENTUM = 0.8
 DEFAULT_AUTOENCODER_LAST_ACTIVATION_LAYER = "sigmoid"
 DEFAULT_AUTOENCODER_INITIALIZER_MEAN = 0.0
 DEFAULT_AUTOENCODER_INITIALIZER_DEVIATION = 0.125
-DEFAULT_AUTOENCODER_NUMBER_EPOCHS = 350
+DEFAULT_AUTOENCODER_NUMBER_EPOCHS = 500
 DEFAULT_AUTOENCODER_LOSS_FUNCTION = "mse"
 DEFAULT_AUTOENCODER_FILE_NAME_ENCODER = "encoder_model"
 DEFAULT_AUTOENCODER_FILE_NAME_DECODER = "decoder_model"
@@ -103,7 +103,7 @@ class Autoencoder:
         _autoencoder_initializer_mean (float): Mean for weight initialization
         _autoencoder_initializer_deviation (float): Std dev for weight initialization
         _autoencoder_latent_mean_distribution (float): Latent space mean
-        _autoencoder_latent_stander_deviation (float): Latent space std dev
+        _autoencoder_latent_standard_deviation (float): Latent space std dev
         _autoencoder_file_name_encoder (str): Encoder model filename
         _autoencoder_file_name_decoder (str): Decoder model filename
         _autoencoder_path_output_models (str): Path for saving models
@@ -156,7 +156,7 @@ class Autoencoder:
             initializer_mean: Mean for weight initialization (default: 0.0)
             initializer_deviation: Std dev for weight initialization (default: 0.125)
             latent_mean_distribution: Latent space mean (default: 0.5)
-            latent_stander_deviation: Latent space std dev (default: 0.125)
+            latent_standard_deviation: Latent space std dev (default: 0.125)
             file_name_encoder: Encoder model filename (default: "encoder_model")
             file_name_decoder: Decoder model filename (default: "decoder_model")
             path_output_models: Path for saving models (default: "models_saved/")
@@ -198,7 +198,7 @@ class Autoencoder:
         self._autoencoder_initializer_mean: float = initializer_mean
         self._autoencoder_initializer_deviation: float = initializer_deviation
         self._autoencoder_latent_mean_distribution: float = latent_mean_distribution
-        self._autoencoder_latent_standard_deviation: float = latent_stander_deviation
+        self._autoencoder_latent_standard_deviation: float = latent_standard_deviation
         self._autoencoder_file_name_encoder: str = file_name_encoder
         self._autoencoder_file_name_decoder: str = file_name_decoder
         self._autoencoder_path_output_models: str = path_output_models
@@ -275,7 +275,7 @@ class Autoencoder:
                 file_name_decoder=self._autoencoder_file_name_decoder,
                 models_saved_path=self._autoencoder_path_output_models,
                 latent_mean_distribution=self._autoencoder_latent_mean_distribution,
-                latent_stander_deviation=self._autoencoder_latent_stander_deviation,
+                latent_standard_deviation=self._autoencoder_latent_standard_deviation,
                 latent_dimension=self._autoencoder_latent_dimension
             )
         else:
@@ -291,7 +291,7 @@ class Autoencoder:
             if hasattr(self._autoencoder_algorithm, 'latent_mean_distribution'):
                 self._autoencoder_algorithm.latent_mean_distribution = self._autoencoder_latent_mean_distribution
             if hasattr(self._autoencoder_algorithm, 'latent_standard_deviation'):
-                self._autoencoder_algorithm.latent_standard_deviation = self._autoencoder_latent_stander_deviation
+                self._autoencoder_algorithm.latent_standard_deviation = self._autoencoder_latent_standard_deviation
             if hasattr(self._autoencoder_algorithm, 'latent_dimension'):
                 self._autoencoder_algorithm.latent_dimension = self._autoencoder_latent_dimension
 
@@ -572,7 +572,7 @@ class Autoencoder:
         """Set the latent space mean distribution."""
         self._autoencoder_latent_mean_distribution = value
 
-    # Getter and setter for autoencoder_latent_stander_deviation
+    # Getter and setter for autoencoder_latent_standard_deviation
     @property
     def autoencoder_latent_standard_deviation(self) -> float:
         """Get the latent space standard deviation."""

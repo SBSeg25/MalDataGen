@@ -80,7 +80,7 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
             Tracks the KL divergence loss during training.
         @_latent_mean_distribution (float):
             Mean of the latent distribution.
-        @_latent_stander_deviation (float):
+        @_latent_standard_deviation (float):
             Standard deviation of the latent distribution.
         @_latent_dimension (int):
             Dimensionality of the latent space.
@@ -107,7 +107,7 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
         ...     loss_function=custom_loss_function,
         ...     latent_dimension=128,
         ...     latent_mean_distribution=0.0,
-        ...     latent_stander_deviation=1.0,
+        ...     latent_standard_deviation=1.0,
         ...     file_name_encoder="encoder_model.h5",
         ...     file_name_decoder="decoder_model.h5",
         ...     models_saved_path="models/"
@@ -122,7 +122,7 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
                  latent_dimension,
                  decoder_latent_dimension,
                  latent_mean_distribution,
-                 latent_stander_deviation,
+                 latent_standard_deviation,
                  file_name_encoder,
                  file_name_decoder,
                  models_saved_path,
@@ -147,7 +147,7 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
                 The dimensionality of the latent space.
             @latent_mean_distribution (float):
                 The mean of the latent distribution (usually 0).
-            @latent_stander_deviation (float):
+            @latent_standard_deviation (float):
                 The standard deviation of the latent distribution (usually 1).
             @file_name_encoder (str):
                 The filename for saving the encoder model.
@@ -163,7 +163,7 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
         Raises:
             ValueError:
                 If latent_dimension <= 0.
-                If latent_stander_deviation <= 0.
+                If latent_standard_deviation <= 0.
                 If file paths are invalid.
         """
         # Initialize the encoder and decoder models
@@ -176,7 +176,7 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
         self._reconstruction_loss_tracker = Mean(name="reconstruction_loss")
         self._kl_loss_tracker = Mean(name="kl_loss")
         self._latent_mean_distribution = latent_mean_distribution
-        self._latent_stander_deviation = latent_stander_deviation
+        self._latent_standard_deviation = latent_standard_deviation
         self._latent_dimension = latent_dimension
         self._decoder_latent_dimension = decoder_latent_dimension
         # File names for saving models

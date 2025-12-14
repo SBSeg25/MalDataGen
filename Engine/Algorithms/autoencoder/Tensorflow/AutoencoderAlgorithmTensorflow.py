@@ -48,7 +48,7 @@ except ImportError as error:
     sys.exit(-1)
 
 DEFAULT_LATENT_MEAN_DISTRIBUTION=0.0
-DEFAULT_LATENT_STANDER_DEVIATION=1.0
+DEFAULT_latent_standard_deviation=1.0
 DEFAULT_LATENT_DIMENSION=64
 DEFAULT_NUMBER_CLASSES=2
 
@@ -75,7 +75,7 @@ class AutoencoderAlgorithmTensorflow(Model):
             The path to save the models.
         @latent_mean_distribution (float, optional):
             Mean of the latent space distribution.
-        @latent_stander_deviation (float, optional):
+        @latent_standard_deviation (float, optional):
             Standard deviation of the latent space distribution.
         @latent_dimension (int, optional):
             The dimensionality of the latent space.
@@ -109,7 +109,7 @@ class AutoencoderAlgorithmTensorflow(Model):
         ...     file_name_decoder="decoder_model.h5",
         ...     models_saved_path="./autoencoder_models/",
         ...     latent_mean_distribution=0.0,
-        ...     latent_stander_deviation=1.0,
+        ...     latent_standard_deviation=1.0,
         ...     latent_dimension=64
         ...     )
         ...     autoencoder.compile(optimizer=Tensorflow.keras.optimizers.Adam(learning_rate=0.001))
@@ -124,7 +124,7 @@ class AutoencoderAlgorithmTensorflow(Model):
                  file_name_decoder=None,
                  models_saved_path=None,
                  latent_mean_distribution=DEFAULT_LATENT_MEAN_DISTRIBUTION,
-                 latent_stander_deviation=DEFAULT_LATENT_STANDER_DEVIATION,
+                 latent_standard_deviation=DEFAULT_latent_standard_deviation,
                  latent_dimension=DEFAULT_LATENT_DIMENSION):
 
         super().__init__()
@@ -194,11 +194,11 @@ class AutoencoderAlgorithmTensorflow(Model):
         if not isinstance(latent_mean_distribution, (int, float)):
             raise TypeError("latent_mean_distribution must be a number.")
 
-        if not isinstance(latent_stander_deviation, (int, float)):
-            raise TypeError("latent_stander_deviation must be a number.")
+        if not isinstance(latent_standard_deviation, (int, float)):
+            raise TypeError("latent_standard_deviation must be a number.")
 
-        if latent_stander_deviation <= 0:
-            raise ValueError("latent_stander_deviation must be greater than 0.")
+        if latent_standard_deviation <= 0:
+            raise ValueError("latent_standard_deviation must be greater than 0.")
 
         if not isinstance(latent_dimension, int) or latent_dimension <= 0:
             raise ValueError("latent_dimension must be a positive integer.")
@@ -211,7 +211,7 @@ class AutoencoderAlgorithmTensorflow(Model):
         self._loss_function = loss_function
         self._total_loss_tracker = Mean(name="loss")
         self._latent_mean_distribution = latent_mean_distribution
-        self._latent_stander_deviation = latent_stander_deviation
+        self._latent_standard_deviation = latent_standard_deviation
         self._latent_dimension = latent_dimension
 
         # File names for saving models
@@ -432,7 +432,7 @@ class AutoencoderAlgorithmTensorflow(Model):
             # Shape: (number_instances, latent_dimension)
             latent_noise = numpy.random.normal(
                 self._latent_mean_distribution,  # Mean of the latent distribution
-                self._latent_stander_deviation,  # Standard deviation of the latent distribution
+                self._latent_standard_deviation,  # Standard deviation of the latent distribution
                 (number_instances, self._latent_dimension)
             )
 

@@ -44,7 +44,7 @@ class AdversarialAlgorithmTensorflow(Model):
                  file_name_generator,
                  models_saved_path,
                  latent_mean_distribution,
-                 latent_stander_deviation,
+                 latent_standard_deviation,
                  smoothing_rate,
                  *args,
                  **kwargs):
@@ -61,9 +61,9 @@ class AdversarialAlgorithmTensorflow(Model):
             raise ValueError("Architectures saved path must be a non-empty string.")
         if not isinstance(latent_mean_distribution, (int, float)):
             raise TypeError("Latent mean distribution must be a number.")
-        if not isinstance(latent_stander_deviation, (int, float)):
+        if not isinstance(latent_standard_deviation, (int, float)):
             raise TypeError("Latent standard deviation must be a number.")
-        if latent_stander_deviation <= 0:
+        if latent_standard_deviation <= 0:
             raise ValueError("Latent standard deviation must be greater than 0.")
         if not (0.0 <= smoothing_rate <= 1.0):
             raise ValueError("Smoothing rate must be between 0 and 1.")
@@ -77,7 +77,7 @@ class AdversarialAlgorithmTensorflow(Model):
         self._loss_discriminator = loss_discriminator
         self._smoothing_rate = smoothing_rate
         self._latent_mean_distribution = latent_mean_distribution
-        self._latent_stander_deviation = latent_stander_deviation
+        self._latent_standard_deviation = latent_standard_deviation
         self._file_name_discriminator = file_name_discriminator
         self._file_name_generator = file_name_generator
         self._models_saved_path = models_saved_path
@@ -322,7 +322,7 @@ class AdversarialAlgorithmTensorflow(Model):
             # Generate random noise vectors
             latent_noise = numpy.random.normal(
                 self._latent_mean_distribution,
-                self._latent_stander_deviation,
+                self._latent_standard_deviation,
                 (number_instances, self._latent_dimension)
             )
 

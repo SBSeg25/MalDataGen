@@ -475,7 +475,7 @@ autoencoder_algorithm = AutoencoderAlgorithm(encoder_model=autoencoder_model.get
                                              file_name_decoder="decoder_model",
                                              models_saved_path="models_saved/",
                                              latent_mean_distribution=0.5,
-                                             latent_stander_deviation=0.5,
+                                             latent_standard_deviation=0.5,
                                              latent_dimension=64)
 
 # Print the model summaries for the encoder and decoder
@@ -560,7 +560,7 @@ variational_algorithm = VariationalAlgorithm(encoder_model=variation_model.get_e
                                              latent_dimension=64,
                                              decoder_latent_dimension=128,
                                              latent_mean_distribution=0.0,
-                                             latent_stander_deviation=0.5,
+                                             latent_standard_deviation=0.5,
                                              file_name_encoder="encoder_model",
                                              file_name_decoder="decoder_model",
                                              models_saved_path="models_saved/")

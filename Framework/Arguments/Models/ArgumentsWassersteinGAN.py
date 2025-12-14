@@ -56,7 +56,7 @@ DEFAULT_WASSERSTEIN_GAN_ADAM_BETA = 0.5
 DEFAULT_WASSERSTEIN_GAN_DISCRIMINATOR_STEPS = 3
 DEFAULT_WASSERSTEIN_GAN_SMOOTHING_RATE = 0.15
 DEFAULT_WASSERSTEIN_GAN_LATENT_MEAN_DISTRIBUTION = 0.0
-DEFAULT_WASSERSTEIN_GAN_LATENT_STANDER_DEVIATION = 0.125
+DEFAULT_WASSERSTEIN_GAN_latent_standard_deviation = 0.125
 DEFAULT_WASSERSTEIN_GAN_FILE_NAME_DISCRIMINATOR = "discriminator_model"
 DEFAULT_WASSERSTEIN_GAN_FILE_NAME_GENERATOR = "generator_model"
 DEFAULT_WASSERSTEIN_GAN_PATH_OUTPUT_MODELS = "models_saved/"
@@ -160,8 +160,8 @@ def add_argument_wasserstein_gan(parser):
                         default=DEFAULT_WASSERSTEIN_GAN_LATENT_MEAN_DISTRIBUTION,
                         help="Mean of the random latent space distribution.")
 
-    parser.add_argument("--wasserstein_latent_stander_deviation", type=float,
-                        default=DEFAULT_WASSERSTEIN_GAN_LATENT_STANDER_DEVIATION,
+    parser.add_argument("--wasserstein_latent_standard_deviation", type=float,
+                        default=DEFAULT_WASSERSTEIN_GAN_latent_standard_deviation,
                         help="Standard deviation of the random latent space distribution.")
 
 

@@ -24,7 +24,7 @@
         "autoencoder_last_activation_layer": "sigmoid",
         "autoencoder_latent_dimension": 128,
         "autoencoder_latent_mean_distribution": 0.5,
-        "autoencoder_latent_stander_deviation": 0.125,
+        "autoencoder_latent_standard_deviation": 0.125,
         "autoencoder_loss_function": "binary_crossentropy",
         "autoencoder_momentum": 0.8,
         "autoencoder_number_classes": 2,

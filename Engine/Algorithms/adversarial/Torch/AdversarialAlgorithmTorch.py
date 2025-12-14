@@ -96,7 +96,7 @@ class AdversarialAlgorithmTorch(nn.Module):
         ...     file_name_generator="generator",
         ...     models_saved_path="./models/",
         ...     latent_mean_distribution=0.0,
-        ...     latent_stander_deviation=1.0,
+        ...     latent_standard_deviation=1.0,
         ...     smoothing_rate=0.1
         ... )
         >>> adversarial_algorithm.compile(
@@ -130,7 +130,7 @@ class AdversarialAlgorithmTorch(nn.Module):
             file_name_generator (str): Filename for generator model.
             models_saved_path (str): Path for saving models.
             latent_mean_distribution (float): Mean of the latent noise distribution.
-            latent_stander_deviation (float): Standard deviation of the latent noise.
+            latent_standard_deviation (float): Standard deviation of the latent noise.
             smoothing_rate (float): Label smoothing rate.
 
         Raises:

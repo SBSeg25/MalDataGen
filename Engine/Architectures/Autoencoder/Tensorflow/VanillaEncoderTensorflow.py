@@ -34,12 +34,13 @@ __credits__ = ['Synthetic Ocean AI']
 try:
     import sys
     import numpy
+    import tensorflow
 
     from typing import Any
     from typing import Dict
     from typing import Optional
 
-    from tensorflow.keras.layers import Dense, Input, Dropout, Flatten, Concatenate
+    from tensorflow.keras.layers import Dense, Input, Dropout, Flatten, Concatenate, Layer
     from tensorflow.keras.models import Model
     from tensorflow.keras.initializers import RandomNormal
     from Engine.Activations.Activations import Activations
@@ -49,12 +50,93 @@ except ImportError as error:
     sys.exit(-1)
 
 
+class CrossAttentionLayer(Layer):
+    """
+    Cross-Attention layer for conditioning on label information.
+
+    The input features act as Query, while the label embedding provides Key and Value.
+    """
+
+    def __init__(self, embed_dim, num_heads=4, **kwargs):
+        super(CrossAttentionLayer, self).__init__(**kwargs)
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.head_dim = embed_dim // num_heads
+
+        assert self.head_dim * num_heads == embed_dim, "embed_dim must be divisible by num_heads"
+
+        # Query projection (from input features)
+        self.query_dense = Dense(embed_dim, name='query')
+
+        # Key and Value projections (from label embedding)
+        self.key_dense = Dense(embed_dim, name='key')
+        self.value_dense = Dense(embed_dim, name='value')
+
+        # Output projection
+        self.out_dense = Dense(embed_dim, name='output')
+
+    def split_heads(self, x, batch_size):
+        """Split the last dimension into (num_heads, head_dim)"""
+        x = tensorflow.reshape(x, (batch_size, -1, self.num_heads, self.head_dim))
+        return tensorflow.transpose(x, perm=[0, 2, 1, 3])
+
+    def call(self, query_input, key_value_input):
+        batch_size = tensorflow.shape(query_input)[0]
+
+        # Ensure inputs have sequence dimension
+        if len(query_input.shape) == 2:
+            query_input = tensorflow.expand_dims(query_input, axis=1)
+        if len(key_value_input.shape) == 2:
+            key_value_input = tensorflow.expand_dims(key_value_input, axis=1)
+
+        # Linear projections
+        Q = self.query_dense(query_input)
+        K = self.key_dense(key_value_input)
+        V = self.value_dense(key_value_input)
+
+        # Split heads
+        Q = self.split_heads(Q, batch_size)
+        K = self.split_heads(K, batch_size)
+        V = self.split_heads(V, batch_size)
+
+        # Scaled dot-product attention
+        matmul_qk = tensorflow.matmul(Q, K, transpose_b=True)
+        dk = tensorflow.cast(self.head_dim, tensorflow.float32)
+        scaled_attention_logits = matmul_qk / tensorflow.math.sqrt(dk)
+
+        attention_weights = tensorflow.nn.softmax(scaled_attention_logits, axis=-1)
+
+        # Apply attention to values
+        attention_output = tensorflow.matmul(attention_weights, V)
+
+        # Concatenate heads
+        attention_output = tensorflow.transpose(attention_output, perm=[0, 2, 1, 3])
+        concat_attention = tensorflow.reshape(attention_output, (batch_size, -1, self.embed_dim))
+
+        # Final linear projection
+        output = self.out_dense(concat_attention)
+
+        # Remove sequence dimension if it was added
+        output = tensorflow.squeeze(output, axis=1)
+
+        return output
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "embed_dim": self.embed_dim,
+            "num_heads": self.num_heads,
+        })
+        return config
+
+
 class VanillaEncoderTensorflow(Activations):
     """
-    VanillaEncoder - Adaptativo Multi-Dimensional
+    VanillaEncoder with Cross-Attention - Adaptativo Multi-Dimensional
 
     Um encoder condicional que se adapta automaticamente à dimensionalidade dos dados de entrada.
     Suporta dados 1D (vetor), 2D (imagem/matriz), 3D (volume) e N-D (tensor).
+    Usa cross-attention para condicionamento sofisticado em vez de concatenação simples.
     Usa apenas camadas Dense com Flatten para processar dados de qualquer dimensionalidade.
 
     Attributes:
@@ -78,6 +160,10 @@ class VanillaEncoderTensorflow(Activations):
             Desvio padrão para distribuição normal usada para inicializar os pesos.
         @encoder_number_samples_per_class (Optional[dict]):
             Dicionário opcional contendo metadados sobre o número de amostras por classe.
+        @encoder_attention_embed_dim (int):
+            Dimensão de embedding para mecanismo de cross-attention.
+        @encoder_attention_num_heads (int):
+            Número de cabeças de atenção na camada de cross-attention.
 
     Raises:
         ValueError:
@@ -88,9 +174,10 @@ class VanillaEncoderTensorflow(Activations):
             - `dropout_decay_encoder` está fora do intervalo válido [0, 1].
             - `number_neurons_encoder` não é uma lista não-vazia ou contém inteiros não-positivos.
             - `number_samples_per_class` é fornecido mas não é um dicionário.
+            - `attention_embed_dim` não é divisível por `attention_num_heads`.
 
     Example:
-        >>> # Encoder 1D (vetor de entrada)
+        >>> # Encoder 1D (vetor de entrada) com cross-attention
         >>> encoder_1d = VanillaEncoderTensorflow(
         ...     latent_dimension=128,
         ...     output_shape=128,
@@ -100,10 +187,12 @@ class VanillaEncoderTensorflow(Activations):
         ...     dropout_decay_encoder=0.3,
         ...     last_layer_activation='linear',
         ...     number_neurons_encoder=[256, 512],
-        ...     number_samples_per_class={"number_classes": 10}
+        ...     number_samples_per_class={"number_classes": 10},
+        ...     attention_embed_dim=128,
+        ...     attention_num_heads=4
         ... )
-        >>> 
-        >>> # Encoder 2D (imagem de entrada)
+        >>>
+        >>> # Encoder 2D (imagem de entrada) com cross-attention
         >>> encoder_2d = VanillaEncoderTensorflow(
         ...     latent_dimension=128,
         ...     output_shape=128,
@@ -113,10 +202,12 @@ class VanillaEncoderTensorflow(Activations):
         ...     dropout_decay_encoder=0.3,
         ...     last_layer_activation='linear',
         ...     number_neurons_encoder=[512, 256],
-        ...     number_samples_per_class={"number_classes": 10}
+        ...     number_samples_per_class={"number_classes": 10},
+        ...     attention_embed_dim=128,
+        ...     attention_num_heads=4
         ... )
         >>>
-        >>> # Encoder 3D (volume de entrada)
+        >>> # Encoder 3D (volume de entrada) com cross-attention
         >>> encoder_3d = VanillaEncoderTensorflow(
         ...     latent_dimension=256,
         ...     output_shape=256,
@@ -126,16 +217,19 @@ class VanillaEncoderTensorflow(Activations):
         ...     dropout_decay_encoder=0.4,
         ...     last_layer_activation='linear',
         ...     number_neurons_encoder=[1024, 512],
-        ...     number_samples_per_class={"number_classes": 5}
+        ...     number_samples_per_class={"number_classes": 5},
+        ...     attention_embed_dim=256,
+        ...     attention_num_heads=8
         ... )
     """
 
     def __init__(self, latent_dimension: int, output_shape, activation_function: str, initializer_mean: float,
                  initializer_deviation: float, dropout_decay_encoder: float, last_layer_activation: str,
                  number_neurons_encoder: list, dataset_type: Any = numpy.float32,
-                 number_samples_per_class: Optional[Dict[str, Any]] = None):
+                 number_samples_per_class: Optional[Dict[str, Any]] = None,
+                 attention_embed_dim: int = 128, attention_num_heads: int = 4):
         """
-        Inicializa o VanillaEncoder com os parâmetros fornecidos.
+        Inicializa o VanillaEncoder com cross-attention e os parâmetros fornecidos.
 
         Args:
             latent_dimension (int): Dimensão do espaço latente.
@@ -148,6 +242,8 @@ class VanillaEncoderTensorflow(Activations):
             number_neurons_encoder (list): Lista especificando número de neurônios em cada camada.
             dataset_type (dtype, optional): Tipo de dados do dataset de entrada. Padrão numpy.float32.
             number_samples_per_class (dict, optional): Especifica número de amostras por classe.
+            attention_embed_dim (int, optional): Dimensão de embedding para cross-attention (padrão: 128).
+            attention_num_heads (int, optional): Número de cabeças de atenção (padrão: 4).
         """
 
         if not isinstance(latent_dimension, int) or latent_dimension <= 0:
@@ -183,6 +279,15 @@ class VanillaEncoderTensorflow(Activations):
             if not isinstance(number_samples_per_class, dict):
                 raise ValueError("number_samples_per_class must be a dictionary.")
 
+        if not isinstance(attention_embed_dim, int) or attention_embed_dim <= 0:
+            raise ValueError(f"Invalid value for attention_embed_dim: {attention_embed_dim}. It must be a positive integer.")
+
+        if not isinstance(attention_num_heads, int) or attention_num_heads <= 0:
+            raise ValueError(f"Invalid value for attention_num_heads: {attention_num_heads}. It must be a positive integer.")
+
+        if attention_embed_dim % attention_num_heads != 0:
+            raise ValueError(f"attention_embed_dim ({attention_embed_dim}) must be divisible by attention_num_heads ({attention_num_heads}).")
+
         self._encoder_latent_dimension = latent_dimension
         self._encoder_output_shape = output_shape
         self._encoder_activation_function = activation_function
@@ -193,6 +298,8 @@ class VanillaEncoderTensorflow(Activations):
         self._encoder_initializer_deviation = initializer_deviation
         self._encoder_number_neurons_encoder = number_neurons_encoder
         self._encoder_number_samples_per_class = number_samples_per_class
+        self._encoder_attention_embed_dim = attention_embed_dim
+        self._encoder_attention_num_heads = attention_num_heads
 
     def _calculate_total_input_size(self, input_shape) -> int:
         """
@@ -226,11 +333,13 @@ class VanillaEncoderTensorflow(Activations):
 
     def get_encoder(self, input_shape) -> Model:
         """
-        Cria e retorna o modelo encoder adaptado automaticamente à dimensionalidade.
+        Cria e retorna o modelo encoder com cross-attention adaptado automaticamente à dimensionalidade.
+
+        O modelo usa cross-attention para condicionar as features de entrada na informação dos labels,
+        onde as features de entrada atuam como Query e o embedding dos labels fornece Key e Value.
 
         Este método constrói a rede neural empilhando camadas Dense com as configurações
-        fornecidas (neurônios, dropout e ativação). Ele também concatena os dados de entrada
-        e labels antes de passar pelas camadas. Se a entrada for N-D, usa Flatten automaticamente.
+        fornecidas (neurônios, dropout e ativação). Se a entrada for N-D, usa Flatten automaticamente.
 
         Args:
             input_shape (int or tuple): Forma dos dados de entrada.
@@ -238,8 +347,8 @@ class VanillaEncoderTensorflow(Activations):
                 - tuple: para dados N-D (ex: (28, 28, 1) para 2D, (16, 16, 16) para 3D)
 
         Returns:
-            keras.Model: O modelo encoder que recebe dados de entrada e labels e gera
-                         a representação latente codificada e labels.
+            keras.Model: O modelo encoder com cross-attention que recebe dados de entrada e labels
+                         e gera a representação latente codificada e labels.
         """
 
         # Validar input_shape
@@ -271,10 +380,27 @@ class VanillaEncoderTensorflow(Activations):
         label_input = Input(shape=(self._encoder_number_samples_per_class["number_classes"],),
                             dtype=self._encoder_dataset_type, name="second_input")
 
-        # Concatenar dados e labels e aplicar primeira camada Dense com dropout e ativação
-        concatenate_input = Concatenate()([flattened_input, label_input])
+        # Label embedding
+        label_input_embedding = Dense(self._encoder_attention_embed_dim,
+                                      activation='relu',
+                                      name='label_embedding')(label_input)
+
+        # Projetar features de entrada para dimensão de embedding de atenção
+        input_projected = Dense(self._encoder_attention_embed_dim,
+                                kernel_initializer=initialization,
+                                name='input_projection')(flattened_input)
+
+        # Cross-attention: features de entrada consultam informação dos labels
+        cross_attention = CrossAttentionLayer(
+            embed_dim=self._encoder_attention_embed_dim,
+            num_heads=self._encoder_attention_num_heads,
+            name='cross_attention'
+        )
+        attended_features = cross_attention(input_projected, label_input_embedding)
+
+        # Primeira camada Dense após atenção
         conditional_encoder = Dense(self._encoder_number_neurons_encoder[0],
-                                    kernel_initializer=initialization)(concatenate_input)
+                                    kernel_initializer=initialization)(attended_features)
         conditional_encoder = Dropout(self._encoder_dropout_decay_rate_encoder)(conditional_encoder)
         conditional_encoder = self._add_activation_layer(conditional_encoder, self._encoder_activation_function)
 
@@ -291,7 +417,7 @@ class VanillaEncoderTensorflow(Activations):
 
         # Retornar o modelo encoder
         return Model([neural_model_inputs, label_input], [conditional_encoder, label_input],
-                     name=f"Encoder_{dimensionality}D")
+                     name=f"Encoder_{dimensionality}D_CrossAttention")
 
     @property
     def dropout_decay_rate_encoder(self) -> float:
@@ -327,6 +453,16 @@ class VanillaEncoderTensorflow(Activations):
     def dimensionality(self) -> int:
         """int: Obtém a dimensionalidade dos dados configurados."""
         return self._get_dimensionality(self._encoder_output_shape)
+
+    @property
+    def attention_embed_dim(self) -> int:
+        """int: Obtém a dimensão de embedding para cross-attention."""
+        return self._encoder_attention_embed_dim
+
+    @property
+    def attention_num_heads(self) -> int:
+        """int: Obtém o número de cabeças de atenção."""
+        return self._encoder_attention_num_heads
 
     @dropout_decay_rate_encoder.setter
     def dropout_decay_rate_encoder(self, dropout_decay_rate_generator: float) -> None:

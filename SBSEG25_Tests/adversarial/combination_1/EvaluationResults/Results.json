@@ -22,7 +22,7 @@
         "adversarial_last_layer_activation": "Sigmoid",
         "adversarial_latent_dimension": 32,
         "adversarial_latent_mean_distribution": 0.5,
-        "adversarial_latent_stander_deviation": 0.125,
+        "adversarial_latent_standard_deviation": 0.125,
         "adversarial_loss_discriminator": "binary_crossentropy",
         "adversarial_loss_generator": "binary_crossentropy",
         "adversarial_number_epochs": 300,

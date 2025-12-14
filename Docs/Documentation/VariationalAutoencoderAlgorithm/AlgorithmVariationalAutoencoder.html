@@ -142,7 +142,7 @@ AlgorithmVariationalAutoencoder    </h1>
 </span><span id="L-58"><a href="#L-58"><span class="linenos"> 58</span></a><span class="sd">            Tracks the KL divergence loss during training.</span>
 </span><span id="L-59"><a href="#L-59"><span class="linenos"> 59</span></a><span class="sd">        @_latent_mean_distribution (float):</span>
 </span><span id="L-60"><a href="#L-60"><span class="linenos"> 60</span></a><span class="sd">            Mean of the latent distribution.</span>
-</span><span id="L-61"><a href="#L-61"><span class="linenos"> 61</span></a><span class="sd">        @_latent_stander_deviation (float):</span>
+</span><span id="L-61"><a href="#L-61"><span class="linenos"> 61</span></a><span class="sd">        @_latent_standard_deviation (float):</span>
 </span><span id="L-62"><a href="#L-62"><span class="linenos"> 62</span></a><span class="sd">            Standard deviation of the latent distribution.</span>
 </span><span id="L-63"><a href="#L-63"><span class="linenos"> 63</span></a><span class="sd">        @_latent_dimension (int):</span>
 </span><span id="L-64"><a href="#L-64"><span class="linenos"> 64</span></a><span class="sd">            Dimensionality of the latent space.</span>
@@ -169,7 +169,7 @@ AlgorithmVariationalAutoencoder    </h1>
 </span><span id="L-85"><a href="#L-85"><span class="linenos"> 85</span></a><span class="sd">        ...     loss_function=custom_loss_function,</span>
 </span><span id="L-86"><a href="#L-86"><span class="linenos"> 86</span></a><span class="sd">        ...     latent_dimension=128,</span>
 </span><span id="L-87"><a href="#L-87"><span class="linenos"> 87</span></a><span class="sd">        ...     latent_mean_distribution=0.0,</span>
-</span><span id="L-88"><a href="#L-88"><span class="linenos"> 88</span></a><span class="sd">        ...     latent_stander_deviation=1.0,</span>
+</span><span id="L-88"><a href="#L-88"><span class="linenos"> 88</span></a><span class="sd">        ...     latent_standard_deviation=1.0,</span>
 </span><span id="L-89"><a href="#L-89"><span class="linenos"> 89</span></a><span class="sd">        ...     file_name_encoder=&quot;encoder_model.h5&quot;,</span>
 </span><span id="L-90"><a href="#L-90"><span class="linenos"> 90</span></a><span class="sd">        ...     file_name_decoder=&quot;decoder_model.h5&quot;,</span>
 </span><span id="L-91"><a href="#L-91"><span class="linenos"> 91</span></a><span class="sd">        ...     models_saved_path=&quot;models/&quot;</span>
@@ -184,7 +184,7 @@ AlgorithmVariationalAutoencoder    </h1>
 </span><span id="L-100"><a href="#L-100"><span class="linenos">100</span></a>                 <span class="n">latent_dimension</span><span class="p">,</span>
 </span><span id="L-101"><a href="#L-101"><span class="linenos">101</span></a>                 <span class="n">decoder_latent_dimension</span><span class="p">,</span>
 </span><span id="L-102"><a href="#L-102"><span class="linenos">102</span></a>                 <span class="n">latent_mean_distribution</span><span class="p">,</span>
-</span><span id="L-103"><a href="#L-103"><span class="linenos">103</span></a>                 <span class="n">latent_stander_deviation</span><span class="p">,</span>
+</span><span id="L-103"><a href="#L-103"><span class="linenos">103</span></a>                 <span class="n">latent_standard_deviation</span><span class="p">,</span>
 </span><span id="L-104"><a href="#L-104"><span class="linenos">104</span></a>                 <span class="n">file_name_encoder</span><span class="p">,</span>
 </span><span id="L-105"><a href="#L-105"><span class="linenos">105</span></a>                 <span class="n">file_name_decoder</span><span class="p">,</span>
 </span><span id="L-106"><a href="#L-106"><span class="linenos">106</span></a>                 <span class="n">models_saved_path</span><span class="p">,</span>
@@ -209,7 +209,7 @@ AlgorithmVariationalAutoencoder    </h1>
 </span><span id="L-125"><a href="#L-125"><span class="linenos">125</span></a><span class="sd">                The dimensionality of the latent space.</span>
 </span><span id="L-126"><a href="#L-126"><span class="linenos">126</span></a><span class="sd">            @latent_mean_distribution (float):</span>
 </span><span id="L-127"><a href="#L-127"><span class="linenos">127</span></a><span class="sd">                The mean of the latent distribution (usually 0).</span>
-</span><span id="L-128"><a href="#L-128"><span class="linenos">128</span></a><span class="sd">            @latent_stander_deviation (float):</span>
+</span><span id="L-128"><a href="#L-128"><span class="linenos">128</span></a><span class="sd">            @latent_standard_deviation (float):</span>
 </span><span id="L-129"><a href="#L-129"><span class="linenos">129</span></a><span class="sd">                The standard deviation of the latent distribution (usually 1).</span>
 </span><span id="L-130"><a href="#L-130"><span class="linenos">130</span></a><span class="sd">            @file_name_encoder (str):</span>
 </span><span id="L-131"><a href="#L-131"><span class="linenos">131</span></a><span class="sd">                The filename for saving the encoder model.</span>
@@ -225,7 +225,7 @@ AlgorithmVariationalAutoencoder    </h1>
 </span><span id="L-141"><a href="#L-141"><span class="linenos">141</span></a><span class="sd">        Raises:</span>
 </span><span id="L-142"><a href="#L-142"><span class="linenos">142</span></a><span class="sd">            ValueError:</span>
 </span><span id="L-143"><a href="#L-143"><span class="linenos">143</span></a><span class="sd">                If latent_dimension &lt;= 0.</span>
-</span><span id="L-144"><a href="#L-144"><span class="linenos">144</span></a><span class="sd">                If latent_stander_deviation &lt;= 0.</span>
+</span><span id="L-144"><a href="#L-144"><span class="linenos">144</span></a><span class="sd">                If latent_standard_deviation &lt;= 0.</span>
 </span><span id="L-145"><a href="#L-145"><span class="linenos">145</span></a><span class="sd">                If file paths are invalid.</span>
 </span><span id="L-146"><a href="#L-146"><span class="linenos">146</span></a><span class="sd">        &quot;&quot;&quot;</span>
 </span><span id="L-147"><a href="#L-147"><span class="linenos">147</span></a>        <span class="c1"># Initialize the encoder and decoder models</span>
@@ -238,7 +238,7 @@ AlgorithmVariationalAutoencoder    </h1>
 </span><span id="L-154"><a href="#L-154"><span class="linenos">154</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_reconstruction_loss_tracker</span> <span class="o">=</span> <span class="n">Mean</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;reconstruction_loss&quot;</span><span class="p">)</span>
 </span><span id="L-155"><a href="#L-155"><span class="linenos">155</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_kl_loss_tracker</span> <span class="o">=</span> <span class="n">Mean</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;kl_loss&quot;</span><span class="p">)</span>
 </span><span id="L-156"><a href="#L-156"><span class="linenos">156</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_latent_mean_distribution</span> <span class="o">=</span> <span class="n">latent_mean_distribution</span>
-</span><span id="L-157"><a href="#L-157"><span class="linenos">157</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_latent_stander_deviation</span> <span class="o">=</span> <span class="n">latent_stander_deviation</span>
+</span><span id="L-157"><a href="#L-157"><span class="linenos">157</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_latent_standard_deviation</span> <span class="o">=</span> <span class="n">latent_standard_deviation</span>
 </span><span id="L-158"><a href="#L-158"><span class="linenos">158</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_latent_dimension</span> <span class="o">=</span> <span class="n">latent_dimension</span>
 </span><span id="L-159"><a href="#L-159"><span class="linenos">159</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_decoder_latent_dimension</span> <span class="o">=</span> <span class="n">decoder_latent_dimension</span>
 </span><span id="L-160"><a href="#L-160"><span class="linenos">160</span></a>        <span class="c1"># File names for saving models</span>
@@ -515,7 +515,7 @@ AlgorithmVariationalAutoencoder    </h1>
 </span><span id="VariationalAlgorithm-59"><a href="#VariationalAlgorithm-59"><span class="linenos"> 59</span></a><span class="sd">            Tracks the KL divergence loss during training.</span>
 </span><span id="VariationalAlgorithm-60"><a href="#VariationalAlgorithm-60"><span class="linenos"> 60</span></a><span class="sd">        @_latent_mean_distribution (float):</span>
 </span><span id="VariationalAlgorithm-61"><a href="#VariationalAlgorithm-61"><span class="linenos"> 61</span></a><span class="sd">            Mean of the latent distribution.</span>
-</span><span id="VariationalAlgorithm-62"><a href="#VariationalAlgorithm-62"><span class="linenos"> 62</span></a><span class="sd">        @_latent_stander_deviation (float):</span>
+</span><span id="VariationalAlgorithm-62"><a href="#VariationalAlgorithm-62"><span class="linenos"> 62</span></a><span class="sd">        @_latent_standard_deviation (float):</span>
 </span><span id="VariationalAlgorithm-63"><a href="#VariationalAlgorithm-63"><span class="linenos"> 63</span></a><span class="sd">            Standard deviation of the latent distribution.</span>
 </span><span id="VariationalAlgorithm-64"><a href="#VariationalAlgorithm-64"><span class="linenos"> 64</span></a><span class="sd">        @_latent_dimension (int):</span>
 </span><span id="VariationalAlgorithm-65"><a href="#VariationalAlgorithm-65"><span class="linenos"> 65</span></a><span class="sd">            Dimensionality of the latent space.</span>
@@ -542,7 +542,7 @@ AlgorithmVariationalAutoencoder    </h1>
 </span><span id="VariationalAlgorithm-86"><a href="#VariationalAlgorithm-86"><span class="linenos"> 86</span></a><span class="sd">        ...     loss_function=custom_loss_function,</span>
 </span><span id="VariationalAlgorithm-87"><a href="#VariationalAlgorithm-87"><span class="linenos"> 87</span></a><span class="sd">        ...     latent_dimension=128,</span>
 </span><span id="VariationalAlgorithm-88"><a href="#VariationalAlgorithm-88"><span class="linenos"> 88</span></a><span class="sd">        ...     latent_mean_distribution=0.0,</span>
-</span><span id="VariationalAlgorithm-89"><a href="#VariationalAlgorithm-89"><span class="linenos"> 89</span></a><span class="sd">        ...     latent_stander_deviation=1.0,</span>
+</span><span id="VariationalAlgorithm-89"><a href="#VariationalAlgorithm-89"><span class="linenos"> 89</span></a><span class="sd">        ...     latent_standard_deviation=1.0,</span>
 </span><span id="VariationalAlgorithm-90"><a href="#VariationalAlgorithm-90"><span class="linenos"> 90</span></a><span class="sd">        ...     file_name_encoder=&quot;encoder_model.h5&quot;,</span>
 </span><span id="VariationalAlgorithm-91"><a href="#VariationalAlgorithm-91"><span class="linenos"> 91</span></a><span class="sd">        ...     file_name_decoder=&quot;decoder_model.h5&quot;,</span>
 </span><span id="VariationalAlgorithm-92"><a href="#VariationalAlgorithm-92"><span class="linenos"> 92</span></a><span class="sd">        ...     models_saved_path=&quot;models/&quot;</span>
@@ -557,7 +557,7 @@ AlgorithmVariationalAutoencoder    </h1>
 </span><span id="VariationalAlgorithm-101"><a href="#VariationalAlgorithm-101"><span class="linenos">101</span></a>                 <span class="n">latent_dimension</span><span class="p">,</span>
 </span><span id="VariationalAlgorithm-102"><a href="#VariationalAlgorithm-102"><span class="linenos">102</span></a>                 <span class="n">decoder_latent_dimension</span><span class="p">,</span>
 </span><span id="VariationalAlgorithm-103"><a href="#VariationalAlgorithm-103"><span class="linenos">103</span></a>                 <span class="n">latent_mean_distribution</span><span class="p">,</span>
-</span><span id="VariationalAlgorithm-104"><a href="#VariationalAlgorithm-104"><span class="linenos">104</span></a>                 <span class="n">latent_stander_deviation</span><span class="p">,</span>
+</span><span id="VariationalAlgorithm-104"><a href="#VariationalAlgorithm-104"><span class="linenos">104</span></a>                 <span class="n">latent_standard_deviation</span><span class="p">,</span>
 </span><span id="VariationalAlgorithm-105"><a href="#VariationalAlgorithm-105"><span class="linenos">105</span></a>                 <span class="n">file_name_encoder</span><span class="p">,</span>
 </span><span id="VariationalAlgorithm-106"><a href="#VariationalAlgorithm-106"><span class="linenos">106</span></a>                 <span class="n">file_name_decoder</span><span class="p">,</span>
 </span><span id="VariationalAlgorithm-107"><a href="#VariationalAlgorithm-107"><span class="linenos">107</span></a>                 <span class="n">models_saved_path</span><span class="p">,</span>
@@ -582,7 +582,7 @@ AlgorithmVariationalAutoencoder    </h1>
 </span><span id="VariationalAlgorithm-126"><a href="#VariationalAlgorithm-126"><span class="linenos">126</span></a><span class="sd">                The dimensionality of the latent space.</span>
 </span><span id="VariationalAlgorithm-127"><a href="#VariationalAlgorithm-127"><span class="linenos">127</span></a><span class="sd">            @latent_mean_distribution (float):</span>
 </span><span id="VariationalAlgorithm-128"><a href="#VariationalAlgorithm-128"><span class="linenos">128</span></a><span class="sd">                The mean of the latent distribution (usually 0).</span>
-</span><span id="VariationalAlgorithm-129"><a href="#VariationalAlgorithm-129"><span class="linenos">129</span></a><span class="sd">            @latent_stander_deviation (float):</span>
+</span><span id="VariationalAlgorithm-129"><a href="#VariationalAlgorithm-129"><span class="linenos">129</span></a><span class="sd">            @latent_standard_deviation (float):</span>
 </span><span id="VariationalAlgorithm-130"><a href="#VariationalAlgorithm-130"><span class="linenos">130</span></a><span class="sd">                The standard deviation of the latent distribution (usually 1).</span>
 </span><span id="VariationalAlgorithm-131"><a href="#VariationalAlgorithm-131"><span class="linenos">131</span></a><span class="sd">            @file_name_encoder (str):</span>
 </span><span id="VariationalAlgorithm-132"><a href="#VariationalAlgorithm-132"><span class="linenos">132</span></a><span class="sd">                The filename for saving the encoder model.</span>
@@ -598,7 +598,7 @@ AlgorithmVariationalAutoencoder    </h1>
 </span><span id="VariationalAlgorithm-142"><a href="#VariationalAlgorithm-142"><span class="linenos">142</span></a><span class="sd">        Raises:</span>
 </span><span id="VariationalAlgorithm-143"><a href="#VariationalAlgorithm-143"><span class="linenos">143</span></a><span class="sd">            ValueError:</span>
 </span><span id="VariationalAlgorithm-144"><a href="#VariationalAlgorithm-144"><span class="linenos">144</span></a><span class="sd">                If latent_dimension &lt;= 0.</span>
-</span><span id="VariationalAlgorithm-145"><a href="#VariationalAlgorithm-145"><span class="linenos">145</span></a><span class="sd">                If latent_stander_deviation &lt;= 0.</span>
+</span><span id="VariationalAlgorithm-145"><a href="#VariationalAlgorithm-145"><span class="linenos">145</span></a><span class="sd">                If latent_standard_deviation &lt;= 0.</span>
 </span><span id="VariationalAlgorithm-146"><a href="#VariationalAlgorithm-146"><span class="linenos">146</span></a><span class="sd">                If file paths are invalid.</span>
 </span><span id="VariationalAlgorithm-147"><a href="#VariationalAlgorithm-147"><span class="linenos">147</span></a><span class="sd">        &quot;&quot;&quot;</span>
 </span><span id="VariationalAlgorithm-148"><a href="#VariationalAlgorithm-148"><span class="linenos">148</span></a>        <span class="c1"># Initialize the encoder and decoder models</span>
@@ -611,7 +611,7 @@ AlgorithmVariationalAutoencoder    </h1>
 </span><span id="VariationalAlgorithm-155"><a href="#VariationalAlgorithm-155"><span class="linenos">155</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_reconstruction_loss_tracker</span> <span class="o">=</span> <span class="n">Mean</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;reconstruction_loss&quot;</span><span class="p">)</span>
 </span><span id="VariationalAlgorithm-156"><a href="#VariationalAlgorithm-156"><span class="linenos">156</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_kl_loss_tracker</span> <span class="o">=</span> <span class="n">Mean</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;kl_loss&quot;</span><span class="p">)</span>
 </span><span id="VariationalAlgorithm-157"><a href="#VariationalAlgorithm-157"><span class="linenos">157</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_latent_mean_distribution</span> <span class="o">=</span> <span class="n">latent_mean_distribution</span>
-</span><span id="VariationalAlgorithm-158"><a href="#VariationalAlgorithm-158"><span class="linenos">158</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_latent_stander_deviation</span> <span class="o">=</span> <span class="n">latent_stander_deviation</span>
+</span><span id="VariationalAlgorithm-158"><a href="#VariationalAlgorithm-158"><span class="linenos">158</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_latent_standard_deviation</span> <span class="o">=</span> <span class="n">latent_standard_deviation</span>
 </span><span id="VariationalAlgorithm-159"><a href="#VariationalAlgorithm-159"><span class="linenos">159</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_latent_dimension</span> <span class="o">=</span> <span class="n">latent_dimension</span>
 </span><span id="VariationalAlgorithm-160"><a href="#VariationalAlgorithm-160"><span class="linenos">160</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_decoder_latent_dimension</span> <span class="o">=</span> <span class="n">decoder_latent_dimension</span>
 </span><span id="VariationalAlgorithm-161"><a href="#VariationalAlgorithm-161"><span class="linenos">161</span></a>        <span class="c1"># File names for saving models</span>
@@ -874,7 +874,7 @@ adaptable for different generative tasks.</p>
         Tracks the KL divergence loss during training.
     @_latent_mean_distribution (float):
         Mean of the latent distribution.
-    @_latent_stander_deviation (float):
+    @_latent_standard_deviation (float):
         Standard deviation of the latent distribution.
     @_latent_dimension (int):
         Dimensionality of the latent space.
@@ -905,7 +905,7 @@ adaptable for different generative tasks.</p>
           ...     loss_function=custom_loss_function,
           ...     latent_dimension=128,
           ...     latent_mean_distribution=0.0,
-          ...     latent_stander_deviation=1.0,
+          ...     latent_standard_deviation=1.0,
           ...     file_name_encoder="encoder_model.h5",
           ...     file_name_decoder="decoder_model.h5",
           ...     models_saved_path="models/"
@@ -921,7 +921,7 @@ adaptable for different generative tasks.</p>
                                         <input id="VariationalAlgorithm.__init__-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
-        <span class="name">VariationalAlgorithm</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="n">encoder_model</span>,</span><span class="param">	<span class="n">decoder_model</span>,</span><span class="param">	<span class="n">loss_function</span>,</span><span class="param">	<span class="n">latent_dimension</span>,</span><span class="param">	<span class="n">decoder_latent_dimension</span>,</span><span class="param">	<span class="n">latent_mean_distribution</span>,</span><span class="param">	<span class="n">latent_stander_deviation</span>,</span><span class="param">	<span class="n">file_name_encoder</span>,</span><span class="param">	<span class="n">file_name_decoder</span>,</span><span class="param">	<span class="n">models_saved_path</span>,</span><span class="param">	<span class="o">*</span><span class="n">args</span>,</span><span class="param">	<span class="o">**</span><span class="n">kwargs</span></span>)</span>
+        <span class="name">VariationalAlgorithm</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="n">encoder_model</span>,</span><span class="param">	<span class="n">decoder_model</span>,</span><span class="param">	<span class="n">loss_function</span>,</span><span class="param">	<span class="n">latent_dimension</span>,</span><span class="param">	<span class="n">decoder_latent_dimension</span>,</span><span class="param">	<span class="n">latent_mean_distribution</span>,</span><span class="param">	<span class="n">latent_standard_deviation</span>,</span><span class="param">	<span class="n">file_name_encoder</span>,</span><span class="param">	<span class="n">file_name_decoder</span>,</span><span class="param">	<span class="n">models_saved_path</span>,</span><span class="param">	<span class="o">*</span><span class="n">args</span>,</span><span class="param">	<span class="o">**</span><span class="n">kwargs</span></span>)</span>
 
                 <label class="view-source-button" for="VariationalAlgorithm.__init__-view-source"><span>View Source</span></label>
 
@@ -934,7 +934,7 @@ adaptable for different generative tasks.</p>
 </span><span id="VariationalAlgorithm.__init__-101"><a href="#VariationalAlgorithm.__init__-101"><span class="linenos">101</span></a>                 <span class="n">latent_dimension</span><span class="p">,</span>
 </span><span id="VariationalAlgorithm.__init__-102"><a href="#VariationalAlgorithm.__init__-102"><span class="linenos">102</span></a>                 <span class="n">decoder_latent_dimension</span><span class="p">,</span>
 </span><span id="VariationalAlgorithm.__init__-103"><a href="#VariationalAlgorithm.__init__-103"><span class="linenos">103</span></a>                 <span class="n">latent_mean_distribution</span><span class="p">,</span>
-</span><span id="VariationalAlgorithm.__init__-104"><a href="#VariationalAlgorithm.__init__-104"><span class="linenos">104</span></a>                 <span class="n">latent_stander_deviation</span><span class="p">,</span>
+</span><span id="VariationalAlgorithm.__init__-104"><a href="#VariationalAlgorithm.__init__-104"><span class="linenos">104</span></a>                 <span class="n">latent_standard_deviation</span><span class="p">,</span>
 </span><span id="VariationalAlgorithm.__init__-105"><a href="#VariationalAlgorithm.__init__-105"><span class="linenos">105</span></a>                 <span class="n">file_name_encoder</span><span class="p">,</span>
 </span><span id="VariationalAlgorithm.__init__-106"><a href="#VariationalAlgorithm.__init__-106"><span class="linenos">106</span></a>                 <span class="n">file_name_decoder</span><span class="p">,</span>
 </span><span id="VariationalAlgorithm.__init__-107"><a href="#VariationalAlgorithm.__init__-107"><span class="linenos">107</span></a>                 <span class="n">models_saved_path</span><span class="p">,</span>
@@ -959,7 +959,7 @@ adaptable for different generative tasks.</p>
 </span><span id="VariationalAlgorithm.__init__-126"><a href="#VariationalAlgorithm.__init__-126"><span class="linenos">126</span></a><span class="sd">                The dimensionality of the latent space.</span>
 </span><span id="VariationalAlgorithm.__init__-127"><a href="#VariationalAlgorithm.__init__-127"><span class="linenos">127</span></a><span class="sd">            @latent_mean_distribution (float):</span>
 </span><span id="VariationalAlgorithm.__init__-128"><a href="#VariationalAlgorithm.__init__-128"><span class="linenos">128</span></a><span class="sd">                The mean of the latent distribution (usually 0).</span>
-</span><span id="VariationalAlgorithm.__init__-129"><a href="#VariationalAlgorithm.__init__-129"><span class="linenos">129</span></a><span class="sd">            @latent_stander_deviation (float):</span>
+</span><span id="VariationalAlgorithm.__init__-129"><a href="#VariationalAlgorithm.__init__-129"><span class="linenos">129</span></a><span class="sd">            @latent_standard_deviation (float):</span>
 </span><span id="VariationalAlgorithm.__init__-130"><a href="#VariationalAlgorithm.__init__-130"><span class="linenos">130</span></a><span class="sd">                The standard deviation of the latent distribution (usually 1).</span>
 </span><span id="VariationalAlgorithm.__init__-131"><a href="#VariationalAlgorithm.__init__-131"><span class="linenos">131</span></a><span class="sd">            @file_name_encoder (str):</span>
 </span><span id="VariationalAlgorithm.__init__-132"><a href="#VariationalAlgorithm.__init__-132"><span class="linenos">132</span></a><span class="sd">                The filename for saving the encoder model.</span>
@@ -975,7 +975,7 @@ adaptable for different generative tasks.</p>
 </span><span id="VariationalAlgorithm.__init__-142"><a href="#VariationalAlgorithm.__init__-142"><span class="linenos">142</span></a><span class="sd">        Raises:</span>
 </span><span id="VariationalAlgorithm.__init__-143"><a href="#VariationalAlgorithm.__init__-143"><span class="linenos">143</span></a><span class="sd">            ValueError:</span>
 </span><span id="VariationalAlgorithm.__init__-144"><a href="#VariationalAlgorithm.__init__-144"><span class="linenos">144</span></a><span class="sd">                If latent_dimension &lt;= 0.</span>
-</span><span id="VariationalAlgorithm.__init__-145"><a href="#VariationalAlgorithm.__init__-145"><span class="linenos">145</span></a><span class="sd">                If latent_stander_deviation &lt;= 0.</span>
+</span><span id="VariationalAlgorithm.__init__-145"><a href="#VariationalAlgorithm.__init__-145"><span class="linenos">145</span></a><span class="sd">                If latent_standard_deviation &lt;= 0.</span>
 </span><span id="VariationalAlgorithm.__init__-146"><a href="#VariationalAlgorithm.__init__-146"><span class="linenos">146</span></a><span class="sd">                If file paths are invalid.</span>
 </span><span id="VariationalAlgorithm.__init__-147"><a href="#VariationalAlgorithm.__init__-147"><span class="linenos">147</span></a><span class="sd">        &quot;&quot;&quot;</span>
 </span><span id="VariationalAlgorithm.__init__-148"><a href="#VariationalAlgorithm.__init__-148"><span class="linenos">148</span></a>        <span class="c1"># Initialize the encoder and decoder models</span>
@@ -988,7 +988,7 @@ adaptable for different generative tasks.</p>
 </span><span id="VariationalAlgorithm.__init__-155"><a href="#VariationalAlgorithm.__init__-155"><span class="linenos">155</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_reconstruction_loss_tracker</span> <span class="o">=</span> <span class="n">Mean</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;reconstruction_loss&quot;</span><span class="p">)</span>
 </span><span id="VariationalAlgorithm.__init__-156"><a href="#VariationalAlgorithm.__init__-156"><span class="linenos">156</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_kl_loss_tracker</span> <span class="o">=</span> <span class="n">Mean</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;kl_loss&quot;</span><span class="p">)</span>
 </span><span id="VariationalAlgorithm.__init__-157"><a href="#VariationalAlgorithm.__init__-157"><span class="linenos">157</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_latent_mean_distribution</span> <span class="o">=</span> <span class="n">latent_mean_distribution</span>
-</span><span id="VariationalAlgorithm.__init__-158"><a href="#VariationalAlgorithm.__init__-158"><span class="linenos">158</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_latent_stander_deviation</span> <span class="o">=</span> <span class="n">latent_stander_deviation</span>
+</span><span id="VariationalAlgorithm.__init__-158"><a href="#VariationalAlgorithm.__init__-158"><span class="linenos">158</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_latent_standard_deviation</span> <span class="o">=</span> <span class="n">latent_standard_deviation</span>
 </span><span id="VariationalAlgorithm.__init__-159"><a href="#VariationalAlgorithm.__init__-159"><span class="linenos">159</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_latent_dimension</span> <span class="o">=</span> <span class="n">latent_dimension</span>
 </span><span id="VariationalAlgorithm.__init__-160"><a href="#VariationalAlgorithm.__init__-160"><span class="linenos">160</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_decoder_latent_dimension</span> <span class="o">=</span> <span class="n">decoder_latent_dimension</span>
 </span><span id="VariationalAlgorithm.__init__-161"><a href="#VariationalAlgorithm.__init__-161"><span class="linenos">161</span></a>        <span class="c1"># File names for saving models</span>

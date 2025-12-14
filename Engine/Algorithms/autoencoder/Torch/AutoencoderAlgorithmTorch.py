@@ -47,7 +47,7 @@ except ImportError as error:
     sys.exit(-1)
 
 DEFAULT_LATENT_MEAN_DISTRIBUTION=0.0
-DEFAULT_LATENT_STANDER_DEVIATION=1.0
+DEFAULT_latent_standard_deviation=1.0
 DEFAULT_LATENT_DIMENSION=64
 DEFAULT_NUMBER_CLASSES=2
 
@@ -76,7 +76,7 @@ class AutoencoderAlgorithmTorch(nn.Module):
             The path to save the models.
         @latent_mean_distribution (float, optional):
             Mean of the latent space distribution (default: 0.0).
-        @latent_stander_deviation (float, optional):
+        @latent_standard_deviation (float, optional):
             Standard deviation of the latent space distribution (default: 1.0).
         @latent_dimension (int, optional):
             The dimensionality of the latent space (default: 64).
@@ -105,7 +105,7 @@ class AutoencoderAlgorithmTorch(nn.Module):
                  file_name_decoder=None,
                  models_saved_path=None,
                  latent_mean_distribution=DEFAULT_LATENT_MEAN_DISTRIBUTION,
-                 latent_stander_deviation=DEFAULT_LATENT_STANDER_DEVIATION,
+                 latent_standard_deviation=DEFAULT_latent_standard_deviation,
                  latent_dimension=DEFAULT_LATENT_DIMENSION):
 
         super().__init__()
@@ -128,11 +128,11 @@ class AutoencoderAlgorithmTorch(nn.Module):
         if not isinstance(latent_mean_distribution, (int, float)):
             raise TypeError("latent_mean_distribution must be a number.")
 
-        if not isinstance(latent_stander_deviation, (int, float)):
-            raise TypeError("latent_stander_deviation must be a number.")
+        if not isinstance(latent_standard_deviation, (int, float)):
+            raise TypeError("latent_standard_deviation must be a number.")
 
-        if latent_stander_deviation <= 0:
-            raise ValueError("latent_stander_deviation must be greater than 0.")
+        if latent_standard_deviation <= 0:
+            raise ValueError("latent_standard_deviation must be greater than 0.")
 
         if not isinstance(latent_dimension, int) or latent_dimension <= 0:
             raise ValueError("latent_dimension must be a positive integer.")
@@ -145,7 +145,7 @@ class AutoencoderAlgorithmTorch(nn.Module):
         self._loss_function = loss_function
         self._total_loss_tracker = 0.0
         self._latent_mean_distribution = latent_mean_distribution
-        self._latent_stander_deviation = latent_stander_deviation
+        self._latent_standard_deviation = latent_standard_deviation
         self._latent_dimension = latent_dimension
 
 
@@ -527,7 +527,7 @@ class AutoencoderAlgorithmTorch(nn.Module):
                 # Generate random noise vectors (latent space vectors) for each sample
                 latent_noise = torch.normal(
                     mean=self._latent_mean_distribution,
-                    std=self._latent_stander_deviation,
+                    std=self._latent_standard_deviation,
                     size=(number_instances, self._latent_dimension)
                 ).to(self.device)
 

@@ -98,7 +98,7 @@ class VariationalAutoencoder:
         _variational_initializer_mean (float): Mean for weight initialization
         _variational_initializer_deviation (float): Std dev for weight initialization
         _variational_latent_mean_distribution (float): Latent space mean
-        _variational_latent_stander_deviation (float): Latent space std dev
+        _variational_latent_standard_deviation (float): Latent space std dev
         _variational_file_name_encoder (str): Encoder model filename
         _variational_file_name_decoder (str): Decoder model filename
         _variational_path_output_models (str): Path for saving models
@@ -156,7 +156,7 @@ class VariationalAutoencoder:
             initializer_mean: Weight init mean (default: 0)
             initializer_deviation: Weight init std dev (default: 0.125)
             latent_mean_distribution: Latent space mean (default: 0.5)
-            latent_stander_deviation: Latent space std dev (default: 0.125)
+            latent_standard_deviation: Latent space std dev (default: 0.125)
             file_name_encoder: Encoder filename (default: "encoder_model")
             file_name_decoder: Decoder filename (default: "decoder_model")
             path_output_models: Output models path (default: "models_saved/")

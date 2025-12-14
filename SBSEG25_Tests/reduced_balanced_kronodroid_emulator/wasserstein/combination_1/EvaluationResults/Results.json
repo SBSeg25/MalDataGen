@@ -241,7 +241,7 @@
         "wasserstein_last_activation_layer": "linear",
         "wasserstein_latent_dimension": 32,
         "wasserstein_latent_mean_distribution": 0.5,
-        "wasserstein_latent_stander_deviation": 0.125,
+        "wasserstein_latent_standard_deviation": 0.125,
         "wasserstein_loss_function": "binary_crossentropy",
         "wasserstein_momentum": 0.8,
         "wasserstein_number_classes": 2,

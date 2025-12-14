@@ -129,7 +129,7 @@ def add_argument_autoencoder(parser):
                         default=DEFAULT_AUTOENCODER_LATENT_MEAN_DISTRIBUTION,
                         help="Mean of the random noise input distribution.")
 
-    parser.add_argument("--autoencoder_latent_stander_deviation", type=float,
+    parser.add_argument("--autoencoder_latent_standard_deviation", type=float,
                         default=DEFAULT_AUTOENCODER_STANDER_DEVIATION,
                         help="Standard deviation of the random noise input.")
 

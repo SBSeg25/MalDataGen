@@ -73,7 +73,7 @@ DEFAULT_WASSERSTEIN_GAN_GP_ADAM_BETA = 0.5
 DEFAULT_WASSERSTEIN_GAN_GP_DISCRIMINATOR_STEPS = 3
 DEFAULT_WASSERSTEIN_GAN_GP_SMOOTHING_RATE = 0.15
 DEFAULT_WASSERSTEIN_GAN_GP_LATENT_MEAN_DISTRIBUTION = 0.0
-DEFAULT_WASSERSTEIN_GAN_GP_LATENT_STANDER_DEVIATION = 0.125
+DEFAULT_WASSERSTEIN_GAN_GP_latent_standard_deviation = 0.125
 DEFAULT_WASSERSTEIN_GAN_GP_GRADIENT_PENALTY = 10.0
 DEFAULT_WASSERSTEIN_GAN_GP_FILE_NAME_DISCRIMINATOR = "discriminator_model"
 DEFAULT_WASSERSTEIN_GAN_GP_FILE_NAME_GENERATOR = "generator_model"
@@ -117,7 +117,7 @@ class WassersteinGP:
         _wasserstein_gp_discriminator_steps (int): Number of critic steps per generator step
         _wasserstein_gp_smoothing_rate (float): Label smoothing rate
         _wasserstein_gp_latent_mean_distribution (float): Distribution type for latent space
-        _wasserstein_gp_latent_stander_deviation (float): Std dev for latent distribution
+        _wasserstein_gp_latent_standard_deviation (float): Std dev for latent distribution
         _wasserstein_gp_gradient_penalty (float): Weight for gradient penalty term
         _wasserstein_gp_file_name_discriminator (str): Filename for saving critic
         _wasserstein_gp_file_name_generator (str): Filename for saving generator
@@ -148,7 +148,7 @@ class WassersteinGP:
             discriminator_steps: int = DEFAULT_WASSERSTEIN_GAN_GP_DISCRIMINATOR_STEPS,
             smoothing_rate: float = DEFAULT_WASSERSTEIN_GAN_GP_SMOOTHING_RATE,
             latent_mean_distribution: float = DEFAULT_WASSERSTEIN_GAN_GP_LATENT_MEAN_DISTRIBUTION,
-            latent_stander_deviation: float = DEFAULT_WASSERSTEIN_GAN_GP_LATENT_STANDER_DEVIATION,
+            latent_standard_deviation: float = DEFAULT_WASSERSTEIN_GAN_GP_latent_standard_deviation,
             gradient_penalty: float = DEFAULT_WASSERSTEIN_GAN_GP_GRADIENT_PENALTY,
             file_name_discriminator: str = DEFAULT_WASSERSTEIN_GAN_GP_FILE_NAME_DISCRIMINATOR,
             file_name_generator: str = DEFAULT_WASSERSTEIN_GAN_GP_FILE_NAME_GENERATOR,
@@ -182,7 +182,7 @@ class WassersteinGP:
             discriminator_steps: Critic steps per generator step (default: 3)
             smoothing_rate: Label smoothing rate (default: 0.15)
             latent_mean_distribution: Latent distribution mean (default: 0.0)
-            latent_stander_deviation: Latent distribution std dev (default: 0.125)
+            latent_standard_deviation: Latent distribution std dev (default: 0.125)
             gradient_penalty: Gradient penalty weight (default: 10.0)
             file_name_discriminator: Critic filename (default: "discriminator_model")
             file_name_generator: Generator filename (default: "generator_model")
@@ -228,7 +228,7 @@ class WassersteinGP:
         self._wasserstein_gp_discriminator_steps: int = discriminator_steps
         self._wasserstein_gp_smoothing_rate: float = smoothing_rate
         self._wasserstein_gp_latent_mean_distribution: float = latent_mean_distribution
-        self._wasserstein_gp_latent_stander_deviation: float = latent_stander_deviation
+        self._wasserstein_gp_latent_standard_deviation: float = latent_standard_deviation
         self._wasserstein_gp_gradient_penalty: float = gradient_penalty
         self._wasserstein_gp_file_name_discriminator: str = file_name_discriminator
         self._wasserstein_gp_file_name_generator: str = file_name_generator
@@ -322,7 +322,7 @@ class WassersteinGP:
                 file_name_generator=self._wasserstein_gp_file_name_generator,
                 models_saved_path=self._wasserstein_gp_path_output_models,
                 latent_mean_distribution=self._wasserstein_gp_latent_mean_distribution,
-                latent_stander_deviation=self._wasserstein_gp_latent_stander_deviation,
+                latent_standard_deviation=self._wasserstein_gp_latent_standard_deviation,
                 smoothing_rate=self._wasserstein_gp_smoothing_rate,
                 gradient_penalty_weight=self._wasserstein_gp_gradient_penalty,
                 discriminator_steps=self._wasserstein_gp_discriminator_steps
@@ -344,7 +344,7 @@ class WassersteinGP:
             if hasattr(self._wasserstein_gp_algorithm, 'latent_mean_distribution'):
                 self._wasserstein_gp_algorithm.latent_mean_distribution = self._wasserstein_gp_latent_mean_distribution
             if hasattr(self._wasserstein_gp_algorithm, 'latent_standard_deviation'):
-                self._wasserstein_gp_algorithm.latent_stander_deviation = self._wasserstein_gp_latent_stander_deviation
+                self._wasserstein_gp_algorithm.latent_standard_deviation = self._wasserstein_gp_latent_standard_deviation
             if hasattr(self._wasserstein_gp_algorithm, 'smoothing_rate'):
                 self._wasserstein_gp_algorithm.smoothing_rate = self._wasserstein_gp_smoothing_rate
             if hasattr(self._wasserstein_gp_algorithm, 'gradient_penalty_weight'):
@@ -760,14 +760,14 @@ class WassersteinGP:
         self._wasserstein_gp_latent_mean_distribution = value
 
     @property
-    def wasserstein_gp_latent_stander_deviation(self) -> float:
+    def wasserstein_gp_latent_standard_deviation(self) -> float:
         """Get the latent stander deviation."""
-        return self._wasserstein_gp_latent_stander_deviation
+        return self._wasserstein_gp_latent_standard_deviation
 
-    @wasserstein_gp_latent_stander_deviation.setter
-    def wasserstein_gp_latent_stander_deviation(self, value: float) -> None:
+    @wasserstein_gp_latent_standard_deviation.setter
+    def wasserstein_gp_latent_standard_deviation(self, value: float) -> None:
         """Set the latent stander deviation."""
-        self._wasserstein_gp_latent_stander_deviation = value
+        self._wasserstein_gp_latent_standard_deviation = value
 
     @property
     def wasserstein_gp_gradient_penalty(self) -> float:

@@ -43,13 +43,13 @@ DEFAULT_ADVERSARIAL_INITIALIZER_DEVIATION = 0.5
 DEFAULT_ADVERSARIAL_BATCH_SIZE = 32
 DEFAULT_ADVERSARIAL_DENSE_LAYERS_SETTINGS_G = [128]
 DEFAULT_ADVERSARIAL_DENSE_LAYERS_SETTINGS_D = [128]
-DEFAULT_ADVERSARIAL_RANDOM_LATENT_STANDER_DEVIATION = 1.0
+DEFAULT_ADVERSARIAL_RANDOM_latent_standard_deviation = 1.0
 
 DEFAULT_ADVERSARIAL_LOSS_GENERATOR = 'binary_crossentropy'
 DEFAULT_ADVERSARIAL_LOSS_DISCRIMINATOR = 'binary_crossentropy'
 DEFAULT_ADVERSARIAL_SMOOTHING_RATE = 0.15
 DEFAULT_ADVERSARIAL_LATENT_MEAN_DISTRIBUTION = 0.0
-DEFAULT_ADVERSARIAL_LATENT_STANDER_DEVIATION = 1.0
+DEFAULT_ADVERSARIAL_latent_standard_deviation = 1.0
 DEFAULT_ADVERSARIAL_FILE_NAME_DISCRIMINATOR = "discriminator_model"
 DEFAULT_ADVERSARIAL_FILE_NAME_GENERATOR = "generator_model"
 DEFAULT_ADVERSARIAL_PATH_OUTPUT_MODELS = "models_saved/"
@@ -105,8 +105,8 @@ def add_argument_adversarial(parser):
                         help='Mean of the random noise input distribution.',
                         default=DEFAULT_ADVERSARIAL_LATENT_MEAN_DISTRIBUTION)
     
-    parser.add_argument('--adversarial_latent_stander_deviation', type=float,
-                        default=DEFAULT_ADVERSARIAL_LATENT_STANDER_DEVIATION,
+    parser.add_argument('--adversarial_latent_standard_deviation', type=float,
+                        default=DEFAULT_ADVERSARIAL_latent_standard_deviation,
                         help='Standard deviation of the latent space distribution.')
 
     parser.add_argument('--adversarial_loss_generator', type=str,
