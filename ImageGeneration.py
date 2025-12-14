@@ -9,18 +9,19 @@ Ideal para validar VAEs condicionais
 
 import os
 import numpy as np
-
+os.environ["ML_FRAMEWORK"] = "tensorflow"
+from Engine.Models.Adversarial import Adversarial
 from Engine.Models.Autoencoder import Autoencoder
 from Engine.Models.VariationalAutoencoder import VariationalAutoencoder
-os.environ["ML_FRAMEWORK"] = "tensorflow"
+
 
 
 # =====================
 # Configurações MNIST
 # =====================
 
-IMAGE_SIZE = (28, 28)
-INPUT_SHAPE = (28, 28, 1)
+IMAGE_SIZE = (16, 16)
+INPUT_SHAPE = (16, 16, 1)
 
 N_CLASSES = 10
 BATCH_LIMIT = 20000
@@ -69,7 +70,7 @@ y_real_samples = np.array(y_real_samples, dtype=np.int32)
 # Modelo
 # =====================
 
-model = Autoencoder(number_classes=N_CLASSES)
+model = Adversarial(number_classes=N_CLASSES)
 
 model.fit_model(
     input_shape=INPUT_SHAPE,

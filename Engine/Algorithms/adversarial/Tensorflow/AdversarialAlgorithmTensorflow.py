@@ -95,10 +95,51 @@ class AdversarialAlgorithmTensorflow(Model):
         self._loss_generator = loss_generator
         self._loss_discriminator = loss_discriminator
 
+    def call(self, inputs, training=False):
+        """
+        Define the forward pass of the model (required by Keras Model API).
+        For a GAN, this generates synthetic samples.
+
+        Args:
+            inputs: Can be either:
+                - A tuple (latent_vector, labels) for conditional generation
+                - Just latent_vector for unconditional generation
+            training: Boolean indicating if in training mode
+
+        Returns:
+            Generated synthetic samples
+        """
+        # Se inputs for uma tupla, desempacote
+        if isinstance(inputs, (list, tuple)):
+            if len(inputs) == 2:
+                latent_vector, labels = inputs
+            else:
+                latent_vector = inputs[0]
+                labels = None
+        else:
+            latent_vector = inputs
+            labels = None
+
+        # Gerar amostras sintéticas usando o gerador
+        if labels is not None:
+            # Geração condicional (com labels)
+            synthetic_samples = self._generator([latent_vector, labels], training=training)
+        else:
+            # Geração incondicional (sem labels)
+            synthetic_samples = self._generator(latent_vector, training=training)
+
+        return synthetic_samples
+
     @tensorflow.function
     def train_step(self, batch):
         """
         Performs a single training step for both generator and discriminator.
+
+        Args:
+            batch: Tuple of (real_features, real_labels)
+
+        Returns:
+            Dictionary with loss metrics
         """
         # Unpack the batch into real features and real labels
         real_feature, real_samples_label = batch
@@ -106,73 +147,116 @@ class AdversarialAlgorithmTensorflow(Model):
         # Get the current batch size
         batch_size = tensorflow.shape(real_feature)[0]
 
-        # Expand the label tensor to match the expected shape
-        real_samples_label = tensorflow.expand_dims(real_samples_label, axis=-1)
+        # FIX 1: Expandir labels corretamente (verificar se precisa)
+        if len(real_samples_label.shape) == 1:
+            real_samples_label = tensorflow.expand_dims(real_samples_label, axis=-1)
 
-        # Sample random noise vectors for the generator input
-        latent_space = tensorflow.random.normal(shape=(batch_size, self._latent_dimension))
+        # ==================================================
+        # FASE 1: TREINAR O DISCRIMINADOR
+        # ==================================================
 
-        # Generate synthetic features
-        synthetic_feature = self._generator([latent_space, real_samples_label], training=False)
+        # Gerar ruído latente para o gerador
+        latent_space = tensorflow.random.normal(
+            shape=(batch_size, self._latent_dimension),
+            mean=self._latent_mean_distribution,
+            stddev=self._latent_standard_deviation
+        )
 
-        # Train discriminator
+        # FIX 2: Gerar amostras sintéticas com training=True
+        synthetic_feature = self._generator([latent_space, real_samples_label], training=True)
+
+        # Treinar discriminador
         with tensorflow.GradientTape() as discriminator_gradient:
-            # Get discriminator predictions on real and synthetic samples
+            # Obter predições do discriminador para amostras reais e sintéticas
             label_predicted_real = self._discriminator([real_feature, real_samples_label], training=True)
             label_predicted_synthetic = self._discriminator([synthetic_feature, real_samples_label], training=True)
 
-            # Concatenate predictions
-            label_predicted_all_samples = tensorflow.concat([label_predicted_real, label_predicted_synthetic], axis=0)
+            # Concatenar todas as predições
+            label_predicted_all_samples = tensorflow.concat(
+                [label_predicted_real, label_predicted_synthetic],
+                axis=0
+            )
 
-            # Create ground-truth labels (real=0, fake=1)
-            list_all_labels_predicted = [
-                tensorflow.zeros_like(label_predicted_real),
-                tensorflow.ones_like(label_predicted_synthetic)
-            ]
-            tensor_labels_predicted = tensorflow.concat(list_all_labels_predicted, axis=0)
+            # FIX 3: Label smoothing correto e simplificado
+            # Para amostras reais: labels próximos de 0 (0.0 a 0.15)
+            # Para amostras sintéticas: labels próximos de 1 (0.85 a 1.0)
+            smooth_real_labels = tensorflow.random.uniform(
+                shape=tensorflow.shape(label_predicted_real),
+                minval=0.0,
+                maxval=0.15
+            )
 
-            # Label smoothing
-            smooth_tensor_real_data = 0.15 * tensorflow.random.uniform(tensorflow.shape(label_predicted_real))
-            smooth_tensor_synthetic_data = -0.15 * tensorflow.random.uniform(
-                tensorflow.shape(label_predicted_synthetic))
-            tensor_labels_predicted += tensorflow.concat([smooth_tensor_real_data, smooth_tensor_synthetic_data],
-                                                         axis=0)
+            smooth_synthetic_labels = tensorflow.random.uniform(
+                shape=tensorflow.shape(label_predicted_synthetic),
+                minval=0.85,
+                maxval=1.0
+            )
 
-            # Compute discriminator loss
+            # Concatenar labels suavizados
+            tensor_labels_predicted = tensorflow.concat(
+                [smooth_real_labels, smooth_synthetic_labels],
+                axis=0
+            )
+
+            # Calcular perda do discriminador
             loss_d = self._loss_discriminator(tensor_labels_predicted, label_predicted_all_samples)
 
-        # Update discriminator
-        gradient_tape_loss = discriminator_gradient.gradient(loss_d, self._discriminator.trainable_variables)
-        self._optimizer_discriminator.apply_gradients(zip(gradient_tape_loss, self._discriminator.trainable_variables))
+        # FIX 4: Aplicar gradientes apenas se houver variáveis treináveis
+        trainable_vars_discriminator = self._discriminator.trainable_variables
+        if trainable_vars_discriminator:
+            gradient_discriminator = discriminator_gradient.gradient(loss_d, trainable_vars_discriminator)
+            self._optimizer_discriminator.apply_gradients(zip(gradient_discriminator, trainable_vars_discriminator))
 
-        # Train generator
+        # ==================================================
+        # FASE 2: TREINAR O GERADOR
+        # ==================================================
+
         with tensorflow.GradientTape() as generator_gradient:
-            # Generate synthetic samples
-            latent_space = tensorflow.random.normal(shape=(batch_size, self._latent_dimension))
-            synthetic_feature = self._generator([latent_space, real_samples_label], training=True)
+            # FIX 5: Gerar NOVO ruído latente (não reutilizar o anterior)
+            latent_space_generator = tensorflow.random.normal(
+                shape=(batch_size, self._latent_dimension),
+                mean=self._latent_mean_distribution,
+                stddev=self._latent_standard_deviation
+            )
 
-            # Get discriminator predictions for synthetic samples
-            predicted_labels = self._discriminator([synthetic_feature, real_samples_label], training=False)
+            # Gerar amostras sintéticas
+            synthetic_feature_generator = self._generator(
+                [latent_space_generator, real_samples_label],
+                training=True
+            )
 
-            # Compute generator loss
+            # FIX 6: Discriminador em modo de inferência durante treinamento do gerador
+            predicted_labels = self._discriminator(
+                [synthetic_feature_generator, real_samples_label],
+                training=False
+            )
+
+            # Perda do gerador - queremos que o discriminador classifique como real (0)
             loss_g = self._loss_generator(tensorflow.zeros_like(predicted_labels), predicted_labels)
 
-        # Update generator
-        gradient_tape_loss = generator_gradient.gradient(loss_g, self._generator.trainable_variables)
-        self._optimizer_generator.apply_gradients(zip(gradient_tape_loss, self._generator.trainable_variables))
+        # Aplicar gradientes ao gerador
+        trainable_vars_generator = self._generator.trainable_variables
+        if trainable_vars_generator:
+            gradient_generator = generator_gradient.gradient(loss_g, trainable_vars_generator)
+            self._optimizer_generator.apply_gradients(zip(gradient_generator, trainable_vars_generator))
 
-        # ** FIX: Update loss trackers **
+        # ==================================================
+        # ATUALIZAR MÉTRICAS E RETORNAR
+        # ==================================================
+
+        # Atualizar trackers de perda
         self._loss_d_tracker.update_state(loss_d)
         self._loss_g_tracker.update_state(loss_g)
-        # Combined loss for overall tracking
+
+        # Perda combinada
         combined_loss = (loss_d + loss_g) / 2.0
         self._total_loss_tracker.update_state(combined_loss)
 
-        # ** FIX: Return all three metrics **
+        # Retornar todas as métricas como dicionário
         return {
-            "loss_d": loss_d,
-            "loss_g": loss_g,
-            "loss": combined_loss  # Add this key that fit() expects
+            "loss": combined_loss,  # Perda total (esperada pelo fit)
+            "loss_d": loss_d,  # Perda do discriminador
+            "loss_g": loss_g  # Perda do gerador
         }
 
     @property
@@ -289,22 +373,51 @@ class AdversarialAlgorithmTensorflow(Model):
 
     def _evaluate_validation(self, validation_data, validation_steps=None):
         """
-        Evaluate the model on validation data.
+        Evaluate the model on validation data WITHOUT updating weights.
         """
-        val_losses = []
-        step = 0
+        # FIX: Resetar trackers antes da validação
+        val_loss_tracker = Mean(name="val_loss")
+        val_loss_d_tracker = Mean(name="val_loss_d")
+        val_loss_g_tracker = Mean(name="val_loss_g")
 
+        step = 0
         for batch_data in validation_data:
-            batch_x, batch_y = batch_data
-            # Perform validation step (without updating weights)
-            metrics = self.train_step(batch_data)
-            val_losses.append(float(metrics['loss']))
+            real_feature, real_samples_label = batch_data
+            batch_size = tensorflow.shape(real_feature)[0]
+            real_samples_label = tensorflow.expand_dims(real_samples_label, axis=-1)
+
+            # Gerar dados sintéticos
+            latent_space = tensorflow.random.normal(shape=(batch_size, self._latent_dimension))
+            synthetic_feature = self._generator([latent_space, real_samples_label], training=False)
+
+            # Avaliar discriminador (SEM treinar)
+            label_predicted_real = self._discriminator([real_feature, real_samples_label], training=False)
+            label_predicted_synthetic = self._discriminator([synthetic_feature, real_samples_label], training=False)
+
+            label_predicted_all = tensorflow.concat([label_predicted_real, label_predicted_synthetic], axis=0)
+            tensor_labels = tensorflow.concat([
+                tensorflow.zeros_like(label_predicted_real),
+                tensorflow.ones_like(label_predicted_synthetic)
+            ], axis=0)
+
+            # Calcular perdas (sem aplicar gradientes)
+            loss_d = self._loss_discriminator(tensor_labels, label_predicted_all)
+
+            predicted_labels = self._discriminator([synthetic_feature, real_samples_label], training=False)
+            loss_g = self._loss_generator(tensorflow.zeros_like(predicted_labels), predicted_labels)
+
+            combined_loss = (loss_d + loss_g) / 2.0
+
+            # Atualizar trackers
+            val_loss_tracker.update_state(combined_loss)
+            val_loss_d_tracker.update_state(loss_d)
+            val_loss_g_tracker.update_state(loss_g)
 
             step += 1
             if validation_steps is not None and step >= validation_steps:
                 break
 
-        return numpy.mean(val_losses) if val_losses else 0.0
+        return float(val_loss_tracker.result())
 
     def get_samples(self, number_samples_per_class):
         """
@@ -329,9 +442,6 @@ class AdversarialAlgorithmTensorflow(Model):
             # Generate synthetic samples
             generated_samples = self._generator.predict([latent_noise, label_samples_generated], verbose=0)
 
-            # Round to nearest integer
-            generated_samples = numpy.rint(generated_samples)
-
             # Store in dictionary
             generated_data[label_class] = generated_samples
 
@@ -341,86 +451,67 @@ class AdversarialAlgorithmTensorflow(Model):
         try:
             logging.info("Starting to save adversarial Model for fold {}...".format(k_fold))
 
-            # Create directory for saving models
             path_directory = os.path.join(path_output, self._models_saved_path)
             Path(path_directory).mkdir(parents=True, exist_ok=True)
-            logging.info("Created/verified directory at: {}".format(path_directory))
 
-            # Filenames
+            # FIX: Usar k_fold consistentemente (sem +1)
             discriminator_file_name = self._file_name_discriminator + "_" + str(k_fold)
             generator_file_name = self._file_name_generator + "_" + str(k_fold)
 
-            # Directory for current fold
-            path_model = os.path.join(path_directory, "fold_" + str(k_fold + 1))
-            Path(path_model).mkdir(parents=True, exist_ok=True)
-            logging.info("Created/verified fold directory at: {}".format(path_model))
+            # FIX: Não criar subpasta fold_X ou ser consistente com load_models
+            path_model = path_directory  # Salvar direto no path_directory
 
-            # Full paths
             discriminator_file_name = os.path.join(path_model, discriminator_file_name)
             generator_file_name = os.path.join(path_model, generator_file_name)
 
-            # Save discriminator
-            logging.info("Saving discriminator model...")
+            # Salvar discriminador
             discriminator_model_json = self._discriminator.to_json()
             with open(discriminator_file_name + ".json", "w") as json_file:
                 json_file.write(discriminator_model_json)
             self._discriminator.save_weights(discriminator_file_name + ".h5")
-            logging.info("Discriminator model saved at: {}.json and {}.h5".format(discriminator_file_name,
-                                                                                  discriminator_file_name))
 
-            # Save generator
-            logging.info("Saving generator model...")
+            # Salvar gerador
             generator_model_json = self._generator.to_json()
             with open(generator_file_name + ".json", "w") as json_file:
                 json_file.write(generator_model_json)
             self._generator.save_weights(generator_file_name + ".h5")
-            logging.info("Generator model saved at: {}.json and {}.h5".format(generator_file_name,
-                                                                              generator_file_name))
 
-        except FileExistsError:
-            logging.error("Model file already exists. Aborting.")
-            exit(-1)
+            logging.info("Models saved successfully for fold {}".format(k_fold))
+
         except Exception as e:
             logging.error("An error occurred while saving the models: {}".format(e))
-            exit(-1)
+            raise
 
     def load_models(self, path_output, k_fold):
         try:
-            logging.info("Loading adversarial Model for fold {}...".format(k_fold + 1))
+            logging.info("Loading adversarial Model for fold {}...".format(k_fold))
 
-            # Directory containing saved models
             path_directory = os.path.join(path_output, self._models_saved_path)
 
-            # Filenames
-            discriminator_file_name = self._file_name_discriminator + "_" + str(k_fold + 1)
-            generator_file_name = self._file_name_generator + "_" + str(k_fold + 1)
+            # FIX: Usar k_fold consistentemente (igual ao save_model)
+            discriminator_file_name = self._file_name_discriminator + "_" + str(k_fold)
+            generator_file_name = self._file_name_generator + "_" + str(k_fold)
 
-            # Full paths
             discriminator_file_name = os.path.join(path_directory, discriminator_file_name)
             generator_file_name = os.path.join(path_directory, generator_file_name)
 
-            # Load discriminator
-            logging.info("Loading discriminator model from: {}.json".format(discriminator_file_name))
+            # Carregar discriminador
             with open(discriminator_file_name + ".json", 'r') as json_file:
                 discriminator_model_json = json_file.read()
             self._discriminator = model_from_json(discriminator_model_json)
             self._discriminator.load_weights(discriminator_file_name + ".h5")
-            logging.info("Loaded discriminator weights from: {}.h5".format(discriminator_file_name))
 
-            # Load generator
-            logging.info("Loading generator model from: {}.json".format(generator_file_name))
+            # Carregar gerador
             with open(generator_file_name + ".json", 'r') as json_file:
                 generator_model_json = json_file.read()
             self._generator = model_from_json(generator_model_json)
             self._generator.load_weights(generator_file_name + ".h5")
-            logging.info("Loaded generator weights from: {}.h5".format(generator_file_name))
 
-        except FileNotFoundError:
-            logging.error("Model file not found. Please provide an existing and valid model.")
-            exit(-1)
+            logging.info("Models loaded successfully for fold {}".format(k_fold))
+
         except Exception as e:
             logging.error("An error occurred while loading the models: {}".format(e))
-            exit(-1)
+            raise
 
     def set_generator(self, generator):
         self._generator = generator
