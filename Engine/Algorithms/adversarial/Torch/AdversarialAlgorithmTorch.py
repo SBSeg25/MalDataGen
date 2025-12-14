@@ -78,7 +78,7 @@ class AdversarialAlgorithmTorch(nn.Module):
             Path where models will be saved.
         @latent_mean_distribution (float):
             Mean of the latent noise distribution.
-        @latent_stander_deviation (float):
+        @latent_standard_deviation (float):
             Standard deviation of the latent noise distribution.
         @smoothing_rate (float):
             Smoothing rate applied to discriminator labels.
@@ -115,7 +115,7 @@ class AdversarialAlgorithmTorch(nn.Module):
                  file_name_generator: str,
                  models_saved_path: str,
                  latent_mean_distribution: float,
-                 latent_stander_deviation: float,
+                 latent_standard_deviation: float,
                  smoothing_rate: float):
         """
         Initializes the adversarial algorithm with the specified generator, discriminator, and other configurations.
@@ -153,10 +153,10 @@ class AdversarialAlgorithmTorch(nn.Module):
         if not isinstance(latent_mean_distribution, (int, float)):
             raise TypeError("Latent mean distribution must be a number.")
 
-        if not isinstance(latent_stander_deviation, (int, float)):
+        if not isinstance(latent_standard_deviation, (int, float)):
             raise TypeError("Latent standard deviation must be a number.")
 
-        if latent_stander_deviation <= 0:
+        if latent_standard_deviation <= 0:
             raise ValueError("Latent standard deviation must be greater than 0.")
 
         if not (0.0 <= smoothing_rate <= 1.0):
@@ -174,7 +174,7 @@ class AdversarialAlgorithmTorch(nn.Module):
 
         self._smoothing_rate = smoothing_rate
         self._latent_mean_distribution = latent_mean_distribution
-        self._latent_stander_deviation = latent_stander_deviation
+        self._latent_standard_deviation = latent_standard_deviation
         self._file_name_discriminator = file_name_discriminator
         self._file_name_generator = file_name_generator
         self._models_saved_path = models_saved_path
@@ -466,7 +466,7 @@ class AdversarialAlgorithmTorch(nn.Module):
 
                 # Sample random noise vectors
                 latent_space = torch.randn(batch_size, self._latent_dimension, device=self.device)
-                latent_space = latent_space * self._latent_stander_deviation + self._latent_mean_distribution
+                latent_space = latent_space * self._latent_standard_deviation + self._latent_mean_distribution
 
                 # Generate synthetic features
                 synthetic_feature = self._generator([latent_space, real_samples_label])
@@ -533,7 +533,7 @@ class AdversarialAlgorithmTorch(nn.Module):
 
         # Sample random noise vectors (latent space) for the generator input
         latent_space = torch.randn(batch_size, self._latent_dimension, device=self.device)
-        latent_space = latent_space * self._latent_stander_deviation + self._latent_mean_distribution
+        latent_space = latent_space * self._latent_standard_deviation + self._latent_mean_distribution
 
         # Generate synthetic features
         with torch.no_grad():
@@ -576,7 +576,7 @@ class AdversarialAlgorithmTorch(nn.Module):
 
         # Generate new synthetic samples
         latent_space = torch.randn(batch_size, self._latent_dimension, device=self.device)
-        latent_space = latent_space * self._latent_stander_deviation + self._latent_mean_distribution
+        latent_space = latent_space * self._latent_standard_deviation + self._latent_mean_distribution
 
         synthetic_feature = self._generator([latent_space, real_samples_label])
 
@@ -623,7 +623,7 @@ class AdversarialAlgorithmTorch(nn.Module):
                 # Generate random noise vectors
                 latent_noise = torch.normal(
                     mean=self._latent_mean_distribution,
-                    std=self._latent_stander_deviation,
+                    std=self._latent_standard_deviation,
                     size=(number_instances, self._latent_dimension)
                 ).to(self.device)
 

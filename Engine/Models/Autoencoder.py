@@ -126,7 +126,7 @@ class Autoencoder:
                  initializer_mean: float = DEFAULT_AUTOENCODER_INITIALIZER_MEAN,
                  initializer_deviation: float = DEFAULT_AUTOENCODER_INITIALIZER_DEVIATION,
                  latent_mean_distribution: float = DEFAULT_AUTOENCODER_LATENT_MEAN_DISTRIBUTION,
-                 latent_stander_deviation: float = DEFAULT_AUTOENCODER_STANDER_DEVIATION,
+                 latent_standard_deviation: float = DEFAULT_AUTOENCODER_STANDER_DEVIATION,
                  file_name_encoder: str = DEFAULT_AUTOENCODER_FILE_NAME_ENCODER,
                  file_name_decoder: str = DEFAULT_AUTOENCODER_FILE_NAME_DECODER,
                  path_output_models: str = DEFAULT_AUTOENCODER_PATH_OUTPUT_MODELS,
@@ -198,7 +198,7 @@ class Autoencoder:
         self._autoencoder_initializer_mean: float = initializer_mean
         self._autoencoder_initializer_deviation: float = initializer_deviation
         self._autoencoder_latent_mean_distribution: float = latent_mean_distribution
-        self._autoencoder_latent_stander_deviation: float = latent_stander_deviation
+        self._autoencoder_latent_standard_deviation: float = latent_stander_deviation
         self._autoencoder_file_name_encoder: str = file_name_encoder
         self._autoencoder_file_name_decoder: str = file_name_decoder
         self._autoencoder_path_output_models: str = path_output_models
@@ -290,8 +290,8 @@ class Autoencoder:
                 self._autoencoder_algorithm.models_saved_path = self._autoencoder_path_output_models
             if hasattr(self._autoencoder_algorithm, 'latent_mean_distribution'):
                 self._autoencoder_algorithm.latent_mean_distribution = self._autoencoder_latent_mean_distribution
-            if hasattr(self._autoencoder_algorithm, 'latent_stander_deviation'):
-                self._autoencoder_algorithm.latent_stander_deviation = self._autoencoder_latent_stander_deviation
+            if hasattr(self._autoencoder_algorithm, 'latent_standard_deviation'):
+                self._autoencoder_algorithm.latent_standard_deviation = self._autoencoder_latent_stander_deviation
             if hasattr(self._autoencoder_algorithm, 'latent_dimension'):
                 self._autoencoder_algorithm.latent_dimension = self._autoencoder_latent_dimension
 
@@ -574,14 +574,14 @@ class Autoencoder:
 
     # Getter and setter for autoencoder_latent_stander_deviation
     @property
-    def autoencoder_latent_stander_deviation(self) -> float:
+    def autoencoder_latent_standard_deviation(self) -> float:
         """Get the latent space standard deviation."""
-        return self._autoencoder_latent_stander_deviation
+        return self._autoencoder_latent_standard_deviation
 
-    @autoencoder_latent_stander_deviation.setter
-    def autoencoder_latent_stander_deviation(self, value: float) -> None:
+    @autoencoder_latent_standard_deviation.setter
+    def autoencoder_latent_standard_deviation(self, value: float) -> None:
         """Set the latent space standard deviation."""
-        self._autoencoder_latent_stander_deviation = value
+        self._autoencoder_latent_standard_deviation = value
 
     # Getter and setter for autoencoder_file_name_encoder
     @property

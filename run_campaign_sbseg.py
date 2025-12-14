@@ -154,7 +154,7 @@ campaigns_available['adversarial'] = {
     'adversarial_initializer_mean': [0],
     'adversarial_latent_dimension': [32],
     'adversarial_latent_mean_distribution': [0.5],
-    'adversarial_latent_stander_deviation': [0.125],
+    'adversarial_latent_standard_deviation': [0.125],
     'adversarial_training_algorithm': ['Adam'],
     'adversarial_activation_function': ['leakyrelu'],
     'adversarial_loss_generator': ['binary_crossentropy'],
@@ -178,7 +178,7 @@ campaigns_available['adversarial_demo'] = {
     'adversarial_initializer_mean': [0],
     'adversarial_latent_dimension': [32],
     'adversarial_latent_mean_distribution': [0.5],
-    'adversarial_latent_stander_deviation': [0.125],
+    'adversarial_latent_standard_deviation': [0.125],
     'adversarial_training_algorithm': ['Adam'],
     'adversarial_activation_function': ['leakyrelu'],
     'adversarial_loss_generator': ['binary_crossentropy'],
@@ -208,7 +208,7 @@ campaigns_available['autoencoder'] = {
     'autoencoder_initializer_mean': [0.0],
     'autoencoder_initializer_deviation': [0.125],
     'autoencoder_latent_mean_distribution': [0.5],
-    'autoencoder_latent_stander_deviation': [0.500],
+    'autoencoder_latent_standard_deviation': [0.500],
 }
 # === Variational autoencoder Campaign ===
 campaigns_available['variational_demo'] = {
@@ -305,7 +305,7 @@ campaigns_available['wasserstein'] = {
     'wasserstein_discriminator_steps': [3],
     'wasserstein_smoothing_rate': [0.10],
     'wasserstein_latent_mean_distribution': [0.5],
-    'wasserstein_latent_stander_deviation': [0.125],
+    'wasserstein_latent_standard_deviation': [0.125],
 }
 
 
@@ -337,7 +337,7 @@ campaigns_available['wasserstein_gp'] = {
     'wasserstein_gp_discriminator_steps': [3],
     'wasserstein_gp_smoothing_rate': [0.10],
     'wasserstein_gp_latent_mean_distribution': [0.5],
-    'wasserstein_gp_latent_stander_deviation': [0.125],
+    'wasserstein_gp_latent_standard_deviation': [0.125],
     'wasserstein_gp_gradient_penalty': [10.0],
 }
 

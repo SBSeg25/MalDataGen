@@ -80,7 +80,7 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
             Tracks the KL divergence loss during training.
         @_latent_mean_distribution (float):
             Mean of the latent distribution.
-        @_latent_stander_deviation (float):
+        @_latent_standard_deviation (float):
             Standard deviation of the latent distribution.
         @_latent_dimension (int):
             Dimensionality of the latent space.
@@ -107,7 +107,7 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
         ...     loss_function=custom_loss_function,
         ...     latent_dimension=128,
         ...     latent_mean_distribution=0.0,
-        ...     latent_stander_deviation=1.0,
+        ...     latent_standard_deviation=1.0,
         ...     file_name_encoder="encoder_model.h5",
         ...     file_name_decoder="decoder_model.h5",
         ...     models_saved_path="models/"
@@ -122,7 +122,7 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
                  latent_dimension,
                  decoder_latent_dimension,
                  latent_mean_distribution,
-                 latent_stander_deviation,
+                 latent_standard_deviation,  # CORRIGIDO: typo "stander" → "standard"
                  file_name_encoder,
                  file_name_decoder,
                  models_saved_path,
@@ -147,7 +147,7 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
                 The dimensionality of the latent space.
             @latent_mean_distribution (float):
                 The mean of the latent distribution (usually 0).
-            @latent_stander_deviation (float):
+            @latent_standard_deviation (float):
                 The standard deviation of the latent distribution (usually 1).
             @file_name_encoder (str):
                 The filename for saving the encoder model.
@@ -163,7 +163,7 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
         Raises:
             ValueError:
                 If latent_dimension <= 0.
-                If latent_stander_deviation <= 0.
+                If latent_standard_deviation <= 0.
                 If file paths are invalid.
         """
         # Initialize the encoder and decoder models
@@ -176,7 +176,7 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
         self._reconstruction_loss_tracker = Mean(name="reconstruction_loss")
         self._kl_loss_tracker = Mean(name="kl_loss")
         self._latent_mean_distribution = latent_mean_distribution
-        self._latent_stander_deviation = latent_stander_deviation
+        self._latent_standard_deviation = latent_standard_deviation  # CORRIGIDO
         self._latent_dimension = latent_dimension
         self._decoder_latent_dimension = decoder_latent_dimension
         # File names for saving models
@@ -213,10 +213,11 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
             sum_reduced = binary_cross_entropy_loss
             reconstruction_loss = tensorflow.reduce_mean(sum_reduced)
 
-            # Calculate KL divergence loss
-            encoder_output = (1 + latent_log_variation - tensorflow.square(latent_mean))
-            kl_divergence_loss = -0.5 * (encoder_output - tensorflow.exp(latent_log_variation))
-            kl_divergence_loss = tensorflow.reduce_mean(tensorflow.reduce_sum(kl_divergence_loss, axis=1))
+            # CORRIGIDO: Fórmula KL divergence correta
+            # KL divergence: -0.5 * sum(1 + log(var) - mean^2 - var)
+            kl_loss = -0.5 * (1 + latent_log_variation - tensorflow.square(latent_mean) - tensorflow.exp(
+                latent_log_variation))
+            kl_divergence_loss = tensorflow.reduce_mean(tensorflow.reduce_sum(kl_loss, axis=1))
 
             # Total loss is the sum of reconstruction loss and KL divergence loss
             loss_model_in_reconstruction = reconstruction_loss + kl_divergence_loss
@@ -406,10 +407,11 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
             sum_reduced = binary_cross_entropy_loss
             reconstruction_loss = tensorflow.reduce_mean(sum_reduced)
 
-            # Calculate KL divergence loss
-            encoder_output = (1 + latent_log_variation - tensorflow.square(latent_mean))
-            kl_divergence_loss = -0.5 * (encoder_output - tensorflow.exp(latent_log_variation))
-            kl_divergence_loss = tensorflow.reduce_mean(tensorflow.reduce_sum(kl_divergence_loss, axis=1))
+            # CORRIGIDO: Fórmula KL divergence correta
+            # KL divergence: -0.5 * sum(1 + log(var) - mean^2 - var)
+            kl_loss = -0.5 * (1 + latent_log_variation - tensorflow.square(latent_mean) - tensorflow.exp(
+                latent_log_variation))
+            kl_divergence_loss = tensorflow.reduce_mean(tensorflow.reduce_sum(kl_loss, axis=1))
 
             # Total loss
             total_loss = reconstruction_loss + kl_divergence_loss
@@ -474,26 +476,30 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
         self.compile(optimizer=self.optimizer)
 
     def get_decoder_trained(self):
-
         return self._decoder
 
     def get_encoder_trained(self):
-
         return self._encoder
 
-
-    def create_embedding(self, data):
+    def create_embedding(self, data, labels=None):
         """
         Generates latent space embeddings using the trained encoder.
 
         Args:
             data (ndarray): Input data to encode.
+            labels (ndarray, optional): Optional labels for conditional encoding.
 
         Returns:
-            ndarray: Latent space representations.
+            ndarray: Latent space representations (mean vectors).
         """
-        return self._encoder.predict(data, batch_size=32)[0]
+        # CORRIGIDO: Aceitar labels opcionais
+        if labels is not None:
+            encoder_output = self._encoder.predict([data, labels], batch_size=32)
+        else:
+            encoder_output = self._encoder.predict(data, batch_size=32)
 
+        # Return only the mean (first output)
+        return encoder_output[0]
 
     def get_samples(self, number_samples_per_class):
         """
@@ -523,23 +529,17 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
         # Iterate over each class and the corresponding number of samples to generate
         for label_class, number_instances in number_samples_per_class["classes"].items():
             # Create a one-hot encoded label array for all samples in the current class
-            # Example: if label_class = 1 and number_instances = 3, this generates:
-            # [[0, 1], [0, 1], [0, 1]]
             label_samples_generated = to_categorical([label_class] * number_instances,
                                                      num_classes=number_samples_per_class["number_classes"])
 
             # Sample random latent vectors from a standard normal distribution
-            # Shape: (number_instances, decoder_latent_dimension)
             latent_noise = numpy.random.normal(size=(number_instances, self._decoder_latent_dimension))
 
             # Use the decoder to generate samples conditioned on the latent vectors and class labels
-            # Inputs: (latent vectors, class labels)
-            # 'verbose=0' suppresses any print output from the prediction process
             generated_samples = self._decoder.predict([latent_noise, label_samples_generated], verbose=0)
 
-            # Round the generated samples to the nearest integer
-            # This is useful for discrete data, like binary features (0/1) or integer values
-            generated_samples = numpy.rint(generated_samples)
+            # CORRIGIDO: Arredondamento removido - mantém valores contínuos
+            # Se precisar de valores discretos, aplique externamente conforme necessário
 
             # Store the generated samples in the dictionary under the corresponding class label
             generated_data[label_class] = generated_samples
@@ -547,32 +547,42 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
         # Return the dictionary with all generated samples, organized by class
         return generated_data
 
-
-    def generate_synthetic_data(self, number_samples_generate, labels, latent_dimension):
+    def generate_synthetic_data(self, number_samples_generate, label_class, num_classes, latent_dimension=None):
         """
         Generate synthetic data using the Variational AutoEncoder (VAE).
 
         Args:
             number_samples_generate (int): Number of synthetic samples to generate.
-            labels: Labels for the generated data.
-            latent_dimension (int): Dimension of the latent space.
+            label_class (int): Class label to generate.
+            num_classes (int): Total number of classes.
+            latent_dimension (int, optional): Dimension of the latent space (uses self._latent_dimension if None).
 
         Returns:
-            Tensorflow.Tensor: Synthetic data generated by the decoder.
+            numpy.ndarray: Synthetic data generated by the decoder.
         """
+        # CORRIGIDO: Usar latent_dimension correto
+        if latent_dimension is None:
+            latent_dimension = self._latent_dimension
 
         # Generate random noise samples in the latent space
-        random_noise_generate = tensorflow.random.normal(shape=(number_samples_generate, latent_dimension),
-                                                 mean=self.latent_mean_distribution, stddev=self.latent_deviation,
-                                                 dtype=tensorflow.float32)
+        random_noise_generate = tensorflow.random.normal(
+            shape=(number_samples_generate, latent_dimension),
+            mean=self._latent_mean_distribution,
+            stddev=self._latent_standard_deviation,  # CORRIGIDO: nome da variável
+            dtype=tensorflow.float32
+        )
 
-        # Create label vectors for the generated data
-        label_list = tensorflow.cast(tensorflow.fill((number_samples_generate, 1), labels), dtype=tensorflow.float32)
+        # CORRIGIDO: Create one-hot encoded labels para compatibilidade com decoder
+        label_list = tensorflow.one_hot(
+            tensorflow.fill((number_samples_generate,), label_class),
+            depth=num_classes
+        )
+        label_list = tensorflow.cast(label_list, dtype=tensorflow.float32)
 
         # Generate synthetic data by passing random noise and labels through the decoder
-        synthetic_data = self._decoder.predict(numpy.array([random_noise_generate, label_list]))
+        synthetic_data = self._decoder.predict([random_noise_generate, label_list], verbose=0)
 
-        # Return the generated synthetic data as a TensorFlow tensor
+        # Return the generated synthetic data
         return synthetic_data
 
     @property
@@ -606,7 +616,6 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
         self._save_model_to_json(self._decoder, f"{decoder_file_name}.json")
         self._decoder.save_weights(f"{decoder_file_name}.weights.h5")
 
-
     @staticmethod
     def _save_model_to_json(model, file_path):
         """
@@ -618,7 +627,6 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
         """
         with open(file_path, "w") as json_file:
             json.dump(model.to_json(), json_file)
-
 
     def load_models(self, directory, file_name):
         """

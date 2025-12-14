@@ -408,7 +408,7 @@ adversarial_algorithm = AdversarialAlgorithm(
     file_name_generator="generator_model",
     models_saved_path="models_saved/",
     latent_mean_distribution=0.0,
-    latent_stander_deviation=1.0,
+    latent_standard_deviation=1.0,
     smoothing_rate=0.15
 )
 
@@ -500,7 +500,7 @@ wasserstein_algorithm = WassersteinAlgorithm(
     file_name_generator="generator_model",
     models_saved_path="models_saved/",
     latent_mean_distribution=0.0,
-    latent_stander_deviation=1.0,
+    latent_standard_deviation=1.0,
     smoothing_rate=0.15,
     gradient_penalty_weight=10.0,
     discriminator_steps=3
@@ -591,7 +591,7 @@ autoencoder_algorithm = AutoencoderAlgorithm(
     file_name_decoder="decoder_model",
     models_saved_path="models_saved/",
     latent_mean_distribution=0.5,
-    latent_stander_deviation=0.5,
+    latent_standard_deviation=0.5,
     latent_dimension=64
 )
 
@@ -673,7 +673,7 @@ variational_algorithm = VariationalAlgorithm(
     latent_dimension=64,
     decoder_latent_dimension=128,
     latent_mean_distribution=0.0,
-    latent_stander_deviation=0.5,
+    latent_standard_deviation=0.5,
     file_name_encoder="encoder_model",
     file_name_decoder="decoder_model",
     models_saved_path="models_saved/"

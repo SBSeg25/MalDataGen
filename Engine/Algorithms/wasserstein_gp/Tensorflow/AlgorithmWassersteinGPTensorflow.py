@@ -139,7 +139,7 @@ class WassersteinGPAlgorithmTensorflow(Model):
                  file_name_generator,
                  models_saved_path,
                  latent_mean_distribution,
-                 latent_stander_deviation,
+                 latent_standard_deviation,
                  smoothing_rate,
                  gradient_penalty_weight,
                  discriminator_steps,
@@ -159,7 +159,7 @@ class WassersteinGPAlgorithmTensorflow(Model):
         self._gradient_penalty_weight = gradient_penalty_weight
         self._smooth_rate = smoothing_rate
         self._latent_mean_distribution = latent_mean_distribution
-        self._latent_stander_deviation = latent_stander_deviation
+        self._latent_standard_deviation = latent_standard_deviation
         self._file_name_discriminator = file_name_discriminator
         self._file_name_generator = file_name_generator
         self._models_saved_path = models_saved_path
@@ -432,7 +432,7 @@ class WassersteinGPAlgorithmTensorflow(Model):
             latent_space = tensorflow.random.normal(
                 (batch_size, self._latent_dimension),
                 mean=self._latent_mean_distribution,
-                stddev=self._latent_stander_deviation
+                stddev=self._latent_standard_deviation
             )
 
             synthetic_feature = self._generator([latent_space, real_samples_label], training=False)
@@ -489,7 +489,7 @@ class WassersteinGPAlgorithmTensorflow(Model):
             # Generate random noise vectors for the latent space.
             latent_space = tensorflow.random.normal((batch_size, self._latent_dimension),
                                                     mean=self._latent_mean_distribution,
-                                                    stddev=self._latent_stander_deviation)
+                                                    stddev=self._latent_standard_deviation)
 
             with tensorflow.GradientTape() as discriminator_gradient:
                 # Generate synthetic samples from the generator using noise and labels.
@@ -522,7 +522,7 @@ class WassersteinGPAlgorithmTensorflow(Model):
         # Generate fresh random noise vectors for the latent space.
         latent_space = tensorflow.random.normal((batch_size, self._latent_dimension),
                                                 mean=self._latent_mean_distribution,
-                                                stddev=self._latent_stander_deviation)
+                                                stddev=self._latent_standard_deviation)
 
         with tensorflow.GradientTape() as generator_gradient:
             # Generate synthetic samples from the generator.
@@ -573,7 +573,7 @@ class WassersteinGPAlgorithmTensorflow(Model):
 
             # Sample random noise vectors from a normal distribution.
             latent_noise = numpy.random.normal(loc=self._latent_mean_distribution,
-                                               scale=self._latent_stander_deviation,
+                                               scale=self._latent_standard_deviation,
                                                size=(number_instances, self._latent_dimension))
 
             # Generate synthetic samples using the generator.
@@ -783,16 +783,16 @@ class WassersteinGPAlgorithmTensorflow(Model):
         self._latent_mean_distribution = value
 
     @property
-    def latent_stander_deviation(self) -> float:
+    def latent_standard_deviation(self) -> float:
         """Get the standard deviation of the latent space distribution.
 
         Returns:
             The standard deviation used for latent space sampling.
         """
-        return self._latent_stander_deviation
+        return self._latent_standard_deviation
 
-    @latent_stander_deviation.setter
-    def latent_stander_deviation(self, value: float) -> None:
+    @latent_standard_deviation.setter
+    def latent_standard_deviation(self, value: float) -> None:
         """Set the standard deviation of the latent space distribution.
 
         Args:
@@ -803,7 +803,7 @@ class WassersteinGPAlgorithmTensorflow(Model):
         """
         if value <= 0:
             raise ValueError("Standard deviation must be positive")
-        self._latent_stander_deviation = value
+        self._latent_standard_deviation = value
 
     @property
     def file_name_discriminator(self) -> str:

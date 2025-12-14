@@ -92,7 +92,7 @@ class GenerativeModels:
             args.adversarial_loss_discriminator,
             args.adversarial_smoothing_rate,
             args.adversarial_latent_mean_distribution,
-            args.adversarial_latent_stander_deviation,
+            args.adversarial_latent_standard_deviation,
             args.adversarial_file_name_discriminator,
             args.adversarial_file_name_generator,
             args.adversarial_path_output_models,
@@ -118,7 +118,7 @@ class GenerativeModels:
             args.autoencoder_initializer_mean,
             args.autoencoder_initializer_deviation,
             args.autoencoder_latent_mean_distribution,
-            args.autoencoder_latent_stander_deviation,
+            args.autoencoder_latent_standard_deviation,
             args.autoencoder_file_name_encoder,
             args.autoencoder_file_name_decoder,
             args.autoencoder_path_output_models
@@ -235,7 +235,7 @@ class GenerativeModels:
             args.wasserstein_discriminator_steps,
             args.wasserstein_smoothing_rate,
             args.wasserstein_latent_mean_distribution,
-            args.wasserstein_latent_stander_deviation,
+            args.wasserstein_latent_standard_deviation,
             args.wasserstein_file_name_discriminator,
             args.wasserstein_file_name_generator,
             args.wasserstein_path_output_models

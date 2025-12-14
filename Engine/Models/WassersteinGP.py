@@ -343,7 +343,7 @@ class WassersteinGP:
                 self._wasserstein_gp_algorithm.models_saved_path = self._wasserstein_gp_path_output_models
             if hasattr(self._wasserstein_gp_algorithm, 'latent_mean_distribution'):
                 self._wasserstein_gp_algorithm.latent_mean_distribution = self._wasserstein_gp_latent_mean_distribution
-            if hasattr(self._wasserstein_gp_algorithm, 'latent_stander_deviation'):
+            if hasattr(self._wasserstein_gp_algorithm, 'latent_standard_deviation'):
                 self._wasserstein_gp_algorithm.latent_stander_deviation = self._wasserstein_gp_latent_stander_deviation
             if hasattr(self._wasserstein_gp_algorithm, 'smoothing_rate'):
                 self._wasserstein_gp_algorithm.smoothing_rate = self._wasserstein_gp_smoothing_rate

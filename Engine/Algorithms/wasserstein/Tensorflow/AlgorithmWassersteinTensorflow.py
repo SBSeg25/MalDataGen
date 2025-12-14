@@ -616,16 +616,16 @@ class WassersteinAlgorithmTensorflow(Model):
         self._latent_mean_distribution = value
 
     @property
-    def latent_stander_deviation(self) -> float:
+    def latent_standard_deviation(self) -> float:
         """Get the standard deviation of the latent space distribution.
 
         Returns:
             The standard deviation used for latent space sampling.
         """
-        return self._latent_stander_deviation
+        return self._latent_standard_deviation
 
-    @latent_stander_deviation.setter
-    def latent_stander_deviation(self, value: float) -> None:
+    @latent_standard_deviation.setter
+    def latent_standard_deviation(self, value: float) -> None:
         """Set the standard deviation of the latent space distribution.
 
         Args:
@@ -636,7 +636,7 @@ class WassersteinAlgorithmTensorflow(Model):
         """
         if value <= 0:
             raise ValueError("Standard deviation must be positive")
-        self._latent_stander_deviation = value
+        self._latent_standard_deviation = value
 
     @property
     def file_name_discriminator(self) -> str:

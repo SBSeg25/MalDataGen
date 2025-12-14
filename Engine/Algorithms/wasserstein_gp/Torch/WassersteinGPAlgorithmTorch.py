@@ -942,7 +942,7 @@ class WassersteinGPAlgorithmTorch(nn.Module):
         self._latent_mean_distribution = value
 
     @property
-    def latent_stander_deviation(self) -> float:
+    def latent_standard_deviation(self) -> float:
         """Get the standard deviation of the latent space distribution.
 
         Returns:
@@ -950,7 +950,7 @@ class WassersteinGPAlgorithmTorch(nn.Module):
         """
         return self._latent_stander_deviation
 
-    @latent_stander_deviation.setter
+    @latent_standard_deviation.setter
     def latent_stander_deviation(self, value: float) -> None:
         """Set the standard deviation of the latent space distribution.
 

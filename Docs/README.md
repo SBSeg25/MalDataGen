@@ -162,7 +162,7 @@ variational_algorithm_diffusion = VariationalAlgorithmDiffusion(
     latent_dimension=128,
     decoder_latent_dimension=128,
     latent_mean_distribution=0.0,
-    latent_stander_deviation=0.5,
+    latent_standard_deviation=0.5,
     file_name_encoder="encoder_model",
     file_name_decoder="decoder_model",
     models_saved_path="models_saved/"
@@ -216,7 +216,7 @@ Samples = variational_algorithm_diffusion.get_samples(number_samples_per_class)
         --adversarial_dense_layer_sizes_g                   Sizes of dense layers in the generator.
         --adversarial_dense_layer_sizes_d                   Sizes of dense layers in the discriminator.
         --adversarial_latent_mean_distribution              Mean of the random noise input distribution.
-        --adversarial_latent_stander_deviation              Standard deviation of the latent space distribution.
+        --adversarial_latent_standard_deviation              Standard deviation of the latent space distribution.
         --adversarial_loss_generator                        Loss function for the generator.
         --adversarial_loss_discriminator                    Loss function for the discriminator.
         --adversarial_smoothing_rate                        Label smoothing rate for the adversarial training.
@@ -267,7 +267,7 @@ adversarial_algorithm = AdversarialAlgorithm(generator_model=adversarial_model.g
                                              file_name_generator="generator_model",
                                              models_saved_path="models_saved/",
                                              latent_mean_distribution=0.0,
-                                             latent_stander_deviation=1.0,
+                                             latent_standard_deviation=1.0,
                                              smoothing_rate=0.15)
 
 # Print the model summaries for the generator and discriminator
@@ -319,7 +319,7 @@ Samples = adversarial_algorithm.get_samples(number_samples_per_class)
         --wasserstein_discriminator_steps                    Number of steps to update the discriminator per generator update.
         --wasserstein_smoothing_rate                         Smoothing rate for the Wasserstein GAN.
         --wasserstein_latent_mean_distribution               Mean of the random latent space distribution.
-        --wasserstein_latent_stander_deviation               Standard deviation of the random latent space distribution.
+        --wasserstein_latent_standard_deviation               Standard deviation of the random latent space distribution.
         --wasserstein_gradient_penalty                       Gradient penalty value for the Wasserstein GAN.
         --wasserstein_file_name_discriminator                File name to save the discriminator model.
         --wasserstein_file_name_generator                    File name to save the generator model.
@@ -370,7 +370,7 @@ wasserstein_algorithm = WassersteinAlgorithm(
     file_name_generator="generator_model",
     models_saved_path="models_saved/",
     latent_mean_distribution=0.0,
-    latent_stander_deviation=1.0,
+    latent_standard_deviation=1.0,
     smoothing_rate=0.15,
     gradient_penalty_weight=10.0,
     discriminator_steps=3
@@ -431,7 +431,7 @@ Samples = wasserstein_algorithm.get_samples(number_samples_per_class)
         --autoencoder_initializer_mean                      Mean value of the Gaussian initializer distribution.
         --autoencoder_initializer_deviation                 Standard deviation of the Gaussian initializer distribution.
         --autoencoder_latent_mean_distribution              Mean of the random noise input distribution.
-        --autoencoder_latent_stander_deviation              Standard deviation of the random noise input.
+        --autoencoder_latent_standard_deviation              Standard deviation of the random noise input.
         --autoencoder_file_name_encoder                     File name to save the encoder model.
         --autoencoder_file_name_decoder                     File name to save the decoder model.
         --autoencoder_path_output_models                    Path to save the models.

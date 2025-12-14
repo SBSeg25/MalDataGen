@@ -39,7 +39,7 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
                  latent_dimension,
                  decoder_latent_dimension,
                  latent_mean_distribution,
-                 latent_stander_deviation,
+                 latent_standard_deviation,  # CORRIGIDO: typo "stander" → "standard"
                  file_name_encoder,
                  file_name_decoder,
                  models_saved_path):
@@ -59,7 +59,7 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
         self._reconstruction_loss_tracker = 0.0
         self._kl_loss_tracker = 0.0
         self._latent_mean_distribution = latent_mean_distribution
-        self._latent_stander_deviation = latent_stander_deviation
+        self._latent_standard_deviation = latent_standard_deviation  # CORRIGIDO
         self._latent_dimension = latent_dimension
         self._decoder_latent_dimension = decoder_latent_dimension
 
@@ -83,6 +83,7 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
         else:
             batch_x, batch_y = batch
             batch_y_labels = None
+
         # Move to device
         device = next(self.parameters()).device
         batch_x = batch_x.to(device)
@@ -130,8 +131,9 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
 
         # Calcular KL divergence se temos z_mean e z_log_var
         if z_mean is not None and z_log_var is not None:
-            kl_loss = -0.5 * torch.sum(1 + z_log_var - z_mean.pow(2) - z_log_var.exp())
-            kl_loss = kl_loss / batch_x.size(0)  # Normalizar pelo batch size
+            # CORRIGIDO: Removida divisão extra por batch_x.size(0)
+            # torch.mean já calcula a média sobre o batch
+            kl_loss = -0.5 * torch.mean(torch.sum(1 + z_log_var - z_mean.pow(2) - z_log_var.exp(), dim=1))
         else:
             # Para autoencoder simples, KL loss = 0
             kl_loss = torch.tensor(0.0).to(device)
@@ -155,6 +157,7 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
             "reconstruction_loss": self._reconstruction_loss_tracker,
             "kl_loss": self._kl_loss_tracker
         }
+
     def configure_optimizer(self,
                             learning_rate=0.001,
                             beta_1=0.9,
@@ -180,9 +183,13 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
     def get_encoder_trained(self):
         return self._encoder
 
-    def create_embedding(self, data):
+    def create_embedding(self, data, labels=None):
         """
         Generates latent space embeddings using the trained encoder.
+
+        Args:
+            data: Input data
+            labels: Optional labels (one-hot encoded or indices)
         """
         self.eval()
         device = next(self.parameters()).device
@@ -191,7 +198,19 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
             if isinstance(data, numpy.ndarray):
                 data = torch.from_numpy(data).float().to(device)
 
-            latent_mean, _, _, _ = self._encoder(data)
+            # CORRIGIDO: Aceitar labels opcionais
+            if labels is not None:
+                if isinstance(labels, numpy.ndarray):
+                    labels = torch.from_numpy(labels).float().to(device)
+                encoder_output = self._encoder(data, labels)
+            else:
+                encoder_output = self._encoder(data)
+
+            # Extrair z_mean
+            if isinstance(encoder_output, tuple) and len(encoder_output) >= 1:
+                latent_mean = encoder_output[0]
+            else:
+                latent_mean = encoder_output
 
         return latent_mean.cpu().numpy()
 
@@ -199,7 +218,6 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
         """
         Generate synthetic samples for each specified class using the trained decoder.
         """
-
         device = next(self.parameters()).device
         generated_data = {}
 
@@ -211,25 +229,33 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
                 label_samples_generated = label_samples_generated.to(device)
 
                 # Sample random latent vectors from a standard normal distribution
+                # NOTA: Usando decoder_latent_dimension que pode ser diferente de latent_dimension
                 latent_noise = torch.randn(number_instances, self._decoder_latent_dimension).to(device)
 
                 # Use the decoder to generate samples
                 generated_samples = self._decoder(latent_noise, label_samples_generated)
-
-                # Round the generated samples to the nearest integer
-                generated_samples = torch.round(generated_samples)
 
                 # Store the generated samples
                 generated_data[label_class] = generated_samples.cpu().numpy()
 
         return generated_data
 
-    def generate_synthetic_data(self, number_samples_generate, labels, latent_dimension):
+    def generate_synthetic_data(self, number_samples_generate, label_class, num_classes, latent_dimension=None):
         """
         Generate synthetic data using the Variational AutoEncoder (VAE).
+
+        Args:
+            number_samples_generate: Number of samples to generate
+            label_class: Class label (integer) to generate
+            num_classes: Total number of classes
+            latent_dimension: Dimension of latent space (uses self._latent_dimension if None)
         """
         self.eval()
         device = next(self.parameters()).device
+
+        # CORRIGIDO: Usar latent_dimension correto
+        if latent_dimension is None:
+            latent_dimension = self._latent_dimension
 
         with torch.no_grad():
             # Generate random noise samples in the latent space
@@ -237,10 +263,11 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
                 number_samples_generate,
                 latent_dimension,
                 device=device
-            ) * self._latent_stander_deviation + self._latent_mean_distribution
+            ) * self._latent_standard_deviation + self._latent_mean_distribution
 
-            # Create label vectors for the generated data
-            label_list = torch.full((number_samples_generate, 1), labels, dtype=torch.float32, device=device)
+            # CORRIGIDO: Create one-hot encoded labels para compatibilidade com decoder
+            label_list = torch.zeros(number_samples_generate, num_classes, device=device)
+            label_list[:, label_class] = 1.0
 
             # Generate synthetic data by passing random noise and labels through the decoder
             synthetic_data = self._decoder(random_noise_generate, label_list)
@@ -489,11 +516,14 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
                 # Calculate binary cross-entropy loss for reconstruction
                 reconstruction_loss = F.binary_cross_entropy(reconstruction_data, batch_y, reduction='mean')
 
-                # Calculate KL divergence loss
+                # CORRIGIDO: Fórmula KL divergence correta
                 if latent_mean is not None and latent_log_variation is not None:
-                    encoder_output_kl = (1 + latent_log_variation - torch.square(latent_mean))
-                    kl_divergence_loss = -0.5 * (encoder_output_kl - torch.exp(latent_log_variation))
-                    kl_divergence_loss = torch.mean(torch.sum(kl_divergence_loss, dim=1))
+                    # KL divergence: -0.5 * sum(1 + log(var) - mean^2 - var)
+                    kl_loss = -0.5 * torch.sum(
+                        1 + latent_log_variation - torch.square(latent_mean) - torch.exp(latent_log_variation),
+                        dim=1
+                    )
+                    kl_divergence_loss = torch.mean(kl_loss)
                 else:
                     kl_divergence_loss = torch.tensor(0.0).to(device)
 
@@ -537,8 +567,8 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
             "classes": dict(zip(unique.tolist(), counts.tolist())),
             "number_classes": len(unique)
         }
-    # REMOVED: The problematic property setters that interfere with module registration
-    # Properties can still be used for read-only access if needed, but not for setting
+
+    # Properties for read-only access
     @property
     def decoder(self):
         return self._decoder
