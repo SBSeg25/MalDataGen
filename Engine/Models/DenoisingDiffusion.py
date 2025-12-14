@@ -26,7 +26,7 @@ except ImportError as error:
 
 # Default values
 DEFAULT_DIFFUSION_UNET_LAST_LAYER_ACTIVATION = 'linear'
-DEFAULT_DIFFUSION_LATENT_DIMENSION = 64
+DEFAULT_DIFFUSION_LATENT_DIMENSION = 32
 DEFAULT_DIFFUSION_UNET_NUMBER_EMBEDDING_CHANNELS = 1
 DEFAULT_DIFFUSION_UNET_CHANNELS_PER_LEVEL = [1, 2, 4]
 DEFAULT_DIFFUSION_UNET_BATCH_SIZE = 128
@@ -35,7 +35,7 @@ DEFAULT_DIFFUSION_UNET_NUMBER_RESIDUAL_BLOCKS = 2
 DEFAULT_DIFFUSION_UNET_GROUP_NORMALIZATION = 1
 DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION = 'swish'
 DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION_ALPHA = 0.05
-DEFAULT_DIFFUSION_UNET_NUMBER_EPOCHS = 10
+DEFAULT_DIFFUSION_UNET_NUMBER_EPOCHS = 1000
 DEFAULT_DIFFUSION_GAUSSIAN_BETA_START = 1e-4
 DEFAULT_DIFFUSION_GAUSSIAN_BETA_END = 0.02
 DEFAULT_DIFFUSION_GAUSSIAN_TIME_STEPS = 1000
@@ -80,7 +80,7 @@ class DenoisingDiffusion:
             unet_group_normalization: int = DEFAULT_DIFFUSION_UNET_GROUP_NORMALIZATION,
             unet_intermediary_activation: str = DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION,
             unet_intermediary_activation_alpha: float = DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION_ALPHA,
-            unet_epochs: int = DEFAULT_DIFFUSION_UNET_NUMBER_EPOCHS,
+            number_epochs: int = DEFAULT_DIFFUSION_UNET_NUMBER_EPOCHS,
             gaussian_beta_start: float = DEFAULT_DIFFUSION_GAUSSIAN_BETA_START,
             gaussian_beta_end: float = DEFAULT_DIFFUSION_GAUSSIAN_BETA_END,
             gaussian_time_steps: int = DEFAULT_DIFFUSION_GAUSSIAN_TIME_STEPS,
@@ -108,7 +108,7 @@ class DenoisingDiffusion:
             unet_group_normalization: Group norm groups (default: 1)
             unet_intermediary_activation: Intermediary activation (default: 'swish')
             unet_intermediary_activation_alpha: Activation alpha (default: 0.05)
-            unet_epochs: Training epochs (default: 1000)
+            number_epochs: Training epochs (default: 1000)
             gaussian_beta_start: Beta start value (default: 1e-4)
             gaussian_beta_end: Beta end value (default: 0.02)
             gaussian_time_steps: Diffusion time steps (default: 1000)
@@ -165,7 +165,7 @@ class DenoisingDiffusion:
         self._denoising_diffusion_unet_group_normalization = unet_group_normalization
         self._denoising_diffusion_unet_intermediary_activation = unet_intermediary_activation
         self._denoising_diffusion_unet_intermediary_activation_alpha = unet_intermediary_activation_alpha
-        self._denoising_diffusion_unet_epochs = unet_epochs
+        self._denoising_diffusion_unet_epochs = number_epochs
 
         # Diffusion Process Parameters
         self._denoising_diffusion_gaussian_beta_start = gaussian_beta_start
@@ -457,14 +457,6 @@ class DenoisingDiffusion:
         # Initialize the diffusion model
         self._get_denoising_diffusion_tensorflow(input_shape)
 
-        # Print model summaries
-        print("\n" + "=" * 80)
-        print("DENOISING DIFFUSION MODEL ARCHITECTURE (TensorFlow)")
-        print("=" * 80)
-        self._denoising_first_unet_model.summary()
-        self._denoising_second_unet_model.summary()
-        print("=" * 80 + "\n")
-
         # Setup callbacks
         callbacks_list = [self._callback_model_monitor] if self._callback_model_monitor else []
 
@@ -543,25 +535,14 @@ class DenoisingDiffusion:
             "number_classes": num_classes
         }
 
-        # Prepare data
-        print(f"\nPreparing data for Denoising Diffusion ({self._framework})...")
-        print(f"  - Original input shape: {input_shape}")
-        print(f"  - Input data shape: {x_real_samples.shape}")
-        print(f"  - Number of classes: {num_classes}")
 
         # Flatten the input data if it has more than 2 dimensions
         # (batch_size, ...) -> (batch_size, flattened_features)
         if len(x_real_samples.shape) > 2:
             x_real_samples_flat = x_real_samples.reshape(x_real_samples.shape[0], -1)
-            print(f"  - Flattened data shape: {x_real_samples_flat.shape}")
         else:
             x_real_samples_flat = x_real_samples
-            print(f"  - Data already flat: {x_real_samples_flat.shape}")
 
-        print(f"\nStarting training...")
-        print(f"  - Epochs: {self._denoising_diffusion_unet_epochs}")
-        print(f"  - Batch size: {self._denoising_diffusion_unet_batch_size}")
-        print(f"  - Time steps: {self._denoising_diffusion_gaussian_time_steps}")
 
         # Route to appropriate training method with flattened dimension
         if self._framework == 'pytorch':
@@ -573,7 +554,6 @@ class DenoisingDiffusion:
                 flattened_dim, x_real_samples_flat, y_real_samples
             )
 
-        print(f"\n✓ Training completed successfully!")
     def train(
             self,
             input_shape: tuple,

@@ -451,15 +451,8 @@ class LatentDiffusion:
         # Initialize the diffusion model
         self._get_latent_diffusion_tensorflow(input_shape)
 
-        # Print the model summaries for the U-Net models
-        self._latent_first_unet_model.summary()
-        self._latent_second_unet_model.summary()
-
         # Initialize the variational autoencoder model for diffusion
         self._get_variational_autoencoder_tensorflow(input_shape)
-
-        self._latent_variation_model_diffusion.get_encoder().summary()
-        self._latent_variation_model_diffusion.get_decoder().summary()
 
         # Compile the variational algorithm for diffusion
         self._latent_variational_algorithm.compile(loss=self._latent_diffusion_VAE_loss_function)
