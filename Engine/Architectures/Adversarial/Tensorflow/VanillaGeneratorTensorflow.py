@@ -37,14 +37,13 @@ try:
     from tensorflow.keras.layers import Input
     from tensorflow.keras.layers import Dense
     from tensorflow.keras.models import Model
-    from tensorflow.keras.layers import Layer
+
     from tensorflow.keras.layers import Flatten
     from tensorflow.keras.layers import Dropout
+
     from tensorflow.keras.layers import Concatenate
+
     from tensorflow.keras.initializers import RandomNormal
-
-    import tensorflow as tf
-
     from Engine.Activations.Activations import Activations
 
 except ImportError as error:
@@ -52,102 +51,16 @@ except ImportError as error:
     sys.exit(-1)
 
 
-class CrossAttentionLayer(Layer):
-    """
-    Cross-Attention layer for conditioning on label information (Keras implementation).
-
-    The input features act as Query, while the label embedding provides Key and Value.
-    """
-
-    def __init__(self, embed_dim, num_heads=4, **kwargs):
-        super(CrossAttentionLayer, self).__init__(**kwargs)
-        self.embed_dim = embed_dim
-        self.num_heads = num_heads
-        self.head_dim = embed_dim // num_heads
-
-        if self.head_dim * num_heads != embed_dim:
-            raise ValueError("embed_dim must be divisible by num_heads")
-
-    def build(self, input_shape):
-        # Query projection (from input features)
-        self.query_dense = Dense(self.embed_dim, name='query')
-
-        # Key and Value projections (from label embedding)
-        self.key_dense = Dense(self.embed_dim, name='key')
-        self.value_dense = Dense(self.embed_dim, name='value')
-
-        # Output projection
-        self.out_dense = Dense(self.embed_dim, name='output')
-
-        super(CrossAttentionLayer, self).build(input_shape)
-
-    def split_heads(self, x, batch_size):
-        """Split the last dimension into (num_heads, head_dim)"""
-        x = tf.reshape(x, (batch_size, -1, self.num_heads, self.head_dim))
-        return tf.transpose(x, perm=[0, 2, 1, 3])
-
-    def call(self, inputs):
-        query_input, key_value_input = inputs
-        batch_size = tf.shape(query_input)[0]
-
-        # Ensure inputs have sequence dimension
-        if len(query_input.shape) == 2:
-            query_input = tf.expand_dims(query_input, 1)
-        if len(key_value_input.shape) == 2:
-            key_value_input = tf.expand_dims(key_value_input, 1)
-
-        # Linear projections
-        Q = self.query_dense(query_input)
-        K = self.key_dense(key_value_input)
-        V = self.value_dense(key_value_input)
-
-        # Split heads
-        Q = self.split_heads(Q, batch_size)
-        K = self.split_heads(K, batch_size)
-        V = self.split_heads(V, batch_size)
-
-        # Scaled dot-product attention
-        matmul_qk = tf.matmul(Q, K, transpose_b=True)
-        dk = tf.cast(self.head_dim, tf.float32)
-        scaled_attention_logits = matmul_qk / tf.sqrt(dk)
-
-        attention_weights = tf.nn.softmax(scaled_attention_logits, axis=-1)
-
-        # Apply attention to values
-        attention_output = tf.matmul(attention_weights, V)
-
-        # Concatenate heads
-        attention_output = tf.transpose(attention_output, perm=[0, 2, 1, 3])
-        concat_attention = tf.reshape(attention_output, (batch_size, -1, self.embed_dim))
-
-        # Final linear projection
-        output = self.out_dense(concat_attention)
-
-        # Remove sequence dimension if it was added
-        output = tf.squeeze(output, axis=1)
-
-        return output
-
-    def get_config(self):
-        config = super(CrossAttentionLayer, self).get_config()
-        config.update({
-            'embed_dim': self.embed_dim,
-            'num_heads': self.num_heads
-        })
-        return config
-
-
 class VanillaGenerator(Activations):
     """
-    VanillaGenerator with Cross-Attention
+    VanillaGenerator
 
-    Implements a dense generator model with cross-attention mechanism for generating
-    synthetic data using a vanilla architecture. Instead of simple concatenation, the
-    generator uses cross-attention where the latent input queries the label embedding
-    information. This class is designed for generating synthetic data from a latent
-    space using a fully connected neural network with flexible configurations for the
-    generator layers, activations, and dropout rates, with conditional generation based
-    on the number of samples per class.
+    Implements a dense generator model for generating synthetic data using a
+    vanilla architecture. This class is designed for generating synthetic data
+    from a latent space using a fully connected neural network. It supports
+    flexible configurations for the generator layers, activations, and dropout
+    rates, with the option for conditional generation based on the number of
+    samples per class.
 
     Attributes:
         @latent_dimension (int):
@@ -170,10 +83,6 @@ class VanillaGenerator(Activations):
             The data type for the input tensors (default is numpy.float32).
         @number_samples_per_class (dict | None):
             An optional dictionary indicating the number of samples per class for conditional data generation.
-        @attention_embed_dim (int):
-            Embedding dimension for cross-attention mechanism.
-        @attention_num_heads (int):
-            Number of attention heads in cross-attention layer.
 
     Raises:
         ValueError:
@@ -181,7 +90,6 @@ class VanillaGenerator(Activations):
             - Non-positive `latent_dimension` or `output_shape`
             - `dropout_decay_rate_g` outside the range [0.0, 1.0]
             - Invalid values in `dense_layer_sizes_g`
-            - `attention_embed_dim` not divisible by `attention_num_heads`
 
     Example:
         >>> generator = VanillaGenerator(
@@ -193,9 +101,7 @@ class VanillaGenerator(Activations):
         ...     dropout_decay_rate_g=0.3,
         ...     last_layer_activation="sigmoid",
         ...     dense_layer_sizes_g=[128, 256, 512],
-        ...     number_samples_per_class={"number_classes": 10},
-        ...     attention_embed_dim=128,
-        ...     attention_num_heads=4
+        ...     number_samples_per_class={"class_1": 50, "class_2": 100}
         ... )
     """
 
@@ -209,11 +115,9 @@ class VanillaGenerator(Activations):
                  last_layer_activation: str,
                  dense_layer_sizes_g: list,
                  dataset_type: type = numpy.float32,
-                 number_samples_per_class: dict | None = None,
-                 attention_embed_dim: int = 128,
-                 attention_num_heads: int = 4):
+                 number_samples_per_class: dict | None = None):
         """
-        Initializes the VanillaGenerator with cross-attention and the specified parameters.
+        Initializes the VanillaGenerator class with the specified parameters.
 
         Args:
             latent_dimension (int): Dimension of the latent space.
@@ -226,11 +130,9 @@ class VanillaGenerator(Activations):
             dense_layer_sizes_g (list): List of dense layer sizes.
             dataset_type (type): Data type for the input tensors.
             number_samples_per_class (dict, optional): Dictionary with the number of samples per class for conditional generation.
-            attention_embed_dim (int, optional): Embedding dimension for cross-attention (default: 128).
-            attention_num_heads (int, optional): Number of attention heads (default: 4).
 
         Raises:
-            ValueError: If any parameter validation fails.
+            ValueError: If `latent_dimension`, `output_shape`, or `dropout_decay_rate_g` are invalid.
         """
 
         if not isinstance(latent_dimension, int) or latent_dimension <= 0:
@@ -254,18 +156,7 @@ class VanillaGenerator(Activations):
         if number_samples_per_class is not None and not isinstance(number_samples_per_class, dict):
             raise ValueError("number_samples_per_class must be a dictionary if provided.")
 
-        if not isinstance(attention_embed_dim, int) or attention_embed_dim <= 0:
-            raise ValueError(
-                f"Invalid value for attention_embed_dim: {attention_embed_dim}. It must be a positive integer.")
-
-        if not isinstance(attention_num_heads, int) or attention_num_heads <= 0:
-            raise ValueError(
-                f"Invalid value for attention_num_heads: {attention_num_heads}. It must be a positive integer.")
-
-        if attention_embed_dim % attention_num_heads != 0:
-            raise ValueError(
-                f"attention_embed_dim ({attention_embed_dim}) must be divisible by attention_num_heads ({attention_num_heads}).")
-
+        # super().__init__()
         self._generator_number_samples_per_class = number_samples_per_class
         self._generator_latent_dimension = latent_dimension
         self._generator_output_shape = output_shape
@@ -276,21 +167,14 @@ class VanillaGenerator(Activations):
         self._generator_dataset_type = dataset_type
         self._generator_initializer_mean = initializer_mean
         self._generator_initializer_deviation = initializer_deviation
-        self._generator_attention_embed_dim = attention_embed_dim
-        self._generator_attention_num_heads = attention_num_heads
         self._generator_model_dense = None
 
     def get_generator(self) -> Model:
         """
-        Builds and returns the generator model with cross-attention.
-
-        This method constructs a neural network model using cross-attention to condition
-        the latent input on label information, where the latent input acts as Query and
-        the label embedding provides Key and Value.
+        Builds and returns the generator model.
 
         Returns:
-            Model: A Keras model with inputs for latent vectors and conditional labels,
-                   and an output for generated data using cross-attention.
+            Model: A Keras model with inputs for latent vectors and conditional labels, and an output for generated data.
 
         Raises:
             ValueError: If `number_samples_per_class` is not provided for conditional generation.
@@ -299,92 +183,31 @@ class VanillaGenerator(Activations):
             raise ValueError(
                 "`number_samples_per_class` must include a 'number_classes' key for conditional generation.")
 
-        initialization = RandomNormal(
-            mean=self._generator_initializer_mean,
-            stddev=self._generator_initializer_deviation
-        )
+        initialization = RandomNormal(mean=self._generator_initializer_mean, stddev=self._generator_initializer_deviation)
+        neural_model_inputs = Input(shape=(self._generator_latent_dimension,), dtype=self._generator_dataset_type)
+        latent_input = Input(shape=(self._generator_latent_dimension,))
+        label_input = Input(shape=(self._generator_number_samples_per_class["number_classes"],), dtype=self._generator_dataset_type)
 
-        # Define inputs
-        neural_model_inputs = Input(
-            shape=(self._generator_latent_dimension,),
-            dtype=self._generator_dataset_type,
-            name='neural_input'
-        )
-        latent_input = Input(
-            shape=(self._generator_latent_dimension,),
-            name='latent_input'
-        )
-        label_input = Input(
-            shape=(self._generator_number_samples_per_class["number_classes"],),
-            dtype=self._generator_dataset_type,
-            name='label_input'
-        )
-
-        # Build dense generator model (core generator)
-        generator_model = Dense(
-            self._generator_dense_layer_sizes_g[0],
-            kernel_initializer=initialization
-        )(neural_model_inputs)
+        # Build dense generator model
+        generator_model = Dense(self._generator_dense_layer_sizes_g[0], kernel_initializer=initialization)(neural_model_inputs)
         generator_model = Dropout(self._generator_dropout_decay_rate_g)(generator_model)
-        generator_model = self._add_activation_layer(
-            generator_model,
-            self._generator_activation_function
-        )
+        generator_model = self._add_activation_layer(generator_model, self._generator_activation_function)
 
         for layer_size in self._generator_dense_layer_sizes_g[1:]:
             generator_model = Dense(layer_size, kernel_initializer=initialization)(generator_model)
             generator_model = Dropout(self._generator_dropout_decay_rate_g)(generator_model)
-            generator_model = self._add_activation_layer(
-                generator_model,
-                self._generator_activation_function
-            )
+            generator_model = self._add_activation_layer(generator_model, self._generator_activation_function)
 
-        generator_model = Dense(
-            self._generator_output_shape,
-            kernel_initializer=initialization
-        )(generator_model)
-        generator_model = self._add_activation_layer(
-            generator_model,
-            self._generator_last_layer_activation
-        )
+        generator_model = Dense(self._generator_output_shape, kernel_initializer=initialization)(generator_model)
+        generator_model = self._add_activation_layer(generator_model, self._generator_last_layer_activation)
         generator_model = Model(neural_model_inputs, generator_model, name="Dense_Generator")
         self._generator_model_dense = generator_model
 
-        # Label embedding layer
-        label_embedded = Dense(
-            self._generator_attention_embed_dim,
-            activation='relu',
-            kernel_initializer=initialization,
-            name='label_embedding'
-        )(label_input)
-
-        # Project latent input to attention embedding dimension
-        latent_projected = Dense(
-            self._generator_attention_embed_dim,
-            kernel_initializer=initialization,
-            name='latent_projection'
-        )(latent_input)
-
-        # Cross-attention: latent input queries label information
-        cross_attention = CrossAttentionLayer(
-            embed_dim=self._generator_attention_embed_dim,
-            num_heads=self._generator_attention_num_heads,
-            name='cross_attention'
-        )
-        attended_features = cross_attention([latent_projected, label_embedded])
-
-        # Project back to latent dimension
-        model_input = Dense(
-            self._generator_latent_dimension,
-            kernel_initializer=initialization,
-            name='attention_output_projection'
-        )(attended_features)
-        model_input = self._add_activation_layer(
-            model_input,
-            self._generator_activation_function
-        )
-
-        # Pass through the dense generator
+        # Concatenate latent input with label input for conditional generation
+        concatenate_output = Concatenate()([latent_input, label_input])
+        label_embedding = Flatten()(concatenate_output)
+        model_input = Dense(self._generator_latent_dimension)(label_embedding)
+        model_input = self._add_activation_layer(model_input, self._generator_activation_function)
         generator_output_flow = generator_model(model_input)
 
         return Model([latent_input, label_input], generator_output_flow, name="Generator")
@@ -397,16 +220,6 @@ class VanillaGenerator(Activations):
             Model | None: A Keras model without label conditioning, or None if not built.
         """
         return self._generator_model_dense
-
-    @property
-    def attention_embed_dim(self) -> int:
-        """int: Gets the embedding dimension for cross-attention."""
-        return self._generator_attention_embed_dim
-
-    @property
-    def attention_num_heads(self) -> int:
-        """int: Gets the number of attention heads."""
-        return self._generator_attention_num_heads
 
     def set_dropout_decay_rate_generator(self, dropout_decay_rate_generator: float) -> None:
         """

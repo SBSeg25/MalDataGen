@@ -24,7 +24,7 @@ IMAGE_SIZE = (16, 16)
 INPUT_SHAPE = (16, 16, 1)
 
 N_CLASSES = 10
-BATCH_LIMIT = 20000
+BATCH_LIMIT = 1200
 
 
 try:
@@ -98,11 +98,11 @@ synthetic_samples = model.get_samples(number_samples_per_class)
 try:
     import matplotlib.pyplot as plt
 
-    n = min(25, synthetic_samples.shape[0])
-    cols = 5
+    n = min(36, synthetic_samples.shape[0])
+    cols = 6
     rows = n // cols
 
-    fig, axes = plt.subplots(rows, cols, figsize=(10, 10))
+    fig, axes = plt.subplots(rows, cols, figsize=(12, 12))
     fig.suptitle("MNIST Sintético (VAE Condicional)", fontsize=16)
 
     idx = 0

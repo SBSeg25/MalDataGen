@@ -38,7 +38,6 @@ try:
     from tensorflow import keras
     from tensorflow.keras.layers import Dense
     from tensorflow.keras.layers import Input
-    from tensorflow.keras.layers import Layer
     from tensorflow.keras.models import Model
 
     from tensorflow.keras.layers import Dropout
@@ -52,97 +51,16 @@ except ImportError as error:
     sys.exit(-1)
 
 
-class CrossAttentionLayer(Layer):
-    """
-    Cross-Attention layer for conditioning on label information.
-
-    The latent vector acts as Query, while the label embedding provides Key and Value.
-    """
-
-    def __init__(self, embed_dim, num_heads=4, **kwargs):
-        super(CrossAttentionLayer, self).__init__(**kwargs)
-        self.embed_dim = embed_dim
-        self.num_heads = num_heads
-        self.head_dim = embed_dim // num_heads
-
-        assert self.head_dim * num_heads == embed_dim, "embed_dim must be divisible by num_heads"
-
-        # Query projection (from latent vector)
-        self.query_dense = Dense(embed_dim, name='query')
-
-        # Key and Value projections (from label embedding)
-        self.key_dense = Dense(embed_dim, name='key')
-        self.value_dense = Dense(embed_dim, name='value')
-
-        # Output projection
-        self.out_dense = Dense(embed_dim, name='output')
-
-    def split_heads(self, x, batch_size):
-        """Split the last dimension into (num_heads, head_dim)"""
-        x = tensorflow.reshape(x, (batch_size, -1, self.num_heads, self.head_dim))
-        return tensorflow.transpose(x, perm=[0, 2, 1, 3])
-
-    def call(self, query_input, key_value_input):
-        batch_size = tensorflow.shape(query_input)[0]
-
-        # Ensure inputs have sequence dimension
-        if len(query_input.shape) == 2:
-            query_input = tensorflow.expand_dims(query_input, axis=1)
-        if len(key_value_input.shape) == 2:
-            key_value_input = tensorflow.expand_dims(key_value_input, axis=1)
-
-        # Linear projections
-        Q = self.query_dense(query_input)
-        K = self.key_dense(key_value_input)
-        V = self.value_dense(key_value_input)
-
-        # Split heads
-        Q = self.split_heads(Q, batch_size)
-        K = self.split_heads(K, batch_size)
-        V = self.split_heads(V, batch_size)
-
-        # Scaled dot-product attention
-        matmul_qk = tensorflow.matmul(Q, K, transpose_b=True)
-        dk = tensorflow.cast(self.head_dim, tensorflow.float32)
-        scaled_attention_logits = matmul_qk / tensorflow.math.sqrt(dk)
-
-        attention_weights = tensorflow.nn.softmax(scaled_attention_logits, axis=-1)
-
-        # Apply attention to values
-        attention_output = tensorflow.matmul(attention_weights, V)
-
-        # Concatenate heads
-        attention_output = tensorflow.transpose(attention_output, perm=[0, 2, 1, 3])
-        concat_attention = tensorflow.reshape(attention_output, (batch_size, -1, self.embed_dim))
-
-        # Final linear projection
-        output = self.out_dense(concat_attention)
-
-        # Remove sequence dimension if it was added
-        output = tensorflow.squeeze(output, axis=1)
-
-        return output
-
-    def get_config(self):
-        config = super().get_config()
-        config.update({
-            "embed_dim": self.embed_dim,
-            "num_heads": self.num_heads,
-        })
-        return config
-
-
 class VanillaDecoderTensorflow(Activations):
     """
-      VanillaDecoder with Cross-Attention
+      VanillaDecoder with Concatenation
 
-      This class implements a conditional fully connected decoder network with cross-attention
-      mechanism for label conditioning. Instead of simple concatenation, the decoder uses
-      cross-attention where the latent vector queries the label embedding information.
+      This class implements a conditional fully connected decoder network using
+      simple concatenation for label conditioning.
 
       The architecture consists of:
       1. Label embedding layer
-      2. Cross-attention layer (latent queries label)
+      2. Concatenation of latent vector and label embedding
       3. Sequence of fully connected layers with activation and dropout
       4. Final output layer
 
@@ -168,10 +86,8 @@ class VanillaDecoderTensorflow(Activations):
           List specifying the number of neurons in each dense layer.
       @decoder_number_samples_per_class : Optional[Dict[str, int]]
           Dictionary containing class metadata (e.g., number of samples per class).
-      @decoder_attention_embed_dim : int
-          Embedding dimension for cross-attention mechanism.
-      @decoder_attention_num_heads : int
-          Number of attention heads in cross-attention layer.
+      @decoder_label_embed_dim : int
+          Embedding dimension for label conditioning.
       @decoder_model : Optional[Model]
           Placeholder for the actual compiled Keras model (built later).
 
@@ -188,8 +104,7 @@ class VanillaDecoderTensorflow(Activations):
       ...     number_neurons_decoder=[256, 128, 64],
       ...     dataset_type=numpy.float32,
       ...     number_samples_per_class={"number_classes": 10},
-      ...     attention_embed_dim=128,
-      ...     attention_num_heads=4
+      ...     label_embed_dim=128
       ... )
       >>> decoder_model = decoder.get_decoder()
       """
@@ -205,10 +120,9 @@ class VanillaDecoderTensorflow(Activations):
                  number_neurons_decoder,
                  dataset_type=numpy.float32,
                  number_samples_per_class=None,
-                 attention_embed_dim=128,
-                 attention_num_heads=4):
+                 label_embed_dim=128):
         """
-        Initializes the VanillaDecoder with cross-attention.
+        Initializes the VanillaDecoder with simple concatenation.
 
         Parameters
         ----------
@@ -232,10 +146,8 @@ class VanillaDecoderTensorflow(Activations):
             Data type for inputs and outputs (default: numpy.float32).
         @number_samples_per_class : dict, optional
             Dictionary with class information (must contain 'number_classes' key).
-        @attention_embed_dim : int, optional
-            Embedding dimension for cross-attention (default: 128).
-        @attention_num_heads : int, optional
-            Number of attention heads (default: 4).
+        @label_embed_dim : int, optional
+            Embedding dimension for label conditioning (default: 128).
         """
 
         if not isinstance(latent_dimension, int) or latent_dimension <= 0:
@@ -271,14 +183,8 @@ class VanillaDecoderTensorflow(Activations):
                     number_samples_per_class["number_classes"], int):
                 raise ValueError("number_samples_per_class must contain a key 'number_classes' with an integer value.")
 
-        if not isinstance(attention_embed_dim, int) or attention_embed_dim <= 0:
-            raise ValueError("attention_embed_dim must be a positive integer.")
-
-        if not isinstance(attention_num_heads, int) or attention_num_heads <= 0:
-            raise ValueError("attention_num_heads must be a positive integer.")
-
-        if attention_embed_dim % attention_num_heads != 0:
-            raise ValueError("attention_embed_dim must be divisible by attention_num_heads.")
+        if not isinstance(label_embed_dim, int) or label_embed_dim <= 0:
+            raise ValueError("label_embed_dim must be a positive integer.")
 
         self._decoder_latent_dimension = latent_dimension
         self._decoder_output_shape = output_shape
@@ -290,22 +196,20 @@ class VanillaDecoderTensorflow(Activations):
         self._decoder_initializer_deviation = initializer_deviation
         self._decoder_number_neurons_decoder = number_neurons_decoder
         self._decoder_number_samples_per_class = number_samples_per_class
-        self._decoder_attention_embed_dim = attention_embed_dim
-        self._decoder_attention_num_heads = attention_num_heads
+        self._decoder_label_embed_dim = label_embed_dim
         self._decoder_model = None
 
     def get_decoder(self, input_shape=None):
         """
-        Builds and returns the decoder model with cross-attention.
+        Builds and returns the decoder model with simple concatenation.
 
-        The model uses cross-attention to condition the latent vector on label information,
-        where the latent vector acts as Query and the label embedding provides Key and Value.
+        The model concatenates the latent vector with the label embedding.
 
         Args:
             input_shape: Optional input shape (for API compatibility, not used)
 
         Returns:
-            tensorflow.keras.Model: The decoder model with cross-attention conditioning.
+            tensorflow.keras.Model: The decoder model with concatenation conditioning.
         """
         initialization = RandomNormal(mean=self._decoder_initializer_mean,
                                       stddev=self._decoder_initializer_deviation)
@@ -319,26 +223,17 @@ class VanillaDecoderTensorflow(Activations):
                             name='label_input')
 
         # Label embedding
-        label_input_embedding = Dense(self._decoder_attention_embed_dim,
+        label_input_embedding = Dense(self._decoder_label_embed_dim,
                                       activation='relu',
+                                      kernel_initializer=initialization,
                                       name='label_embedding')(label_input)
 
-        # Project latent vector to attention embedding dimension
-        latent_projected = Dense(self._decoder_attention_embed_dim,
-                                 kernel_initializer=initialization,
-                                 name='latent_projection')(neural_model_inputs)
+        # Concatenate latent vector and label embedding
+        concatenated = Concatenate(name='concatenate')([neural_model_inputs, label_input_embedding])
 
-        # Cross-attention: latent queries label information
-        cross_attention = CrossAttentionLayer(
-            embed_dim=self._decoder_attention_embed_dim,
-            num_heads=self._decoder_attention_num_heads,
-            name='cross_attention'
-        )
-        attended_features = cross_attention(latent_projected, label_input_embedding)
-
-        # First dense layer after attention
+        # First dense layer
         conditional_decoder = Dense(self._decoder_number_neurons_decoder[0],
-                                    kernel_initializer=initialization)(attended_features)
+                                    kernel_initializer=initialization)(concatenated)
         conditional_decoder = self._add_activation_layer(conditional_decoder,
                                                          self._decoder_intermediary_activation_function)
         conditional_decoder = Dropout(self._decoder_dropout_decay_rate_decoder)(conditional_decoder)
@@ -359,7 +254,7 @@ class VanillaDecoderTensorflow(Activations):
 
         self._decoder_model = Model([neural_model_inputs, label_input],
                                     conditional_decoder,
-                                    name="Decoder_CrossAttention")
+                                    name="Decoder_Concatenation")
 
         return self._decoder_model
 
@@ -374,14 +269,9 @@ class VanillaDecoderTensorflow(Activations):
         return self._decoder_number_neurons_decoder
 
     @property
-    def attention_embed_dim(self):
-        """int: Gets the embedding dimension for cross-attention."""
-        return self._decoder_attention_embed_dim
-
-    @property
-    def attention_num_heads(self):
-        """int: Gets the number of attention heads."""
-        return self._decoder_attention_num_heads
+    def label_embed_dim(self):
+        """int: Gets the embedding dimension for label conditioning."""
+        return self._decoder_label_embed_dim
 
     @dropout_decay_rate_decoder.setter
     def dropout_decay_rate_decoder(self, dropout_decay_rate_discriminator):

@@ -442,6 +442,7 @@ class AdversarialAlgorithmTorch(nn.Module):
         Returns:
             float: Average validation loss.
         """
+        # FIX: Garantir que ambos os modelos estão em eval mode
         self._generator.eval()
         self._discriminator.eval()
 
@@ -450,7 +451,6 @@ class AdversarialAlgorithmTorch(nn.Module):
 
         with torch.no_grad():
             for batch_data in validation_data:
-                # Perform validation step (without updating weights)
                 real_feature, real_samples_label = batch_data
 
                 # Move to device
@@ -478,7 +478,7 @@ class AdversarialAlgorithmTorch(nn.Module):
                 # Concatenate predictions
                 label_predicted_all_samples = torch.cat([label_predicted_real, label_predicted_synthetic], dim=0)
 
-                # Create ground-truth labels
+                # FIX: Labels SEM smoothing para validação (usar valores exatos 0 e 1)
                 tensor_labels_predicted = torch.cat([
                     torch.zeros_like(label_predicted_real),
                     torch.ones_like(label_predicted_synthetic)
@@ -500,7 +500,6 @@ class AdversarialAlgorithmTorch(nn.Module):
                     break
 
         return numpy.mean(val_losses) if val_losses else 0.0
-
     def train_step(self, batch: Tuple[torch.Tensor, torch.Tensor]) -> Dict[str, float]:
         """
         Performs a single training step for both generator and discriminator.
@@ -527,7 +526,7 @@ class AdversarialAlgorithmTorch(nn.Module):
 
         # ==================== TRAIN DISCRIMINATOR ====================
         self._discriminator.train()
-        self._generator.eval()
+        self._generator.eval()  # Generator não está sendo treinado nesta fase
 
         self._optimizer_discriminator.zero_grad()
 
@@ -535,7 +534,8 @@ class AdversarialAlgorithmTorch(nn.Module):
         latent_space = torch.randn(batch_size, self._latent_dimension, device=self.device)
         latent_space = latent_space * self._latent_standard_deviation + self._latent_mean_distribution
 
-        # Generate synthetic features
+        # FIX: Generate synthetic features without computing gradients for generator
+        # Isso está CORRETO em PyTorch - não precisamos de gradientes para o gerador aqui
         with torch.no_grad():
             synthetic_feature = self._generator([latent_space, real_samples_label])
 
@@ -546,19 +546,15 @@ class AdversarialAlgorithmTorch(nn.Module):
         # Concatenate predictions
         label_predicted_all_samples = torch.cat([label_predicted_real, label_predicted_synthetic], dim=0)
 
-        # Create ground-truth labels (real=0, fake=1)
+        # FIX: Label smoothing correto - sem valores negativos
+        # Real labels: [0.0, 0.15] (próximo de 0 = real)
+        # Fake labels: [0.85, 1.0] (próximo de 1 = fake)
+        smooth_real_labels = torch.rand_like(label_predicted_real) * 0.15
+        smooth_synthetic_labels = 0.85 + torch.rand_like(label_predicted_synthetic) * 0.15
+
         tensor_labels_predicted = torch.cat([
-            torch.zeros_like(label_predicted_real),
-            torch.ones_like(label_predicted_synthetic)
-        ], dim=0)
-
-        # Label smoothing
-        smooth_tensor_real_data = 0.15 * torch.rand_like(label_predicted_real)
-        smooth_tensor_synthetic_data = -0.15 * torch.rand_like(label_predicted_synthetic)
-
-        tensor_labels_predicted += torch.cat([
-            smooth_tensor_real_data,
-            smooth_tensor_synthetic_data
+            smooth_real_labels,
+            smooth_synthetic_labels
         ], dim=0)
 
         # Compute discriminator loss
@@ -570,15 +566,16 @@ class AdversarialAlgorithmTorch(nn.Module):
 
         # ==================== TRAIN GENERATOR ====================
         self._generator.train()
-        self._discriminator.eval()
+        self._discriminator.eval()  # Discriminador em eval() enquanto treinamos gerador
 
         self._optimizer_generator.zero_grad()
 
-        # Generate new synthetic samples
-        latent_space = torch.randn(batch_size, self._latent_dimension, device=self.device)
-        latent_space = latent_space * self._latent_standard_deviation + self._latent_mean_distribution
+        # FIX: Generate NEW latent space (não reutilizar o anterior)
+        latent_space_new = torch.randn(batch_size, self._latent_dimension, device=self.device)
+        latent_space_new = latent_space_new * self._latent_standard_deviation + self._latent_mean_distribution
 
-        synthetic_feature = self._generator([latent_space, real_samples_label])
+        # Generate new synthetic samples
+        synthetic_feature = self._generator([latent_space_new, real_samples_label])
 
         # Get discriminator predictions for synthetic samples
         predicted_labels = self._discriminator([synthetic_feature, real_samples_label])
@@ -630,9 +627,6 @@ class AdversarialAlgorithmTorch(nn.Module):
                 # Generate synthetic samples
                 generated_samples = self._generator([latent_noise, label_samples_generated])
 
-                # Round to nearest integer
-                generated_samples = torch.round(generated_samples)
-
                 # Convert to numpy and store
                 generated_data[label_class] = generated_samples.cpu().numpy()
 
@@ -641,10 +635,6 @@ class AdversarialAlgorithmTorch(nn.Module):
     def save_model(self, path_output: str, k_fold: int):
         """
         Save the generator and discriminator models.
-
-        Args:
-            path_output (str): Output directory path.
-            k_fold (int): Fold number for cross-validation.
         """
         try:
             logging.info(f"Starting to save adversarial Model for fold {k_fold}...")
@@ -652,20 +642,15 @@ class AdversarialAlgorithmTorch(nn.Module):
             # Create directory
             path_directory = os.path.join(path_output, self._models_saved_path)
             Path(path_directory).mkdir(parents=True, exist_ok=True)
-            logging.info(f"Created/verified directory at: {path_directory}")
 
-            # Filenames
+            # FIX: Usar k_fold consistentemente (sem +1 no nome do arquivo)
             discriminator_file_name = f"{self._file_name_discriminator}_{k_fold}"
             generator_file_name = f"{self._file_name_generator}_{k_fold}"
 
-            # Fold directory
-            path_model = os.path.join(path_directory, f"fold_{k_fold + 1}")
-            Path(path_model).mkdir(parents=True, exist_ok=True)
-            logging.info(f"Created/verified fold directory at: {path_model}")
-
-            # Full paths
-            discriminator_path = os.path.join(path_model, discriminator_file_name)
-            generator_path = os.path.join(path_model, generator_file_name)
+            # FIX: Salvar direto no path_directory (sem criar subpasta fold_X)
+            # OU criar fold_X mas ser consistente com load_models
+            discriminator_path = os.path.join(path_directory, discriminator_file_name)
+            generator_path = os.path.join(path_directory, generator_file_name)
 
             # Save discriminator
             logging.info("Saving discriminator model...")
@@ -683,6 +668,8 @@ class AdversarialAlgorithmTorch(nn.Module):
             }, generator_path + ".pth")
             logging.info(f"Generator model saved at: {generator_path}.pth")
 
+            logging.info(f"Models saved successfully for fold {k_fold}")
+
         except Exception as e:
             logging.error(f"An error occurred while saving the models: {e}")
             raise
@@ -690,22 +677,18 @@ class AdversarialAlgorithmTorch(nn.Module):
     def load_models(self, path_output: str, k_fold: int):
         """
         Load the generator and discriminator models.
-
-        Args:
-            path_output (str): Output directory path.
-            k_fold (int): Fold number for cross-validation.
         """
         try:
-            logging.info(f"Loading adversarial Model for fold {k_fold + 1}...")
+            logging.info(f"Loading adversarial Model for fold {k_fold}...")
 
             # Directory containing saved models
             path_directory = os.path.join(path_output, self._models_saved_path)
 
-            # Filenames
-            discriminator_file_name = f"{self._file_name_discriminator}_{k_fold + 1}"
-            generator_file_name = f"{self._file_name_generator}_{k_fold + 1}"
+            # FIX: Usar k_fold consistentemente (igual ao save_model)
+            discriminator_file_name = f"{self._file_name_discriminator}_{k_fold}"
+            generator_file_name = f"{self._file_name_generator}_{k_fold}"
 
-            # Full paths
+            # FIX: Buscar no mesmo local que save_model salvou
             discriminator_path = os.path.join(path_directory, discriminator_file_name)
             generator_path = os.path.join(path_directory, generator_file_name)
 
@@ -725,13 +708,14 @@ class AdversarialAlgorithmTorch(nn.Module):
             self._generator.eval()
             self._discriminator.eval()
 
+            logging.info(f"Models loaded successfully for fold {k_fold}")
+
         except FileNotFoundError:
             logging.error("Model file not found. Please provide an existing and valid model.")
             raise
         except Exception as e:
             logging.error(f"An error occurred while loading the models: {e}")
             raise
-
     # Setter methods
     def set_generator(self, generator: nn.Module):
         self._generator = generator
