@@ -217,7 +217,6 @@ class LatentDiffusion:
 
         # Store framework
         self._framework = ML_FRAMEWORK
-        logging.info(f"Initializing LatentDiffusion with framework: {self._framework}")
 
         # Initialize device for PyTorch
         if self._framework == 'pytorch':
@@ -225,13 +224,13 @@ class LatentDiffusion:
                 self._device = 'cuda' if torch.cuda.is_available() else 'cpu'
             else:
                 self._device = device
-            logging.info(f"PyTorch device: {self._device}")
+
 
         # Store class information
         if number_samples_per_class is None:
             # Provide a default if not specified
             self._number_samples_per_class = {'number_classes': 2}
-            logging.warning("number_samples_per_class not provided, using default: {'number_classes': 2}")
+
         else:
             self._number_samples_per_class = number_samples_per_class
 
@@ -525,10 +524,6 @@ class LatentDiffusion:
             verbose=1
         )
 
-    # ========================================================================
-    # PYTORCH IMPLEMENTATION
-    # ========================================================================
-
     def _detect_embedding_shape_pytorch(self, x_real_samples):
         """PyTorch-specific helper to detect embedding shape."""
         if len(x_real_samples) > 32:
@@ -550,37 +545,38 @@ class LatentDiffusion:
         return actual_shape
 
     def fit_model_pytorch(self, input_shape, x_real_samples, y_real_samples):
-        """PyTorch-specific training pipeline."""
+        """PyTorch-specific training pipeline with proper model warm-up."""
 
-        self._latent_variation_model_diffusion = VariationalModelDiffusion(
-            latent_dimension=self._latent_diffusion_latent_dimension,
-            output_shape=input_shape,
-            activation_function=self._latent_diffusion_VAE_intermediary_activation_function,
-            initializer_mean=self._latent_diffusion_VAE_initializer_mean,
-            initializer_deviation=self._latent_diffusion_VAE_initializer_deviation,
-            dropout_decay_encoder=self._latent_diffusion_VAE_dropout_decay_rate_encoder,
-            dropout_decay_decoder=self._latent_diffusion_VAE_dropout_decay_rate_decoder,
-            last_layer_activation=self._latent_diffusion_VAE_activation_output_encoder,
-            number_neurons_encoder=self._latent_diffusion_VAE_encoder_filters,
-            number_neurons_decoder=self._latent_diffusion_VAE_decoder_filters,
-            dataset_type=numpy.float32,
-            number_samples_per_class=self._number_samples_per_class
-        ).to(self._device)
+        if not self._has_external_variation_model:
+            self._latent_variation_model_diffusion = VariationalModelDiffusion(
+                latent_dimension=self._latent_diffusion_latent_dimension,
+                output_shape=input_shape,
+                activation_function=self._latent_diffusion_VAE_intermediary_activation_function,
+                initializer_mean=self._latent_diffusion_VAE_initializer_mean,
+                initializer_deviation=self._latent_diffusion_VAE_initializer_deviation,
+                dropout_decay_encoder=self._latent_diffusion_VAE_dropout_decay_rate_encoder,
+                dropout_decay_decoder=self._latent_diffusion_VAE_dropout_decay_rate_decoder,
+                last_layer_activation=self._latent_diffusion_VAE_activation_output_encoder,
+                number_neurons_encoder=self._latent_diffusion_VAE_encoder_filters,
+                number_neurons_decoder=self._latent_diffusion_VAE_decoder_filters,
+                dataset_type=numpy.float32,
+                number_samples_per_class=self._number_samples_per_class
+            ).to(self._device)
 
-        self._latent_variational_algorithm = AlgorithmVAELatentDiffusion(
-            encoder_model=self._latent_variation_model_diffusion.get_encoder(),
-            decoder_model=self._latent_variation_model_diffusion.get_decoder(),
-            loss_function=self._latent_diffusion_VAE_loss_function,
-            latent_dimension=self._latent_diffusion_latent_dimension,
-            decoder_latent_dimension=self._latent_diffusion_latent_dimension,
-            latent_mean_distribution=self._latent_diffusion_VAE_mean_distribution,
-            latent_standard_deviation=self._latent_diffusion_VAE_stander_deviation,
-            file_name_encoder=self._latent_diffusion_VAE_file_name_encoder,
-            file_name_decoder=self._latent_diffusion_VAE_file_name_decoder,
-            models_saved_path=self._latent_diffusion_VAE_path_output_models
-        ).to(self._device)
+        if not self._has_external_variational_algorithm:
+            self._latent_variational_algorithm = AlgorithmVAELatentDiffusion(
+                encoder_model=self._latent_variation_model_diffusion.get_encoder(),
+                decoder_model=self._latent_variation_model_diffusion.get_decoder(),
+                loss_function=self._latent_diffusion_VAE_loss_function,
+                latent_dimension=self._latent_diffusion_latent_dimension,
+                decoder_latent_dimension=self._latent_diffusion_latent_dimension,
+                latent_mean_distribution=self._latent_diffusion_VAE_mean_distribution,
+                latent_standard_deviation=self._latent_diffusion_VAE_stander_deviation,
+                file_name_encoder=self._latent_diffusion_VAE_file_name_encoder,
+                file_name_decoder=self._latent_diffusion_VAE_file_name_decoder,
+                models_saved_path=self._latent_diffusion_VAE_path_output_models
+            ).to(self._device)
 
-        # Convert data
         x_real_samples = torch.from_numpy(x_real_samples).float().to(self._device)
         y_real_samples = torch.from_numpy(y_real_samples).long().to(self._device)
         y_real_samples_onehot = F.one_hot(
@@ -588,7 +584,6 @@ class LatentDiffusion:
             num_classes=self._number_samples_per_class["number_classes"]
         ).float()
 
-        # Train VAE
         vae_optimizer = Adam(
             list(self._latent_variation_model_diffusion.get_encoder().parameters()) +
             list(self._latent_variation_model_diffusion.get_decoder().parameters()),
@@ -612,23 +607,23 @@ class LatentDiffusion:
 
             avg_loss = sum(epoch_losses) / len(epoch_losses)
             if (epoch + 1) % 10 == 0 or epoch == 0:
-                print(f"  Epoch [{epoch + 1}/{self._latent_diffusion_VAE_epochs}], Loss: {avg_loss:.4f}")
+                print(f"  VAE Epoch [{epoch + 1}/{self._latent_diffusion_VAE_epochs}], Loss: {avg_loss:.4f}")
 
             if self._callback_early_stop and self._callback_early_stop.should_stop(avg_loss):
                 print(f"  Early stopping at epoch {epoch + 1}")
                 break
 
+
         self._encoder_latent_diffusion = self._latent_variational_algorithm.get_encoder_trained()
         self._decoder_latent_diffusion = self._latent_variational_algorithm.get_decoder_trained()
 
-        # ========================================================================
-        # PHASE 2: Detect Actual Embedding Shape
-        # ========================================================================
+        # Detect actual embedding shape
         actual_embedding_shape = self._detect_embedding_shape_pytorch(x_real_samples)
+        embedding_seq_len, embedding_channels = actual_embedding_shape
 
-        # ========================================================================
-        # PHASE 3: Create Full Embeddings
-        # ========================================================================
+        self._latent_diffusion_latent_dimension = embedding_seq_len
+
+        # Create embeddings for all data
         data_embedding = self._latent_variational_algorithm.create_embedding(
             x_real_samples,
             batch_size=self._latent_diffusion_VAE_batch_size_create_embedding
@@ -638,55 +633,91 @@ class LatentDiffusion:
         if len(data_embedding.shape) == 2:
             data_embedding = data_embedding.unsqueeze(-1)
 
+        if not self._has_external_first_unet:
+
+            first_unet_builder = DiffusionModelUNetModel(
+                embedding_dimension=embedding_seq_len,
+                embedding_channels=embedding_channels,
+                list_neurons_per_level=self._latent_diffusion_unet_channels_per_level,
+                list_attentions=self._latent_diffusion_unet_attention_mode,
+                number_residual_blocks=self._latent_diffusion_unet_num_residual_blocks,
+                normalization_groups=self._latent_diffusion_unet_group_normalization,
+                intermediary_activation_function=self._latent_diffusion_unet_intermediary_activation,
+                intermediary_activation_alpha=self._latent_diffusion_unet_intermediary_activation_alpha,
+                last_layer_activation=self._latent_diffusion_unet_last_layer_activation,
+                number_samples_per_class=self._number_samples_per_class
+            ).to(self._device)
+
+            self._latent_first_unet_model = first_unet_builder.build_model()
+            del first_unet_builder
+
+        if not self._has_external_second_unet:
+
+            second_unet_builder = DiffusionModelUNetModel(
+                embedding_dimension=embedding_seq_len,
+                embedding_channels=embedding_channels,
+                list_neurons_per_level=self._latent_diffusion_unet_channels_per_level,
+                list_attentions=self._latent_diffusion_unet_attention_mode,
+                number_residual_blocks=self._latent_diffusion_unet_num_residual_blocks,
+                normalization_groups=self._latent_diffusion_unet_group_normalization,
+                intermediary_activation_function=self._latent_diffusion_unet_intermediary_activation,
+                intermediary_activation_alpha=self._latent_diffusion_unet_intermediary_activation_alpha,
+                last_layer_activation=self._latent_diffusion_unet_last_layer_activation,
+                number_samples_per_class=self._number_samples_per_class
+            ).to(self._device)
+
+            self._latent_second_unet_model = second_unet_builder.build_model()
+            del second_unet_builder
+
+        # Create dummy inputs matching the expected shapes
+        dummy_embedding = torch.randn(2, embedding_seq_len, embedding_channels).to(self._device)
+        dummy_time = torch.randint(0, self._latent_diffusion_gaussian_time_steps, (2,)).to(self._device)
+        dummy_labels = torch.zeros(2, self._number_samples_per_class["number_classes"]).to(self._device)
+
+        # Warm up first model
+        self._latent_first_unet_model.eval()
+        with torch.no_grad():
+            _ = self._latent_first_unet_model(dummy_embedding, dummy_time, dummy_labels)
+
+        first_params_after_warmup = len(list(self._latent_first_unet_model.parameters()))
+
+        # Warm up second model
+        self._latent_second_unet_model.eval()
+        with torch.no_grad():
+            _ = self._latent_second_unet_model(dummy_embedding, dummy_time, dummy_labels)
+
+        second_params_after_warmup = len(list(self._latent_second_unet_model.parameters()))
+
+        # Verify both models have same parameter count after warm-up
+        if first_params_after_warmup != second_params_after_warmup:
+            raise RuntimeError(
+                f"Parameter count mismatch after warm-up: {first_params_after_warmup} vs {second_params_after_warmup}"
+            )
+
         # ========================================================================
-        # PHASE 4: Initialize UNets with Correct Dimensions
+        # NOW synchronize weights (both models have all layers initialized)
         # ========================================================================
+        if not self._has_external_first_unet and not self._has_external_second_unet:
+            self._latent_second_unet_model.load_state_dict(self._latent_first_unet_model.state_dict())
 
-        embedding_seq_len, embedding_channels = actual_embedding_shape
+            # Verify synchronization
+            first_params = len(list(self._latent_first_unet_model.parameters()))
+            second_params = len(list(self._latent_second_unet_model.parameters()))
 
-        self._latent_first_instance_unet = DiffusionModelUNetModel(
-            embedding_dimension=embedding_seq_len,
-            embedding_channels=embedding_channels,
-            list_neurons_per_level=self._latent_diffusion_unet_channels_per_level,
-            list_attentions=self._latent_diffusion_unet_attention_mode,
-            number_residual_blocks=self._latent_diffusion_unet_num_residual_blocks,
-            normalization_groups=self._latent_diffusion_unet_group_normalization,
-            intermediary_activation_function=self._latent_diffusion_unet_intermediary_activation,
-            intermediary_activation_alpha=self._latent_diffusion_unet_intermediary_activation_alpha,
-            last_layer_activation=self._latent_diffusion_unet_last_layer_activation,
-            number_samples_per_class=self._number_samples_per_class
-        ).to(self._device)
+            if first_params != second_params:
+                raise RuntimeError(f"Parameter count mismatch after sync: {first_params} vs {second_params}")
 
-        self._latent_second_instance_unet = DiffusionModelUNetModel(
-            embedding_dimension=embedding_seq_len,
-            embedding_channels=embedding_channels,
-            list_neurons_per_level=self._latent_diffusion_unet_channels_per_level,
-            list_attentions=self._latent_diffusion_unet_attention_mode,
-            number_residual_blocks=self._latent_diffusion_unet_num_residual_blocks,
-            normalization_groups=self._latent_diffusion_unet_group_normalization,
-            intermediary_activation_function=self._latent_diffusion_unet_intermediary_activation,
-            intermediary_activation_alpha=self._latent_diffusion_unet_intermediary_activation_alpha,
-            last_layer_activation=self._latent_diffusion_unet_last_layer_activation,
-            number_samples_per_class=self._number_samples_per_class
-        ).to(self._device)
+        if not self._has_external_gaussian_diffusion_util:
+            self._latent_gaussian_diffusion_util = GaussianLatentDiffusion(
+                beta_start=self._latent_diffusion_gaussian_beta_start,
+                beta_end=self._latent_diffusion_gaussian_beta_end,
+                time_steps=self._latent_diffusion_gaussian_time_steps,
+                clip_min=self._latent_diffusion_gaussian_clip_min,
+                clip_max=self._latent_diffusion_gaussian_clip_max
+            ).to(self._device)
 
-        self._latent_first_unet_model = self._latent_first_instance_unet.build_model()
-        self._latent_second_unet_model = self._latent_second_instance_unet.build_model()
-        self._latent_second_unet_model.load_state_dict(self._latent_first_unet_model.state_dict())
 
-        # Initialize GaussianDiffusion
-        self._latent_gaussian_diffusion_util = GaussianLatentDiffusion(
-            beta_start=self._latent_diffusion_gaussian_beta_start,
-            beta_end=self._latent_diffusion_gaussian_beta_end,
-            time_steps=self._latent_diffusion_gaussian_time_steps,
-            clip_min=self._latent_diffusion_gaussian_clip_min,
-            clip_max=self._latent_diffusion_gaussian_clip_max
-        ).to(self._device)
-
-        # ========================================================================
-        # PHASE 5: Initialize Diffusion Algorithm
-        # ========================================================================
-
+        # CRITICAL: Use the DETECTED embedding_seq_len, not the original config value
         self._latent_diffusion_algorithm = LatentDiffusionAlgorithm(
             first_unet_model=self._latent_first_unet_model,
             second_unet_model=self._latent_second_unet_model,
@@ -702,12 +733,24 @@ class LatentDiffusion:
             time_steps=self._latent_diffusion_gaussian_time_steps,
             ema=self._latent_diffusion_ema,
             margin=self._latent_diffusion_margin,
-            embedding_dimension=embedding_seq_len
+            embedding_dimension=embedding_seq_len,  # Use detected value
+            device=self._device
         )
 
-        # ========================================================================
-        # PHASE 6: Train Diffusion Model
-        # ========================================================================
+        # CRITICAL: Explicitly verify and update the algorithm's embedding dimension
+        # This is the value used by generate_data()
+        if self._latent_diffusion_algorithm._embedding_dimension != embedding_seq_len:
+            self._latent_diffusion_algorithm._embedding_dimension = embedding_seq_len
+
+        algo_first_params = len(list(self._latent_diffusion_algorithm._network.parameters()))
+        algo_second_params = len(list(self._latent_diffusion_algorithm._second_unet_model.parameters()))
+
+
+        if algo_first_params != algo_second_params:
+            raise RuntimeError(
+                f"CRITICAL: UNet models have different parameter counts in algorithm: "
+                f"{algo_first_params} vs {algo_second_params}"
+            )
 
         num_batches = len(data_embedding) // self._latent_diffusion_unet_batch_size
 
@@ -728,15 +771,11 @@ class LatentDiffusion:
 
             avg_loss = sum(epoch_losses) / len(epoch_losses)
             if (epoch + 1) % 10 == 0 or epoch == 0:
-                print(f"  Epoch [{epoch + 1}/{self._latent_diffusion_unet_epochs}], Diffusion Loss: {avg_loss:.4f}")
+                print(f"  Diffusion Epoch [{epoch + 1}/{self._latent_diffusion_unet_epochs}], Loss: {avg_loss:.4f}")
 
             if self._callback_early_stop and self._callback_early_stop.should_stop(avg_loss):
                 print(f"  Early stopping at epoch {epoch + 1}")
                 break
-
-    # ========================================================================
-    # UNIFIED PUBLIC API
-    # ========================================================================
 
     def fit_model(self, input_shape, x_real_samples, y_real_samples):
         """
@@ -764,27 +803,12 @@ class LatentDiffusion:
         self._number_samples_per_class = {
             "number_classes": num_classes
         }
-
-        # Prepare data
-        print(f"\nPreparing data for Latent Diffusion ({self._framework})...")
-        print(f"  - Original input shape: {input_shape}")
-        print(f"  - Input data shape: {x_real_samples.shape}")
-        print(f"  - Number of classes: {num_classes}")
-
         # Flatten the input data if it has more than 2 dimensions
         # (batch_size, ...) -> (batch_size, flattened_features)
         if len(x_real_samples.shape) > 2:
             x_real_samples_flat = x_real_samples.reshape(x_real_samples.shape[0], -1)
-            print(f"  - Flattened data shape: {x_real_samples_flat.shape}")
         else:
             x_real_samples_flat = x_real_samples
-            print(f"  - Data already flat: {x_real_samples_flat.shape}")
-
-        print(f"\nStarting training...")
-        print(f"  - VAE Epochs: {self._latent_diffusion_VAE_epochs}")
-        print(f"  - UNet Epochs: {self._latent_diffusion_unet_epochs}")
-        print(f"  - Batch size: {self._latent_diffusion_unet_batch_size}")
-        print(f"  - Time steps: {self._latent_diffusion_gaussian_time_steps}")
 
         # Route to appropriate training method with flattened dimension
         if self._framework == 'tensorflow':
@@ -792,7 +816,6 @@ class LatentDiffusion:
         else:  # pytorch
             self.fit_model_pytorch(flattened_dim, x_real_samples_flat, y_real_samples)
 
-        print(f"\n✓ Training completed successfully!")
 
     def train(self, input_shape, x_real_samples, y_real_samples):
         """

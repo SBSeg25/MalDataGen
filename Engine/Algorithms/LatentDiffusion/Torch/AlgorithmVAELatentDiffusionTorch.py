@@ -5,7 +5,7 @@ __author__ = 'Kayuã Oleques Paim'
 __email__ = 'kayuaolequesp@gmail.com'
 __version__ = '{1}.{0}.{1}'
 __initial_data__ = '2022/06/01'
-__last_update__ = '2025/03/29'
+__last_update__ = '2025/12/14'
 __credits__ = ['Kayuã Oleques']
 
 # MIT License
@@ -30,14 +30,11 @@ __credits__ = ['Kayuã Oleques']
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-
 try:
     import os
     import sys
-
     import json
     import numpy
-
     import torch
     import torch.nn as nn
     import torch.nn.functional as F
@@ -60,54 +57,32 @@ class VAELatentDiffusionAlgorithmTorch(nn.Module):
     adaptable for different generative tasks.
 
     Attributes:
-        @_encoder (nn.Module):
+        _encoder (nn.Module):
             Encoder model that encodes input data into the latent space.
-        @_decoder (nn.Module):
+        _decoder (nn.Module):
             Decoder model that reconstructs data from the latent representation.
-        @_loss_function (callable):
+        _loss_function (callable):
             Function used to compute the total loss during training.
-        @_total_loss (float):
+        _total_loss (float):
             Tracks the overall loss during training.
-        @_reconstruction_loss (float):
+        _reconstruction_loss (float):
             Tracks the reconstruction loss during training.
-        @_kl_loss (float):
+        _kl_loss (float):
             Tracks the KL divergence loss during training.
-        @_latent_mean_distribution (float):
+        _latent_mean_distribution (float):
             Mean of the latent distribution.
-        @_latent_standard_deviation (float):
+        _latent_standard_deviation (float):
             Standard deviation of the latent distribution.
-        @_latent_dimension (int):
+        _latent_dimension (int):
             Dimensionality of the latent space.
-        @_decoder_latent_dimension (int):
+        _decoder_latent_dimension (int):
             Dimensionality of the latent space used by the decoder.
-        @_file_name_encoder (str):
+        _file_name_encoder (str):
             File name for saving the encoder model.
-        @_file_name_decoder (str):
+        _file_name_decoder (str):
             File name for saving the decoder model.
-        @_models_saved_path (str):
+        _models_saved_path (str):
             Directory path where the encoder and decoder models are saved.
-
-    Raises:
-        ValueError:
-            Raised in cases where:
-            - The latent dimension is non-positive.
-            - The standard deviation of the latent space is non-positive.
-            - The file paths are invalid.
-
-    Example:
-        >>> vae_model = VAELatentDiffusionAlgorithmPyTorch(
-        ...     encoder_model=encoder,
-        ...     decoder_model=decoder,
-        ...     loss_function=custom_loss_function,
-        ...     latent_dimension=128,
-        ...     latent_mean_distribution=0.0,
-        ...     latent_standard_deviation=1.0,
-        ...     file_name_encoder="encoder_model.pth",
-        ...     file_name_decoder="decoder_model.pth",
-        ...     models_saved_path="models/"
-        ... )
-        >>> optimizer = torch.optim.Adam(vae_model.parameters(), lr=0.001)
-        >>> loss_dict = vae_model.train_step(data, optimizer)
     """
 
     def __init__(self,
@@ -124,42 +99,19 @@ class VAELatentDiffusionAlgorithmTorch(nn.Module):
                  *args,
                  **kwargs):
         """
-        Initializes the VariationalAlgorithm model with provided encoder and decoder models,
-        loss function, and latent space parameters.
-
-        This constructor sets up the architecture, metrics, and paths for saving the models.
+        Initializes the VAELatentDiffusionAlgorithm model.
 
         Args:
-            @encoder_model (nn.Module):
-                The encoder model responsible for encoding input data into latent variables.
-            @decoder_model (nn.Module):
-                The decoder model responsible for reconstructing data from the latent space.
-            @loss_function (callable):
-                The loss function used to compute the training loss.
-            @latent_dimension (int):
-                The dimensionality of the latent space.
-            @decoder_latent_dimension (int):
-                The dimensionality of the latent space used by the decoder.
-            @latent_mean_distribution (float):
-                The mean of the latent distribution (usually 0).
-            @latent_standard_deviation (float):
-                The standard deviation of the latent distribution (usually 1).
-            @file_name_encoder (str):
-                The filename for saving the encoder model.
-            @file_name_decoder (str):
-                The filename for saving the decoder model.
-            @models_saved_path (str):
-                The directory where the models will be saved.
-            @*args:
-                Additional arguments for the parent class.
-            @**kwargs:
-                Additional keyword arguments for the parent class.
-
-        Raises:
-            ValueError:
-                If latent_dimension <= 0.
-                If latent_standard_deviation <= 0.
-                If file paths are invalid.
+            encoder_model (nn.Module): The encoder model.
+            decoder_model (nn.Module): The decoder model.
+            loss_function (callable): The loss function.
+            latent_dimension (int): The dimensionality of the latent space.
+            decoder_latent_dimension (int): Decoder latent dimension.
+            latent_mean_distribution (float): Mean of the latent distribution.
+            latent_standard_deviation (float): Standard deviation of the latent distribution.
+            file_name_encoder (str): Filename for saving the encoder.
+            file_name_decoder (str): Filename for saving the decoder.
+            models_saved_path (str): Directory where models will be saved.
         """
         super().__init__(*args, **kwargs)
 
@@ -167,7 +119,7 @@ class VAELatentDiffusionAlgorithmTorch(nn.Module):
         self._encoder = encoder_model
         self._decoder = decoder_model
 
-        # Loss function and metrics for tracking losses
+        # Loss function
         self._loss_function = loss_function
 
         # Initialize loss trackers
@@ -198,7 +150,7 @@ class VAELatentDiffusionAlgorithmTorch(nn.Module):
             optimizer: PyTorch optimizer for updating model parameters.
 
         Returns:
-            dict: Dictionary containing the loss values (total loss, reconstruction loss, KL divergence loss).
+            dict: Dictionary containing the loss values.
         """
         batch_x, batch_target = batch
 
@@ -229,7 +181,9 @@ class VAELatentDiffusionAlgorithmTorch(nn.Module):
         reconstruction_data = self._decoder(latent, labels)
 
         # Calculate binary cross-entropy loss for reconstruction
-        binary_cross_entropy_loss = F.binary_cross_entropy(reconstruction_data, batch_target, reduction='none')
+        binary_cross_entropy_loss = F.binary_cross_entropy(
+            reconstruction_data, batch_target, reduction='none'
+        )
         reconstruction_loss = binary_cross_entropy_loss.mean()
 
         # Calculate KL divergence loss
@@ -258,6 +212,7 @@ class VAELatentDiffusionAlgorithmTorch(nn.Module):
             "reconstruction_loss": reconstruction_loss.item(),
             "kl_loss": kl_divergence_loss.item()
         }
+
     def get_decoder_trained(self):
         """Returns the trained decoder model."""
         return self._decoder
@@ -291,8 +246,11 @@ class VAELatentDiffusionAlgorithmTorch(nn.Module):
             for i in range(0, len(data), batch_size):
                 batch = data[i:i + batch_size]
                 num_samples = batch.shape[0]
-                dummy_labels = torch.zeros(num_samples,
-                                           self._encoder._encoder_number_samples_per_class["number_classes"]).to(device)
+
+                # Get number of classes from encoder
+                num_classes = self._encoder._encoder_number_samples_per_class["number_classes"]
+                dummy_labels = torch.zeros(num_samples, num_classes).to(device)
+
                 latent_mean, _, _, _ = self._encoder(batch, dummy_labels)
                 embeddings.append(latent_mean.cpu().numpy())
 
@@ -302,56 +260,45 @@ class VAELatentDiffusionAlgorithmTorch(nn.Module):
         """
         Generate synthetic samples for each specified class using the trained decoder.
 
-        This function generates samples by sampling from a normal distribution in the latent space
-        and conditioning the generation process on class labels.
-
         Args:
-            number_samples_per_class (dict):
-                Dictionary specifying the number of samples to generate for each class.
-                Expected structure:
-                {
+            number_samples_per_class (dict): Dictionary specifying the number of samples.
+                Expected format: {
                     "classes": {class_label: number_of_samples, ...},
                     "number_classes": total_number_of_classes
                 }
 
         Returns:
-            dict:
-                A dictionary where each key is a class label and the value is an array of generated samples.
-                Each array contains the synthetic samples generated for the corresponding class.
+            dict: Generated samples organized by class.
         """
         self.eval()
         device = next(self.parameters()).device
 
-        # Initialize a dictionary to store the generated samples for each class
         generated_data = {}
 
-        # Iterate over each class and the corresponding number of samples to generate
         for label_class, number_instances in number_samples_per_class["classes"].items():
-            # Create a one-hot encoded label array for all samples in the current class
+            # Create a one-hot encoded label array
             label_samples_generated = F.one_hot(
                 torch.tensor([label_class] * number_instances, dtype=torch.long),
                 num_classes=number_samples_per_class["number_classes"]
             ).float().to(device)
 
-            # Sample random latent vectors from a standard normal distribution
+            # Sample random latent vectors
             latent_noise = torch.randn(number_instances, self._decoder_latent_dimension).to(device)
 
-            # Use the decoder to generate samples conditioned on the latent vectors and class labels
+            # Generate samples
             with torch.no_grad():
                 generated_samples = self._decoder(latent_noise, label_samples_generated)
 
-            # Round the generated samples to the nearest integer
+            # Round the generated samples
             generated_samples = torch.round(generated_samples).cpu().numpy()
 
-            # Store the generated samples in the dictionary under the corresponding class label
             generated_data[label_class] = generated_samples
 
-        # Return the dictionary with all generated samples, organized by class
         return generated_data
 
     def generate_synthetic_data(self, number_samples_generate, labels, latent_dimension):
         """
-        Generate synthetic data using the Variational AutoEncoder (VAE).
+        Generate synthetic data using the VAE.
 
         Args:
             number_samples_generate (int): Number of synthetic samples to generate.
@@ -371,7 +318,7 @@ class VAELatentDiffusionAlgorithmTorch(nn.Module):
             device=device
         ) * self._latent_standard_deviation + self._latent_mean_distribution
 
-        # Create label vectors for the generated data
+        # Create label vectors
         label_list = torch.full(
             (number_samples_generate, 1),
             labels,
@@ -379,17 +326,18 @@ class VAELatentDiffusionAlgorithmTorch(nn.Module):
             device=device
         )
 
-        # Generate synthetic data by passing random noise and labels through the decoder
+        # Generate synthetic data
         with torch.no_grad():
             synthetic_data = self._decoder(random_noise_generate, label_list)
 
-        # Return the generated synthetic data
         return synthetic_data
 
     def get_metrics(self):
         """
+        Returns averaged metrics tracked during training.
+
         Returns:
-            dict: Dictionary of averaged metrics tracked during training.
+            dict: Dictionary of averaged metrics.
         """
         if self._loss_count == 0:
             return {
@@ -413,7 +361,7 @@ class VAELatentDiffusionAlgorithmTorch(nn.Module):
 
     def save_model(self, directory, file_name):
         """
-        Save the encoder and decoder models in PyTorch format.
+        Save the encoder and decoder models.
 
         Args:
             directory (str): Directory where models will be saved.
@@ -422,7 +370,7 @@ class VAELatentDiffusionAlgorithmTorch(nn.Module):
         if not os.path.exists(directory):
             os.makedirs(directory)
 
-        # Construct file names for encoder and decoder models
+        # Construct file names
         encoder_file_name = os.path.join(directory, f"fold_{file_name}_encoder.pth")
         decoder_file_name = os.path.join(directory, f"fold_{file_name}_decoder.pth")
 
@@ -448,7 +396,7 @@ class VAELatentDiffusionAlgorithmTorch(nn.Module):
             directory (str): Directory where models are stored.
             file_name (str): Base file name for loading models.
         """
-        # Construct file names for encoder and decoder models
+        # Construct file names
         encoder_file_name = os.path.join(directory, f"fold_{file_name}_encoder.pth")
         decoder_file_name = os.path.join(directory, f"fold_{file_name}_decoder.pth")
 
@@ -462,6 +410,7 @@ class VAELatentDiffusionAlgorithmTorch(nn.Module):
 
         print(f"Models loaded from {directory}")
 
+    # Properties
     @property
     def decoder(self):
         return self._decoder

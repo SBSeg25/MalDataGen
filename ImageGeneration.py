@@ -10,7 +10,9 @@ Ideal para validar VAEs condicionais
 import os
 import numpy as np
 
+from Engine.Architectures.DenoisingDiffusion import DenoisingDiffusionUnetModel
 from Engine.Models.DenoisingDiffusion import DenoisingDiffusion
+from Engine.Models.LatentDiffusion import LatentDiffusion
 from Engine.Models.Wasserstein import Wasserstein
 from Engine.Models.WassersteinGP import WassersteinGP
 
@@ -72,7 +74,7 @@ y_real_samples = np.array(y_real_samples, dtype=np.int32)
 
 
 
-model = DenoisingDiffusion(number_classes=N_CLASSES)
+model = LatentDiffusion(number_classes=N_CLASSES)
 
 model.fit_model(
     input_shape=INPUT_SHAPE,

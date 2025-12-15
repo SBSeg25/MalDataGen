@@ -447,10 +447,14 @@ class GaussianLatentDiffusionTorch:
 
         noise = torch.randn_like(x)
 
-        nonzero_mask = (t != 0).float().reshape(x.shape[0], 1, 1, 1)
+        # FIXED: Dynamically create mask shape based on input dimensions
+        # For 3D input (batch, seq, channels): reshape to (batch, 1, 1)
+        # For 4D input (batch, C, H, W): reshape to (batch, 1, 1, 1)
+        ndim = len(x.shape)
+        mask_shape = [x.shape[0]] + [1] * (ndim - 1)
+        nonzero_mask = (t != 0).float().reshape(*mask_shape)
 
         return model_mean + nonzero_mask * torch.exp(0.5 * model_log_variance) * noise
-
     def to(self, device):
         """
         Move all tensors to the specified device (CPU or GPU).

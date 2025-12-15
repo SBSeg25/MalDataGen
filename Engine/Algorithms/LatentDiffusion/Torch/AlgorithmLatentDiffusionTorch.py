@@ -5,7 +5,7 @@ __author__ = 'Synthetic Ocean AI - Team'
 __email__ = 'syntheticoceanai@gmail.com'
 __version__ = '{1}.{0}.{1}'
 __initial_data__ = '2022/06/01'
-__last_update__ = '2025/03/29'
+__last_update__ = '2025/12/14'
 __credits__ = ['Synthetic Ocean AI']
 
 # MIT License
@@ -45,9 +45,12 @@ except ImportError as error:
     sys.exit(-1)
 
 
-class AlgorithmLatentDiffusionTorch(nn.Module):
+class AlgorithmLatentDiffusionTorch:
     """
     PyTorch implementation of a diffusion process using UNet architectures for generating synthetic data.
+
+    IMPORTANT: This class does NOT inherit from nn.Module to prevent automatic parameter
+    registration which was causing parameter count mismatches between the two UNet models.
 
     This model integrates an autoencoder and a diffusion network, enabling both data
     reconstruction and controlled generative modeling through Gaussian diffusion.
@@ -99,7 +102,7 @@ class AlgorithmLatentDiffusionTorch(nn.Module):
                  train_stage='all',
                  device='cuda'):
         """
-        Initializes the PyTorch Diffusion Model.
+        Initializes the PyTorch Diffusion Model WITHOUT nn.Module inheritance.
 
         Args:
             first_unet_model (nn.Module): Primary UNet model for diffusion.
@@ -116,7 +119,7 @@ class AlgorithmLatentDiffusionTorch(nn.Module):
             train_stage (str): Current training stage ('all', 'diffusion', etc.).
             device (str): Device for computation ('cuda' or 'cpu').
         """
-        super().__init__()
+        # NOTE: No super().__init__() call - we don't inherit from nn.Module
 
         self._ema = ema
         self._margin = margin
@@ -131,6 +134,16 @@ class AlgorithmLatentDiffusionTorch(nn.Module):
         self._optimizer_diffusion = optimizer_diffusion
         self._optimizer_autoencoder = optimizer_autoencoder
         self._device = device
+
+        # Verify models at initialization
+        first_param_count = len(list(self._network.parameters()))
+        second_param_count = len(list(self._second_unet_model.parameters()))
+
+        if first_param_count != second_param_count:
+            raise ValueError(
+                f"Models have different parameter counts at initialization: "
+                f"{first_param_count} vs {second_param_count}"
+            )
 
     def set_stage_training(self, training_stage):
         """Sets the current training stage."""
@@ -208,21 +221,27 @@ class AlgorithmLatentDiffusionTorch(nn.Module):
     def update_ema_weights(self):
         """Updates the weights of the second UNet model using EMA."""
         with torch.no_grad():
-            for param, ema_param in zip(self._network.parameters(),
-                                        self._second_unet_model.parameters()):
+            first_params = list(self._network.parameters())
+            second_params = list(self._second_unet_model.parameters())
+
+            if len(first_params) != len(second_params):
+
+                raise RuntimeError(
+                    f"Parameter count mismatch: {len(first_params)} vs {len(second_params)}. "
+                    f"The two UNet models must have identical architectures."
+                )
+
+            for idx, (param, ema_param) in enumerate(zip(first_params, second_params)):
+                if param.shape != ema_param.shape:
+
+                    raise RuntimeError(
+                        f"Parameter shape mismatch at index {idx}: {param.shape} vs {ema_param.shape}"
+                    )
+
+                # Perform EMA update
                 ema_param.data.mul_(self._ema).add_(param.data, alpha=1 - self._ema)
 
     def generate_data(self, labels, batch_size):
-        """
-        Generates synthetic data by reversing the diffusion process.
-
-        Args:
-            labels (torch.Tensor): Class labels for conditioning.
-            batch_size (int): Number of samples to generate.
-
-        Returns:
-            numpy.ndarray: Generated synthetic data samples.
-        """
         self._network.eval()
 
         with torch.no_grad():
@@ -232,16 +251,15 @@ class AlgorithmLatentDiffusionTorch(nn.Module):
                 device=self._device, dtype=torch.float32
             )
 
-            labels_vector = labels.unsqueeze(-1) if len(labels.shape) == 2 else labels
+            labels_vector = labels
 
             # Reverse diffusion process
             for time_step in reversed(range(0, self._time_steps)):
                 array_time = torch.full((labels_vector.shape[0],), time_step,
                                         device=self._device, dtype=torch.long)
 
-                # Predict noise
-                predicted_noise = self._network(embedding_diffusion, array_time, labels_vector)
 
+                predicted_noise = self._network(embedding_diffusion, array_time, labels_vector)
                 # Apply reverse diffusion step
                 embedding_diffusion = self._gdf_util.p_sample(
                     predicted_noise,
@@ -251,6 +269,7 @@ class AlgorithmLatentDiffusionTorch(nn.Module):
                 )
 
             # Decode embeddings to data
+            # labels_vector should remain 2D for decoder as well
             generated_data = self._decoder_model_data(embedding_diffusion, labels_vector)
 
         return generated_data.cpu().numpy()
@@ -261,6 +280,10 @@ class AlgorithmLatentDiffusionTorch(nn.Module):
 
         Args:
             number_samples_per_class (dict): Dictionary with class info.
+                Expected format: {
+                    "classes": {class_id: num_samples, ...},
+                    "number_classes": total_classes
+                }
 
         Returns:
             dict: Generated samples for each class.
@@ -275,7 +298,6 @@ class AlgorithmLatentDiffusionTorch(nn.Module):
 
             # Generate samples
             generated_samples = self.generate_data(labels, batch_size=64)
-            generated_samples = numpy.rint(generated_samples)
 
             generated_data[label_class] = generated_samples
 

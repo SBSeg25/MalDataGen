@@ -241,26 +241,6 @@ class AlgorithmDenoisingDiffusionTorch(nn.Module):
         """
         device = next(self._network.parameters()).device
 
-        # Print model summaries only if verbose
-        if verbose >= 1:
-            print("\n" + "=" * 80)
-            print("DENOISING DIFFUSION MODEL ARCHITECTURE (PyTorch)")
-            print("=" * 80)
-            print(f"\nDevice: {device}")
-            print(f"Batch Size: {batch_size}")
-            print(f"Epochs: {epochs}")
-            print(f"Time Steps: {self._time_steps}")
-
-            if self._network is not None:
-                print("\nFirst UNet Model:")
-                print(self._network)
-
-            if self._second_unet_model is not None:
-                print("\nSecond UNet Model (EMA):")
-                print(self._second_unet_model)
-
-            print("=" * 80 + "\n")
-
         # Prepare data
         x_real_samples = numpy.array(x_real_samples)
         x_real_samples = torch.from_numpy(x_real_samples).float().unsqueeze(-1)
@@ -291,11 +271,6 @@ class AlgorithmDenoisingDiffusionTorch(nn.Module):
             val_dataset = TensorDataset(x_val, y_val_one_hot)
             val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
-        # Training loop
-        if verbose >= 1:
-            print("\n" + "=" * 80)
-            print("STARTING TRAINING")
-            print("=" * 80 + "\n")
 
         self.train()
         best_loss = float('inf')
@@ -345,18 +320,7 @@ class AlgorithmDenoisingDiffusionTorch(nn.Module):
             # Print epoch summary based on verbose level
             if verbose == 1:
                 print(f' - avg_loss: {avg_loss:.4f}', end='')
-                if avg_loss < best_loss:
-                    best_loss = avg_loss
-                    print(f' ★ New Best!')
-                else:
-                    print()
-            elif verbose == 2:
-                print(f'Epoch {epoch + 1}/{epochs} - avg_loss: {avg_loss:.4f}', end='')
-                if avg_loss < best_loss:
-                    best_loss = avg_loss
-                    print(f' ★ New Best!')
-                else:
-                    print()
+                print()
 
             if avg_loss < best_loss:
                 best_loss = avg_loss
@@ -408,15 +372,6 @@ class AlgorithmDenoisingDiffusionTorch(nn.Module):
                     if verbose >= 1:
                         print(f"Warning: Could not call early stop callback: {e}")
 
-        # Print final summary
-        if verbose >= 1:
-            print("\n" + "=" * 80)
-            print("TRAINING COMPLETED")
-            print("=" * 80)
-            print(f"  Total Epochs:   {len(self._training_history['epoch'])}")
-            print(f"  Best Loss:      {best_loss:.6f}")
-            print(f"  Final Loss:     {avg_loss:.6f}")
-            print("=" * 80 + "\n")
 
         # Return history object (similar to Keras)
         class History:

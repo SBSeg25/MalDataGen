@@ -235,12 +235,23 @@ class VanillaDecoderDiffusionTorch(nn.Module, Activations):
         Forward pass through the decoder.
 
         Args:
-            neural_model_inputs (Tensor): Latent vector [batch, latent_dimension]
+            neural_model_inputs (Tensor): Latent vector [batch, latent_dimension] or [batch, seq_len, channels]
             label_input (Tensor): Class labels [batch, number_classes]
 
         Returns:
             Tensor: Reconstructed output [batch, output_shape]
         """
+        # FIXED: Handle 3D embeddings from diffusion process
+        # Flatten embeddings to 2D if needed: (batch, seq_len, channels) -> (batch, seq_len * channels)
+        if len(neural_model_inputs.shape) == 3:
+            batch_size = neural_model_inputs.shape[0]
+            neural_model_inputs = neural_model_inputs.reshape(batch_size, -1)
+
+        # Ensure labels are 2D (should already be, but be defensive)
+        if len(label_input.shape) > 2:
+            batch_size = label_input.shape[0]
+            label_input = label_input.reshape(batch_size, -1)
+
         # Concatenate latent vector with conditional labels
         x = torch.cat([neural_model_inputs, label_input], dim=-1)
 
