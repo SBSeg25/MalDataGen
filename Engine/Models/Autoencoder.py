@@ -295,11 +295,60 @@ class Autoencoder:
             if hasattr(self._autoencoder_algorithm, 'latent_dimension'):
                 self._autoencoder_algorithm.latent_dimension = self._autoencoder_latent_dimension
 
+    def _validate_callbacks(self, callbacks) -> list:
+        """
+        Validates and sanitizes the callbacks parameter.
+
+        Args:
+            callbacks: Can be None, a single callback, or a list of callbacks
+
+        Returns:
+            list: A validated list of callbacks
+
+        Raises:
+            TypeError: If callbacks parameter has invalid type
+            Warning: If any callback in the list doesn't have required methods
+        """
+        if callbacks is None:
+            return []
+
+        # Convert single callback to list
+        if not isinstance(callbacks, list):
+            callbacks = [callbacks]
+
+        validated_callbacks = []
+        for i, callback in enumerate(callbacks):
+            try:
+                # Check if callback has basic Keras callback interface
+                # Most Keras callbacks should have on_epoch_end method
+                if not (hasattr(callback, 'on_epoch_end') or
+                        hasattr(callback, 'on_batch_end') or
+                        hasattr(callback, 'on_train_begin')):
+                    logging.warning(
+                        f"Callback at index {i} ({type(callback).__name__}) "
+                        "may not be a valid Keras callback. It will be included but may cause issues."
+                    )
+
+                validated_callbacks.append(callback)
+
+            except Exception as e:
+                logging.error(
+                    f"Error validating callback at index {i}: {str(e)}. "
+                    "This callback will be skipped."
+                )
+                continue
+
+        return validated_callbacks
+
     def fit_model(
             self,
             input_shape: tuple[int, ...],
             x_real_samples: np.ndarray,
-            y_real_samples: np.ndarray
+            y_real_samples: np.ndarray,
+            batch_size: int = None,
+            epochs: int = None,
+            verbose: int = 1,
+            callbacks: list = None
     ) -> None:
         """
         Executes the complete autoencoder training process with automatic data flattening.
@@ -314,17 +363,44 @@ class Autoencoder:
             input_shape: Shape of input data samples (e.g., (784,) for 1D, (28, 28, 1) for 2D, (16, 16, 16) for 3D)
             x_real_samples: Training data samples (can be N-dimensional)
             y_real_samples: Corresponding class labels (1D array of class indices)
+            batch_size: Batch size for training (default: uses value from __init__ or DEFAULT_AUTOENCODER_BATCH_SIZE)
+            epochs: Number of training epochs (default: uses value from __init__ or DEFAULT_AUTOENCODER_NUMBER_EPOCHS)
+            verbose: Verbosity mode (0 = silent, 1 = progress bar, 2 = one line per epoch) (default: 1)
+            callbacks: List of Keras callbacks to apply during training (default: uses callbacks from __init__)
+                      Can be a single callback or a list of callbacks. Invalid callbacks will be filtered out with warnings.
+
+        Raises:
+            TypeError: If callbacks parameter has invalid type
+            ValueError: If batch_size or epochs are invalid (< 1)
 
         Process:
-            1. Flattens multi-dimensional input data
-            2. Converts labels to categorical format
-            3. Passes data and labels as separate inputs to model
-            4. Initializes model architecture (or uses provided)
-            5. Configures loss function
-            6. Sets up training callbacks
-            7. Executes autoencoder training
-            8. Manages model saving and monitoring
+            1. Validates input parameters (batch_size, epochs, callbacks)
+            2. Flattens multi-dimensional input data
+            3. Converts labels to categorical format
+            4. Passes data and labels as separate inputs to model
+            5. Initializes model architecture (or uses provided)
+            6. Configures loss function
+            7. Merges default callbacks with provided callbacks
+            8. Executes autoencoder training
+            9. Manages model saving and monitoring
         """
+
+        # Parameter validation and defaults
+        if batch_size is None:
+            batch_size = self._autoencoder_batch_size
+        elif batch_size < 1:
+            raise ValueError(f"batch_size must be >= 1, got {batch_size}")
+
+        if epochs is None:
+            epochs = self._autoencoder_number_epochs
+        elif epochs < 1:
+            raise ValueError(f"epochs must be >= 1, got {epochs}")
+
+        if not isinstance(verbose, int) or verbose not in [0, 1, 2]:
+            logging.warning(
+                f"verbose should be 0, 1, or 2. Got {verbose}. Using default value 1."
+            )
+            verbose = 1
 
         # Store original input shape for later reconstruction
         self._original_input_shape = input_shape
@@ -332,23 +408,16 @@ class Autoencoder:
         # Calculate total flattened dimension
         flattened_dim = int(np.prod(input_shape))
 
-        # Prepare data
-        print(f"\nPreparing data for Conditional Autoencoder...")
-        print(f"  - Original input shape: {input_shape}")
-        print(f"  - Input data shape: {x_real_samples.shape}")
 
         # Flatten the input data if it has more than 2 dimensions
         # (batch_size, ...) -> (batch_size, flattened_features)
         if len(x_real_samples.shape) > 2:
             x_real_samples_flat = x_real_samples.reshape(x_real_samples.shape[0], -1)
-            print(f"  - Flattened data shape: {x_real_samples_flat.shape}")
         else:
             x_real_samples_flat = x_real_samples
-            print(f"  - Data already flat: {x_real_samples_flat.shape}")
 
         # Convert labels to categorical format
         y_categorical = to_categorical(y_real_samples, num_classes=self._autoencoder_number_classes)
-        print(f"  - Categorical labels shape: {y_categorical.shape}")
 
         # Initialize the autoencoder model with flattened dimension
         # The model expects 2 separate inputs: [data, labels]
@@ -356,9 +425,7 @@ class Autoencoder:
 
         # Print the model summaries for the encoder and decoder if available
         if self._autoencoder_model is not None:
-            print(f"\nEncoder Model:")
             self._autoencoder_model.get_encoder(flattened_dim)
-            print(f"\nDecoder Model:")
             self._autoencoder_model.get_decoder(flattened_dim)
 
         # Ensure we have an algorithm
@@ -368,7 +435,7 @@ class Autoencoder:
         # Compile the autoencoder algorithm with the specified loss function
         self._autoencoder_algorithm.compile(loss='mse')
 
-        # Build callbacks list - only include callbacks that exist
+        # Build callbacks list starting with default callbacks from __init__
         callbacks_list = []
 
         if self._callback_model_monitor is not None:
@@ -377,10 +444,21 @@ class Autoencoder:
         if self._callback_early_stop is not None:
             callbacks_list.append(self._callback_early_stop)
 
-        print(f"\nStarting training...")
-        print(f"  - Epochs: {self._autoencoder_number_epochs}")
-        print(f"  - Batch size: {self._autoencoder_batch_size}")
-        print(f"  - Latent dimension: {self._autoencoder_latent_dimension}")
+        # Validate and add user-provided callbacks
+        if callbacks is not None:
+            try:
+                validated_callbacks = self._validate_callbacks(callbacks)
+                callbacks_list.extend(validated_callbacks)
+            except TypeError as e:
+                logging.error(
+                    f"Invalid callbacks parameter: {str(e)}. "
+                    "Using only default callbacks from initialization."
+                )
+            except Exception as e:
+                logging.error(
+                    f"Unexpected error processing callbacks: {str(e)}. "
+                    "Using only default callbacks from initialization."
+                )
 
         # Fit the autoencoder model
         # IMPORTANT: Pass as tuple (data, labels) - model concatenates internally!
@@ -389,12 +467,12 @@ class Autoencoder:
         self._autoencoder_algorithm.fit(
             (x_real_samples_flat, y_categorical),  # Input: tuple of (data, labels)
             x_real_samples_flat,  # Target: only the data (no labels)
-            epochs=self._autoencoder_number_epochs,
-            batch_size=self._autoencoder_batch_size,
+            epochs=epochs,
+            batch_size=batch_size,
+            verbose=verbose,
             callbacks=callbacks_list if callbacks_list else None
         )
 
-        print(f"\n✓ Training completed successfully!")
 
     # Additional getters for the algorithm and model
     @property
@@ -494,6 +572,17 @@ class Autoencoder:
     def autoencoder_batch_size(self, value: int) -> None:
         """Set the batch size."""
         self._autoencoder_batch_size = value
+
+    # Getter and setter for autoencoder_number_epochs
+    @property
+    def autoencoder_number_epochs(self) -> int:
+        """Get the number of epochs."""
+        return self._autoencoder_number_epochs
+
+    @autoencoder_number_epochs.setter
+    def autoencoder_number_epochs(self, value: int) -> None:
+        """Set the number of epochs."""
+        self._autoencoder_number_epochs = value
 
     # Getter and setter for autoencoder_number_classes
     @property

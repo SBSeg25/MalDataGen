@@ -23,8 +23,8 @@ from Engine.Models.VariationalAutoencoder import VariationalAutoencoder
 # Configurações MNIST
 # =====================
 
-IMAGE_SIZE = (32, 32)
-INPUT_SHAPE = (32, 32, 1)
+IMAGE_SIZE = (16, 16)
+INPUT_SHAPE = (16, 16, 1)
 
 N_CLASSES = 10
 BATCH_LIMIT = 4800
@@ -77,10 +77,10 @@ print(f"✓ Dataset carregado: {x_real_samples.shape}")
 # =====================
 
 models = {
+    "Adversarial": Adversarial(number_classes=N_CLASSES),
     "LatentDiffusion": LatentDiffusion(number_classes=N_CLASSES),
     "Wasserstein": Wasserstein(number_classes=N_CLASSES),
     "WassersteinGP": WassersteinGP(number_classes=N_CLASSES),
-    "Adversarial": Adversarial(number_classes=N_CLASSES),
     "Autoencoder": Autoencoder(number_classes=N_CLASSES),
     "VariationalAutoencoder": VariationalAutoencoder(number_classes=N_CLASSES)
 }
