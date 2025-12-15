@@ -1172,5 +1172,59 @@ class LatentDiffusion:
         return f"LatentDiffusion(framework='{self._framework}')"
 
     def get_samples(self, number_samples_per_class):
+        """
+        Generate samples using the trained model and reshape them to original input shape.
 
-        return self._latent_diffusion_algorithm.get_samples(number_samples_per_class)
+        NOW SUPPORTS MULTI-DIMENSIONAL OUTPUT:
+        - Automatically reshapes generated samples to original input dimensions
+        - Works with 1D, 2D, 3D, and N-D data
+
+        Args:
+            number_samples_per_class: Dictionary specifying number of samples per class
+                Format 1: {"number_classes": N, "classes": {0: n0, 1: n1, ...}}
+                Format 2 (simplified): {"number_classes": N, 0: n0, 1: n1, ...}
+
+        Returns:
+            np.ndarray: Generated samples reshaped to original input dimensions
+                - Shape: (total_samples, *original_input_shape)
+                - Example: For 3D input (16, 16, 16) with 100 total samples -> (100, 16, 16, 16)
+
+        Raises:
+            RuntimeError: If algorithm is not initialized
+        """
+        if self._latent_diffusion_algorithm is None:
+            raise RuntimeError(
+                "Cannot generate samples: algorithm is not initialized. "
+                "Please train the model first using fit_model() or train()."
+            )
+
+        # Generate flattened samples from algorithm
+        generated_data = self._latent_diffusion_algorithm.get_samples(number_samples_per_class)
+
+        # Check if we have stored original input shape
+        if not hasattr(self, '_original_input_shape') or self._original_input_shape is None:
+            # If no original shape stored, return flattened data
+            # Convert dict to array if needed
+            if isinstance(generated_data, dict):
+                all_samples = []
+                for label in sorted(generated_data.keys()):
+                    all_samples.append(generated_data[label])
+                return np.concatenate(all_samples, axis=0)
+            return generated_data
+
+        # Reshape generated samples to original input shape
+        reshaped_samples = []
+
+        if isinstance(generated_data, dict):
+            # If returned as dict, reshape each class
+            for label in sorted(generated_data.keys()):
+                samples = generated_data[label]
+                # Reshape from (n_samples, flattened_features) to (n_samples, *original_shape)
+                reshaped = samples.reshape(-1, *self._original_input_shape)
+                reshaped_samples.append(reshaped)
+
+            # Concatenate all classes
+            return np.concatenate(reshaped_samples, axis=0)
+        else:
+            # If returned as array, reshape directly
+            return generated_data.reshape(-1, *self._original_input_shape)

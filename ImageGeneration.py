@@ -9,14 +9,12 @@ Ideal para validar VAEs condicionais
 
 import os
 import numpy as np
-
-from Engine.Architectures.DenoisingDiffusion import DenoisingDiffusionUnetModel
-from Engine.Models.DenoisingDiffusion import DenoisingDiffusion
+os.environ["ML_FRAMEWORK"] = "pytorch"
 from Engine.Models.LatentDiffusion import LatentDiffusion
 from Engine.Models.Wasserstein import Wasserstein
 from Engine.Models.WassersteinGP import WassersteinGP
 
-os.environ["ML_FRAMEWORK"] = "tensorflow"
+
 from Engine.Models.Adversarial import Adversarial
 from Engine.Models.Autoencoder import Autoencoder
 from Engine.Models.VariationalAutoencoder import VariationalAutoencoder
@@ -73,6 +71,9 @@ x_real_samples = np.array(x_real_samples, dtype=np.float32)
 y_real_samples = np.array(y_real_samples, dtype=np.int32)
 
 
+# =====================
+# Modelo
+# =====================
 
 model = LatentDiffusion(number_classes=N_CLASSES)
 
@@ -139,111 +140,111 @@ Ideal para validar VAEs / GANs condicionais em imagens RGB
 
 import os
 import numpy as np
-os.environ["ML_FRAMEWORK"] = "tensorflow"
+os.environ["ML_FRAMEWORK"] = "pytorch"
 
 from Engine.Models.Adversarial import Adversarial
 from Engine.Models.Autoencoder import Autoencoder
 from Engine.Models.VariationalAutoencoder import VariationalAutoencoder
 
-
-# =====================
-# Configurações CIFAR-10
-# =====================
-
-IMAGE_SIZE = (16, 16)
-INPUT_SHAPE = (16, 16, 3)
-
-N_CLASSES = 10
-BATCH_LIMIT = 2200
-
-
-try:
-    from torchvision.datasets import CIFAR10
-except ImportError:
-    raise ImportError("Instale torchvision: pip install torchvision")
-
-from PIL import Image
-
-
-# =====================
-# Carregamento Dataset
-# =====================
-
-dataset = CIFAR10(
-    root="./data",
-    train=True,
-    download=True
-)
-
-x_real_samples = []
-y_real_samples = []
-
-for img, label in dataset:
-    # CIFAR-10 vem como PIL.Image em RGB
-    img = img.convert("RGB")
-    img = img.resize(IMAGE_SIZE)
-
-    img = np.asarray(img, dtype=np.float32) / 255.0  # normalização [0,1]
-
-    x_real_samples.append(img)
-    y_real_samples.append(int(label))
-
-    if len(x_real_samples) >= BATCH_LIMIT:
-        break
-
-x_real_samples = np.array(x_real_samples, dtype=np.float32)
-y_real_samples = np.array(y_real_samples, dtype=np.int32)
-
-
-# =====================
-# Modelo
-# =====================
-
-model = WassersteinGP(number_classes=N_CLASSES)
-
-model.fit_model(
-    input_shape=INPUT_SHAPE,
-    x_real_samples=x_real_samples,
-    y_real_samples=y_real_samples
-)
-
-
-# =====================
-# Geração Condicional
-# =====================
-
-number_samples_per_class = {
-    "number_classes": N_CLASSES,
-    "classes": {i: 8 for i in range(N_CLASSES)}
-}
-
-synthetic_samples = model.get_samples(number_samples_per_class)
-
-
-# =====================
-# Visualização
-# =====================
-
-try:
-    import matplotlib.pyplot as plt
-
-    n = min(36, synthetic_samples.shape[0])
-    cols = 6
-    rows = n // cols
-
-    fig, axes = plt.subplots(rows, cols, figsize=(12, 12))
-    fig.suptitle("CIFAR-10 Sintético (Modelo Condicional)", fontsize=16)
-
-    idx = 0
-    for i in range(rows):
-        for j in range(cols):
-            axes[i, j].imshow(synthetic_samples[idx])
-            axes[i, j].axis("off")
-            idx += 1
-
-    plt.tight_layout()
-    plt.show()
-    print("✓ Visualização concluída")
-
-except ImportError:
-    print("⚠️ Matplotlib não disponível")
+#
+# # =====================
+# # Configurações CIFAR-10
+# # =====================
+#
+# IMAGE_SIZE = (16, 16)
+# INPUT_SHAPE = (16, 16, 3)
+#
+# N_CLASSES = 10
+# BATCH_LIMIT = 2200
+#
+#
+# try:
+#     from torchvision.datasets import CIFAR10
+# except ImportError:
+#     raise ImportError("Instale torchvision: pip install torchvision")
+#
+# from PIL import Image
+#
+#
+# # =====================
+# # Carregamento Dataset
+# # =====================
+#
+# dataset = CIFAR10(
+#     root="./data",
+#     train=True,
+#     download=True
+# )
+#
+# x_real_samples = []
+# y_real_samples = []
+#
+# for img, label in dataset:
+#     # CIFAR-10 vem como PIL.Image em RGB
+#     img = img.convert("RGB")
+#     img = img.resize(IMAGE_SIZE)
+#
+#     img = np.asarray(img, dtype=np.float32) / 255.0  # normalização [0,1]
+#
+#     x_real_samples.append(img)
+#     y_real_samples.append(int(label))
+#
+#     if len(x_real_samples) >= BATCH_LIMIT:
+#         break
+#
+# x_real_samples = np.array(x_real_samples, dtype=np.float32)
+# y_real_samples = np.array(y_real_samples, dtype=np.int32)
+#
+#
+# # =====================
+# # Modelo
+# # =====================
+#
+# model = Wasserstein(number_classes=N_CLASSES)
+#
+# model.fit_model(
+#     input_shape=INPUT_SHAPE,
+#     x_real_samples=x_real_samples,
+#     y_real_samples=y_real_samples
+# )
+#
+#
+# # =====================
+# # Geração Condicional
+# # =====================
+#
+# number_samples_per_class = {
+#     "number_classes": N_CLASSES,
+#     "classes": {i: 8 for i in range(N_CLASSES)}
+# }
+#
+# synthetic_samples = model.get_samples(number_samples_per_class)
+#
+#
+# # =====================
+# # Visualização
+# # =====================
+#
+# try:
+#     import matplotlib.pyplot as plt
+#
+#     n = min(36, synthetic_samples.shape[0])
+#     cols = 6
+#     rows = n // cols
+#
+#     fig, axes = plt.subplots(rows, cols, figsize=(12, 12))
+#     fig.suptitle("CIFAR-10 Sintético (Modelo Condicional)", fontsize=16)
+#
+#     idx = 0
+#     for i in range(rows):
+#         for j in range(cols):
+#             axes[i, j].imshow(synthetic_samples[idx])
+#             axes[i, j].axis("off")
+#             idx += 1
+#
+#     plt.tight_layout()
+#     plt.show()
+#     print("✓ Visualização concluída")
+#
+# except ImportError:
+#     print("⚠️ Matplotlib não disponível")
