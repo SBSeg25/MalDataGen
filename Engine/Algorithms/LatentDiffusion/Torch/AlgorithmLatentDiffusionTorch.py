@@ -39,6 +39,7 @@ try:
     import torch.nn as nn
     import torch.nn.functional as F
     from typing import Any
+    from torch.utils.data import DataLoader, TensorDataset
 
 except ImportError as error:
     print(error)
@@ -135,6 +136,9 @@ class AlgorithmLatentDiffusionTorch:
         self._optimizer_autoencoder = optimizer_autoencoder
         self._device = device
 
+        # Initialize loss tracker
+        self._total_loss_tracker = {'sum': 0.0, 'count': 0}
+
         # Verify models at initialization
         first_param_count = len(list(self._network.parameters()))
         second_param_count = len(list(self._second_unet_model.parameters()))
@@ -170,7 +174,16 @@ class AlgorithmLatentDiffusionTorch:
         loss_diffusion = self.train_diffusion_model(raw_data, label)
         self.update_ema_weights()
 
-        return {"Diffusion_loss": loss_diffusion.item() if loss_diffusion is not None else 0}
+        loss_value = loss_diffusion.item() if loss_diffusion is not None else 0
+
+        # Update loss tracker
+        self._total_loss_tracker['sum'] += loss_value
+        self._total_loss_tracker['count'] += 1
+
+        return {
+            "Diffusion_loss": loss_value,
+            "loss": loss_value
+        }
 
     def train_diffusion_model(self, data, ground_truth):
         """
@@ -225,7 +238,6 @@ class AlgorithmLatentDiffusionTorch:
             second_params = list(self._second_unet_model.parameters())
 
             if len(first_params) != len(second_params):
-
                 raise RuntimeError(
                     f"Parameter count mismatch: {len(first_params)} vs {len(second_params)}. "
                     f"The two UNet models must have identical architectures."
@@ -233,13 +245,200 @@ class AlgorithmLatentDiffusionTorch:
 
             for idx, (param, ema_param) in enumerate(zip(first_params, second_params)):
                 if param.shape != ema_param.shape:
-
                     raise RuntimeError(
                         f"Parameter shape mismatch at index {idx}: {param.shape} vs {ema_param.shape}"
                     )
 
                 # Perform EMA update
                 ema_param.data.mul_(self._ema).add_(param.data, alpha=1 - self._ema)
+
+    def fit(self, x=None, y=None, batch_size=32, epochs=1, verbose=1,
+            callbacks=None, validation_data=None, shuffle=True,
+            initial_epoch=0, steps_per_epoch=None, validation_steps=None,
+            validation_freq=1, optimizer=None, learning_rate=0.001, **kwargs):
+        """
+        Train the model with a simplified progress bar.
+
+        Args:
+            x: Input data (numpy array or torch tensor).
+            y: Target data (labels, numpy array or torch tensor).
+            batch_size: Number of samples per gradient update.
+            epochs: Number of epochs to train.
+            verbose: 0 = silent, 1 = progress bar, 2 = one line per epoch.
+            callbacks: List of callbacks to apply during training.
+            validation_data: Data for validation (tuple of (x_val, y_val)).
+            shuffle: Whether to shuffle data before each epoch.
+            initial_epoch: Epoch at which to start training.
+            steps_per_epoch: Number of steps per epoch.
+            validation_steps: Number of validation steps.
+            validation_freq: Validation frequency.
+            optimizer: PyTorch optimizer (if provided, replaces current optimizer).
+            learning_rate: Learning rate for optimizer (only used if optimizer is provided).
+
+        Returns:
+            A History object with training metrics.
+        """
+
+        # Set optimizer if provided
+        if optimizer is not None:
+            self._optimizer_diffusion = optimizer
+
+        # Prepare the dataset
+        if isinstance(x, DataLoader):
+            train_dataset = x
+        else:
+            # Convert to tensors if needed
+            if not isinstance(x, torch.Tensor):
+                x = torch.from_numpy(x).float()
+            if y is None:
+                y = x
+            if not isinstance(y, torch.Tensor):
+                y = torch.from_numpy(y).float()
+
+            dataset = TensorDataset(x, y)
+            train_dataset = DataLoader(
+                dataset,
+                batch_size=batch_size,
+                shuffle=shuffle
+            )
+
+        # Calculate steps per epoch if not provided
+        if steps_per_epoch is None:
+            steps_per_epoch = len(train_dataset)
+
+        # Prepare validation data
+        val_dataset = None
+        if validation_data is not None:
+            x_val, y_val = validation_data
+            if not isinstance(x_val, torch.Tensor):
+                x_val = torch.from_numpy(x_val).float()
+            if not isinstance(y_val, torch.Tensor):
+                y_val = torch.from_numpy(y_val).float()
+            val_dataset = DataLoader(
+                TensorDataset(x_val, y_val),
+                batch_size=batch_size,
+                shuffle=False
+            )
+
+        # History to store metrics
+        history = {'loss': []}
+
+        # Training loop
+        for epoch in range(initial_epoch, epochs):
+            # Reset loss tracker
+            self._total_loss_tracker = {'sum': 0.0, 'count': 0}
+
+            if verbose == 1:
+                print(f'\nEpoch {epoch + 1}/{epochs}')
+
+            # Progress tracking
+            step = 0
+            for batch_data in train_dataset:
+                step += 1
+
+                # Perform training step
+                metrics = self.train_step(batch_data)
+                current_loss = float(metrics['loss'])
+
+                # Simple progress bar
+                if verbose == 1:
+                    progress = int(50 * step / steps_per_epoch)
+                    bar = '=' * progress + '>' + '.' * (50 - progress - 1)
+                    print(f'\r[{bar}] {step}/{steps_per_epoch} - loss: {current_loss:.4f}',
+                          end='', flush=True)
+
+                if step >= steps_per_epoch:
+                    break
+
+            # Store epoch loss
+            epoch_loss = (self._total_loss_tracker['sum'] /
+                          max(self._total_loss_tracker['count'], 1))
+            history['loss'].append(epoch_loss)
+
+            if verbose == 1:
+                print(f' - loss: {epoch_loss:.4f}')
+            elif verbose == 2:
+                print(f'Epoch {epoch + 1}/{epochs} - loss: {epoch_loss:.4f}')
+
+            # Validation
+            if val_dataset is not None and (epoch + 1) % validation_freq == 0:
+                val_loss = self._evaluate_validation(val_dataset, validation_steps)
+                if 'val_loss' not in history:
+                    history['val_loss'] = []
+                history['val_loss'].append(val_loss)
+
+                if verbose >= 1:
+                    print(f' - val_loss: {val_loss:.4f}')
+
+            # Callbacks
+            if callbacks is not None:
+                for callback in callbacks:
+                    callback.on_epoch_end(epoch, {'loss': epoch_loss})
+
+        # Return history object
+        class History:
+            def __init__(self, history_dict):
+                self.history = history_dict
+
+        return History(history)
+
+    def _evaluate_validation(self, validation_data, validation_steps=None):
+        """
+        Evaluate the model on validation data.
+
+        Args:
+            validation_data: Validation DataLoader.
+            validation_steps: Number of validation steps.
+
+        Returns:
+            Average validation loss.
+        """
+        self._network.eval()
+        val_losses = []
+        step = 0
+
+        with torch.no_grad():
+            for batch_data in validation_data:
+                batch_x, batch_y = batch_data
+
+                # Move to device
+                batch_x = batch_x.to(self._device)
+                batch_y = batch_y.to(self._device)
+
+                # Sample random time steps for validation
+                batch_size = batch_x.shape[0]
+                random_time_steps = torch.randint(
+                    0, self._time_steps, (batch_size,),
+                    device=self._device, dtype=torch.long
+                )
+
+                # Sample random noise
+                random_noise = torch.randn_like(batch_x)
+
+                # Apply forward diffusion
+                embedding_with_noise = self._gdf_util.q_sample(
+                    batch_x,
+                    random_time_steps,
+                    random_noise
+                )
+
+                # Predict noise
+                predicted_noise = self._network(
+                    embedding_with_noise,
+                    random_time_steps,
+                    batch_y
+                )
+
+                # Compute loss
+                loss = F.mse_loss(predicted_noise, random_noise)
+                val_losses.append(float(loss))
+
+                step += 1
+                if validation_steps is not None and step >= validation_steps:
+                    break
+
+        self._network.train()
+        return numpy.mean(val_losses) if val_losses else 0.0
 
     def generate_data(self, labels, batch_size):
         self._network.eval()
@@ -257,7 +456,6 @@ class AlgorithmLatentDiffusionTorch:
             for time_step in reversed(range(0, self._time_steps)):
                 array_time = torch.full((labels_vector.shape[0],), time_step,
                                         device=self._device, dtype=torch.long)
-
 
                 predicted_noise = self._network(embedding_diffusion, array_time, labels_vector)
                 # Apply reverse diffusion step

@@ -8,7 +8,6 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/12/13'
 __credits__ = ['Synthetic Ocean AI']
 
-
 try:
     import sys
     import os
@@ -43,7 +42,7 @@ DEFAULT_DIFFUSION_GAUSSIAN_CLIP_MIN = -1.0
 DEFAULT_DIFFUSION_GAUSSIAN_CLIP_MAX = 1.0
 DEFAULT_DIFFUSION_MARGIN = 0.5
 DEFAULT_DIFFUSION_EMA = 0.999
-DEFAULT_DIFFUSION_TIME_STEPS =  500
+DEFAULT_DIFFUSION_TIME_STEPS = 500
 
 
 class DenoisingDiffusion:
@@ -376,11 +375,62 @@ class DenoisingDiffusion:
             clip_max=self._denoising_diffusion_gaussian_clip_max
         )
 
+    def _validate_callbacks(self, callbacks) -> list:
+        """
+        Validates and sanitizes the callbacks parameter.
+
+        Args:
+            callbacks: Can be None, a single callback, or a list of callbacks
+
+        Returns:
+            list: A validated list of callbacks
+
+        Raises:
+            TypeError: If callbacks parameter has invalid type
+            Warning: If any callback in the list doesn't have required methods
+        """
+        if callbacks is None:
+            return []
+
+        # Convert single callback to list
+        if not isinstance(callbacks, list):
+            callbacks = [callbacks]
+
+        validated_callbacks = []
+        for i, callback in enumerate(callbacks):
+            try:
+                # Check if callback has basic Keras/PyTorch callback interface
+                # For Keras callbacks, check for on_epoch_end
+                # For PyTorch, we might have different callback structures
+                if self._framework == 'tensorflow':
+                    if not (hasattr(callback, 'on_epoch_end') or
+                            hasattr(callback, 'on_batch_end') or
+                            hasattr(callback, 'on_train_begin')):
+                        logging.warning(
+                            f"Callback at index {i} ({type(callback).__name__}) "
+                            "may not be a valid Keras callback. It will be included but may cause issues."
+                        )
+
+                validated_callbacks.append(callback)
+
+            except Exception as e:
+                logging.error(
+                    f"Error validating callback at index {i}: {str(e)}. "
+                    "This callback will be skipped."
+                )
+                continue
+
+        return validated_callbacks
+
     def _training_denoising_diffusion_model_pytorch(
             self,
             input_shape: tuple[int, ...],
             x_real_samples: np.ndarray,
-            y_real_samples: np.ndarray
+            y_real_samples: np.ndarray,
+            batch_size: int,
+            epochs: int,
+            verbose: int,
+            callbacks: list
     ) -> None:
         """
         PyTorch training implementation (simplified - delegates to AlgorithmDenoisingDiffusionTorch).
@@ -397,14 +447,21 @@ class DenoisingDiffusion:
                 "Please check that all required components are properly initialized."
             )
 
-        # Extract training parameters
-        batch_size = self._denoising_diffusion_unet_batch_size
-        epochs = self._denoising_diffusion_unet_epochs
-
-        # Extract callbacks
-        callback_model_monitor =  self._callback_model_monitor
+        # Extract callbacks (merge with provided ones)
+        callback_model_monitor = self._callback_model_monitor
         callback_early_stop = self._callback_early_stop
-        use_early_stop = False
+        use_early_stop = callback_early_stop is not None
+
+        # Build callbacks list
+        callbacks_list = []
+        if callback_model_monitor is not None:
+            callbacks_list.append(callback_model_monitor)
+        if callback_early_stop is not None:
+            callbacks_list.append(callback_early_stop)
+
+        # Add user-provided callbacks
+        if callbacks:
+            callbacks_list.extend(callbacks)
 
         # Delegate training to the algorithm's fit method
         history = self._denoising_diffusion_algorithm.fit(
@@ -414,18 +471,22 @@ class DenoisingDiffusion:
             epochs=epochs,
             callback_model_monitor=callback_model_monitor,
             callback_early_stop=callback_early_stop,
-            use_early_stop=use_early_stop
+            use_early_stop=use_early_stop,
+            verbose=verbose
         )
 
         # Update local training history
         self._training_history = history
 
-
     def _training_denoising_diffusion_model_tensorflow(
             self,
             input_shape: tuple[int, ...],
             x_real_samples: np.ndarray,
-            y_real_samples: np.ndarray
+            y_real_samples: np.ndarray,
+            batch_size: int,
+            epochs: int,
+            verbose: int,
+            callbacks: list
     ) -> None:
         """
         TensorFlow training implementation.
@@ -457,11 +518,18 @@ class DenoisingDiffusion:
         # Initialize the diffusion model
         self._get_denoising_diffusion_tensorflow(input_shape)
 
-        # Setup callbacks
-        callbacks_list = [self._callback_model_monitor] if self._callback_model_monitor else []
+        # Setup callbacks - merge default with provided ones
+        callbacks_list = []
 
-        if self._callback_early_stop:
+        if self._callback_model_monitor is not None:
+            callbacks_list.append(self._callback_model_monitor)
+
+        if self._callback_early_stop is not None:
             callbacks_list.append(self._callback_early_stop)
+
+        # Add user-provided callbacks
+        if callbacks:
+            callbacks_list.extend(callbacks)
 
         # Initialize the diffusion algorithm
         self._denoising_diffusion_algorithm = AlgorithmDenoisingDiffusion(
@@ -490,9 +558,10 @@ class DenoisingDiffusion:
         history = self._denoising_diffusion_algorithm.fit(
             x_real_samples,
             to_categorical(y_real_samples, num_classes=self._number_samples_per_class["number_classes"]),
-            epochs=self._denoising_diffusion_unet_epochs,
-            batch_size=self._denoising_diffusion_unet_batch_size,
-            callbacks=callbacks_list
+            epochs=epochs,
+            batch_size=batch_size,
+            verbose=verbose,
+            callbacks=callbacks_list if callbacks_list else None
         )
 
         # Store training history
@@ -506,7 +575,11 @@ class DenoisingDiffusion:
             self,
             input_shape: tuple,
             x_real_samples: np.ndarray,
-            y_real_samples: np.ndarray
+            y_real_samples: np.ndarray,
+            batch_size: int = None,
+            epochs: int = None,
+            verbose: int = 1,
+            callbacks: list = None
     ) -> None:
         """
         Train the denoising diffusion model using the appropriate framework with automatic data flattening.
@@ -518,10 +591,51 @@ class DenoisingDiffusion:
 
         Args:
             input_shape: Shape of input data samples (e.g., (784,) for 1D, (28, 28, 1) for 2D, (16, 16, 16) for 3D)
-            arguments: Training arguments/configuration
             x_real_samples: Training samples (can be N-dimensional)
             y_real_samples: Training labels (1D array of class indices)
+            batch_size: Batch size for training (default: uses value from __init__ or DEFAULT_DIFFUSION_UNET_BATCH_SIZE)
+            epochs: Number of training epochs (default: uses value from __init__ or DEFAULT_DIFFUSION_UNET_NUMBER_EPOCHS)
+            verbose: Verbosity mode (0 = silent, 1 = progress bar, 2 = one line per epoch) (default: 1)
+            callbacks: List of callbacks to apply during training (default: uses callbacks from __init__)
+                      Can be a single callback or a list of callbacks. Invalid callbacks will be filtered out with warnings.
+
+        Raises:
+            TypeError: If callbacks parameter has invalid type
+            ValueError: If batch_size or epochs are invalid (< 1)
         """
+        # Parameter validation and defaults
+        if batch_size is None:
+            batch_size = self._denoising_diffusion_unet_batch_size
+        elif batch_size < 1:
+            raise ValueError(f"batch_size must be >= 1, got {batch_size}")
+
+        if epochs is None:
+            epochs = self._denoising_diffusion_unet_epochs
+        elif epochs < 1:
+            raise ValueError(f"epochs must be >= 1, got {epochs}")
+
+        if not isinstance(verbose, int) or verbose not in [0, 1, 2]:
+            logging.warning(
+                f"verbose should be 0, 1, or 2. Got {verbose}. Using default value 1."
+            )
+            verbose = 1
+
+        # Validate and process callbacks
+        validated_callbacks = []
+        if callbacks is not None:
+            try:
+                validated_callbacks = self._validate_callbacks(callbacks)
+            except TypeError as e:
+                logging.error(
+                    f"Invalid callbacks parameter: {str(e)}. "
+                    "Using only default callbacks from initialization."
+                )
+            except Exception as e:
+                logging.error(
+                    f"Unexpected error processing callbacks: {str(e)}. "
+                    "Using only default callbacks from initialization."
+                )
+
         # Store original input shape for later reconstruction
         self._original_input_shape = input_shape
 
@@ -535,7 +649,6 @@ class DenoisingDiffusion:
             "number_classes": num_classes
         }
 
-
         # Flatten the input data if it has more than 2 dimensions
         # (batch_size, ...) -> (batch_size, flattened_features)
         if len(x_real_samples.shape) > 2:
@@ -543,22 +656,27 @@ class DenoisingDiffusion:
         else:
             x_real_samples_flat = x_real_samples
 
-
         # Route to appropriate training method with flattened dimension
         if self._framework == 'pytorch':
             self._training_denoising_diffusion_model_pytorch(
-                flattened_dim, x_real_samples_flat, y_real_samples
+                flattened_dim, x_real_samples_flat, y_real_samples,
+                batch_size, epochs, verbose, validated_callbacks
             )
         elif self._framework == 'tensorflow':
             self._training_denoising_diffusion_model_tensorflow(
-                flattened_dim, x_real_samples_flat, y_real_samples
+                flattened_dim, x_real_samples_flat, y_real_samples,
+                batch_size, epochs, verbose, validated_callbacks
             )
 
     def train(
             self,
             input_shape: tuple,
             x_real_samples: np.ndarray,
-            y_real_samples: np.ndarray
+            y_real_samples: np.ndarray,
+            batch_size: int = None,
+            epochs: int = None,
+            verbose: int = 1,
+            callbacks: list = None
     ) -> None:
         """
         Public method to train the denoising diffusion model.
@@ -566,12 +684,16 @@ class DenoisingDiffusion:
 
         Args:
             input_shape: Shape of input data
-            arguments: Training arguments/configuration
             x_real_samples: Training samples
             y_real_samples: Training labels
+            batch_size: Batch size for training (default: uses value from __init__)
+            epochs: Number of training epochs (default: uses value from __init__)
+            verbose: Verbosity mode (0 = silent, 1 = progress bar, 2 = one line per epoch)
+            callbacks: List of callbacks to apply during training
         """
         self.fit_model(
-            input_shape, x_real_samples, y_real_samples
+            input_shape, x_real_samples, y_real_samples,
+            batch_size, epochs, verbose, callbacks
         )
 
     def get_samples(self, number_samples_per_class):
@@ -671,6 +793,36 @@ class DenoisingDiffusion:
     def denoising_diffusion_algorithm(self):
         """Get the diffusion algorithm instance."""
         return self._denoising_diffusion_algorithm
+
+    @property
+    def callback_model_monitor(self):
+        """Get the model monitor callback."""
+        return self._callback_model_monitor
+
+    @callback_model_monitor.setter
+    def callback_model_monitor(self, value) -> None:
+        """Set the model monitor callback."""
+        self._callback_model_monitor = value
+
+    @property
+    def callback_early_stop(self):
+        """Get the early stop callback."""
+        return self._callback_early_stop
+
+    @callback_early_stop.setter
+    def callback_early_stop(self, value) -> None:
+        """Set the early stop callback."""
+        self._callback_early_stop = value
+
+    @property
+    def callback_resources_monitor(self):
+        """Get the resources monitor callback."""
+        return self._callback_resources_monitor
+
+    @callback_resources_monitor.setter
+    def callback_resources_monitor(self, value) -> None:
+        """Set the resources monitor callback."""
+        self._callback_resources_monitor = value
 
     # Property getters and setters for all configuration parameters
     @property

@@ -10,7 +10,8 @@ Testa todos os modelos disponíveis e salva resultados
 import os
 import numpy as np
 
-os.environ["ML_FRAMEWORK"] = "pytorch"
+
+os.environ["ML_FRAMEWORK"] = "tensorflow"
 
 from Engine.Models.LatentDiffusion import LatentDiffusion
 from Engine.Models.Wasserstein import Wasserstein
@@ -18,6 +19,7 @@ from Engine.Models.WassersteinGP import WassersteinGP
 from Engine.Models.Adversarial import Adversarial
 from Engine.Models.Autoencoder import Autoencoder
 from Engine.Models.VariationalAutoencoder import VariationalAutoencoder
+from Engine.Models.DenoisingDiffusion import DenoisingDiffusion
 
 # =====================
 # Configurações MNIST
@@ -77,12 +79,13 @@ print(f"✓ Dataset carregado: {x_real_samples.shape}")
 # =====================
 
 models = {
-    "Adversarial": Adversarial(number_classes=N_CLASSES),
-    "LatentDiffusion": LatentDiffusion(number_classes=N_CLASSES),
-    "Wasserstein": Wasserstein(number_classes=N_CLASSES),
-    "WassersteinGP": WassersteinGP(number_classes=N_CLASSES),
-    "Autoencoder": Autoencoder(number_classes=N_CLASSES),
-    "VariationalAutoencoder": VariationalAutoencoder(number_classes=N_CLASSES)
+    #"LatentDiffusion": LatentDiffusion(number_classes=N_CLASSES),
+    # "DenoisingDiffusion": DenoisingDiffusion(number_classes=N_CLASSES),
+     "Autoencoder": Autoencoder(number_classes=N_CLASSES),
+    # "Adversarial": Adversarial(number_classes=N_CLASSES),
+    # "Wasserstein": Wasserstein(number_classes=N_CLASSES),
+    # "WassersteinGP": WassersteinGP(number_classes=N_CLASSES),
+    #"VariationalAutoencoder": VariationalAutoencoder(number_classes=N_CLASSES)
 }
 
 # =====================

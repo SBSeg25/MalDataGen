@@ -39,6 +39,7 @@ try:
     import torch.nn as nn
     import torch.nn.functional as F
     from abc import ABC
+    from torch.utils.data import DataLoader, TensorDataset
 
 except ImportError as error:
     print(error)
@@ -140,19 +141,43 @@ class VAELatentDiffusionAlgorithmTorch(nn.Module):
         # Path for saving models
         self._models_saved_path = models_saved_path
 
-    def train_step(self, batch, labels, optimizer):
+        # Optimizer (will be set in fit() if not provided)
+        self._optimizer = None
+
+    def train_step(self, batch, labels=None, optimizer=None):
         """
         Perform a training step for the Variational AutoEncoder (VAE).
 
         Args:
-            batch: Tuple of (batch_x, batch_target) - input data and reconstruction target.
-            labels: One-hot encoded class labels for conditioning.
-            optimizer: PyTorch optimizer for updating model parameters.
+            batch: Tuple of (batch_x, batch_target) or just batch_x - input data and reconstruction target.
+            labels: One-hot encoded class labels for conditioning (optional, can be part of batch).
+            optimizer: PyTorch optimizer for updating model parameters (optional if set in fit()).
 
         Returns:
             dict: Dictionary containing the loss values.
         """
-        batch_x, batch_target = batch
+        # Handle different batch formats
+        if isinstance(batch, (tuple, list)):
+            if len(batch) == 2:
+                batch_x, batch_target = batch
+                # If labels not provided separately, use batch_target as labels
+                if labels is None:
+                    labels = batch_target
+            elif len(batch) == 3:
+                batch_x, batch_target, labels = batch
+            else:
+                raise ValueError(f"Batch must be a tuple of 2 or 3 elements, got {len(batch)}")
+        else:
+            batch_x = batch
+            batch_target = batch
+            if labels is None:
+                raise ValueError("Labels must be provided when batch is not a tuple")
+
+        # Use internal optimizer if not provided
+        if optimizer is None:
+            optimizer = self._optimizer
+            if optimizer is None:
+                raise ValueError("No optimizer available. Provide optimizer or call fit() first.")
 
         # Ensure tensors are on the same device as the model
         device = next(self.parameters()).device
@@ -211,6 +236,251 @@ class VAELatentDiffusionAlgorithmTorch(nn.Module):
             "loss": loss_model_in_reconstruction.item(),
             "reconstruction_loss": reconstruction_loss.item(),
             "kl_loss": kl_divergence_loss.item()
+        }
+
+    def fit(self, x=None, y=None, batch_size=32, epochs=1, verbose=1,
+            callbacks=None, validation_data=None, shuffle=True,
+            initial_epoch=0, steps_per_epoch=None, validation_steps=None,
+            validation_freq=1, optimizer=None, learning_rate=0.001, **kwargs):
+        """
+        Train the model with a simplified progress bar.
+
+        Args:
+            x: Input data (numpy array or torch tensor).
+            y: Target data (labels, numpy array or torch tensor). If None, uses x as target.
+            batch_size: Number of samples per gradient update.
+            epochs: Number of epochs to train.
+            verbose: 0 = silent, 1 = progress bar, 2 = one line per epoch.
+            callbacks: List of callbacks to apply during training.
+            validation_data: Data for validation (tuple of (x_val, y_val) or (x_val, y_val, labels_val)).
+            shuffle: Whether to shuffle data before each epoch.
+            initial_epoch: Epoch at which to start training.
+            steps_per_epoch: Number of steps per epoch.
+            validation_steps: Number of validation steps.
+            validation_freq: Validation frequency.
+            optimizer: PyTorch optimizer (if provided, replaces current optimizer).
+            learning_rate: Learning rate for optimizer (only used if optimizer is None).
+
+        Returns:
+            A History object with training metrics.
+        """
+
+        # Set optimizer
+        if optimizer is not None:
+            self._optimizer = optimizer
+        elif self._optimizer is None:
+            # Create default optimizer if none exists
+            self._optimizer = torch.optim.Adam(self.parameters(), lr=learning_rate)
+
+        # Prepare the dataset
+        if isinstance(x, DataLoader):
+            train_dataset = x
+        else:
+            # Convert to tensors if needed
+            if not isinstance(x, torch.Tensor):
+                x = torch.from_numpy(x).float()
+            if y is None:
+                y = x
+            if not isinstance(y, torch.Tensor):
+                y = torch.from_numpy(y).float()
+
+            dataset = TensorDataset(x, y)
+            train_dataset = DataLoader(
+                dataset,
+                batch_size=batch_size,
+                shuffle=shuffle
+            )
+
+        # Calculate steps per epoch if not provided
+        if steps_per_epoch is None:
+            steps_per_epoch = len(train_dataset)
+
+        # Prepare validation data
+        val_dataset = None
+        if validation_data is not None:
+            if len(validation_data) == 2:
+                x_val, y_val = validation_data
+                labels_val = None
+            elif len(validation_data) == 3:
+                x_val, y_val, labels_val = validation_data
+            else:
+                raise ValueError("validation_data must be a tuple of 2 or 3 elements")
+
+            if not isinstance(x_val, torch.Tensor):
+                x_val = torch.from_numpy(x_val).float()
+            if not isinstance(y_val, torch.Tensor):
+                y_val = torch.from_numpy(y_val).float()
+
+            if labels_val is not None:
+                if not isinstance(labels_val, torch.Tensor):
+                    labels_val = torch.from_numpy(labels_val).float()
+                val_dataset = DataLoader(
+                    TensorDataset(x_val, y_val, labels_val),
+                    batch_size=batch_size,
+                    shuffle=False
+                )
+            else:
+                val_dataset = DataLoader(
+                    TensorDataset(x_val, y_val),
+                    batch_size=batch_size,
+                    shuffle=False
+                )
+
+        # History to store metrics
+        history = {
+            'loss': [],
+            'reconstruction_loss': [],
+            'kl_loss': []
+        }
+
+        # Training loop
+        for epoch in range(initial_epoch, epochs):
+            # Reset loss trackers
+            self.reset_metrics()
+
+            if verbose == 1:
+                print(f'\nEpoch {epoch + 1}/{epochs}')
+
+            # Progress tracking
+            step = 0
+            for batch_data in train_dataset:
+                step += 1
+
+                # Perform training step
+                metrics = self.train_step(batch_data)
+                current_loss = float(metrics['loss'])
+
+                # Simple progress bar
+                if verbose == 1:
+                    progress = int(50 * step / steps_per_epoch)
+                    bar = '=' * progress + '>' + '.' * (50 - progress - 1)
+                    print(f'\r[{bar}] {step}/{steps_per_epoch} - loss: {current_loss:.4f}',
+                          end='', flush=True)
+
+                if step >= steps_per_epoch:
+                    break
+
+            # Get epoch metrics
+            epoch_metrics = self.get_metrics()
+            epoch_loss = epoch_metrics['loss']
+            epoch_recon_loss = epoch_metrics['reconstruction_loss']
+            epoch_kl_loss = epoch_metrics['kl_loss']
+
+            # Store epoch losses
+            history['loss'].append(epoch_loss)
+            history['reconstruction_loss'].append(epoch_recon_loss)
+            history['kl_loss'].append(epoch_kl_loss)
+
+            if verbose == 1:
+                print(f' - loss: {epoch_loss:.4f} - recon_loss: {epoch_recon_loss:.4f} - kl_loss: {epoch_kl_loss:.4f}')
+            elif verbose == 2:
+                print(
+                    f'Epoch {epoch + 1}/{epochs} - loss: {epoch_loss:.4f} - recon_loss: {epoch_recon_loss:.4f} - kl_loss: {epoch_kl_loss:.4f}')
+
+            # Validation
+            if val_dataset is not None and (epoch + 1) % validation_freq == 0:
+                val_metrics = self._evaluate_validation(val_dataset, validation_steps)
+
+                # Add validation metrics to history
+                for key, value in val_metrics.items():
+                    val_key = f'val_{key}'
+                    if val_key not in history:
+                        history[val_key] = []
+                    history[val_key].append(value)
+
+                if verbose >= 1:
+                    print(
+                        f' - val_loss: {val_metrics["loss"]:.4f} - val_recon_loss: {val_metrics["reconstruction_loss"]:.4f} - val_kl_loss: {val_metrics["kl_loss"]:.4f}')
+
+            # Callbacks
+            if callbacks is not None:
+                for callback in callbacks:
+                    callback.on_epoch_end(epoch, {
+                        'loss': epoch_loss,
+                        'reconstruction_loss': epoch_recon_loss,
+                        'kl_loss': epoch_kl_loss
+                    })
+
+        # Return history object
+        class History:
+            def __init__(self, history_dict):
+                self.history = history_dict
+
+        return History(history)
+
+    def _evaluate_validation(self, validation_data, validation_steps=None):
+        """
+        Evaluate the model on validation data.
+
+        Args:
+            validation_data: Validation DataLoader.
+            validation_steps: Number of validation steps.
+
+        Returns:
+            dict: Dictionary with averaged validation metrics.
+        """
+        self.eval()
+        device = next(self.parameters()).device
+
+        val_total_loss = []
+        val_recon_loss = []
+        val_kl_loss = []
+        step = 0
+
+        with torch.no_grad():
+            for batch_data in validation_data:
+                # Handle different batch formats
+                if len(batch_data) == 2:
+                    batch_x, batch_y = batch_data
+                    labels = batch_y
+                elif len(batch_data) == 3:
+                    batch_x, batch_y, labels = batch_data
+                else:
+                    raise ValueError(f"Batch must have 2 or 3 elements, got {len(batch_data)}")
+
+                # Move to device
+                batch_x = batch_x.to(device)
+                batch_y = batch_y.to(device)
+                labels = labels.to(device)
+
+                # Flatten inputs if necessary
+                if len(batch_x.shape) > 2:
+                    batch_x = batch_x.view(batch_x.shape[0], -1)
+                if len(batch_y.shape) > 2:
+                    batch_y = batch_y.view(batch_y.shape[0], -1)
+                if len(labels.shape) > 2:
+                    labels = labels.view(labels.shape[0], -1)
+
+                # Forward pass
+                latent_mean, latent_log_variation, latent, _ = self._encoder(batch_x, labels)
+                reconstruction_data = self._decoder(latent, labels)
+
+                # Calculate losses
+                binary_cross_entropy_loss = F.binary_cross_entropy(
+                    reconstruction_data, batch_y, reduction='none'
+                )
+                reconstruction_loss = binary_cross_entropy_loss.mean()
+
+                encoder_output = (1 + latent_log_variation - latent_mean.pow(2))
+                kl_divergence_loss = -0.5 * (encoder_output - torch.exp(latent_log_variation))
+                kl_divergence_loss = kl_divergence_loss.sum(dim=1).mean()
+
+                total_loss = reconstruction_loss + kl_divergence_loss
+
+                val_total_loss.append(float(total_loss))
+                val_recon_loss.append(float(reconstruction_loss))
+                val_kl_loss.append(float(kl_divergence_loss))
+
+                step += 1
+                if validation_steps is not None and step >= validation_steps:
+                    break
+
+        self.train()
+
+        return {
+            'loss': numpy.mean(val_total_loss) if val_total_loss else 0.0,
+            'reconstruction_loss': numpy.mean(val_recon_loss) if val_recon_loss else 0.0,
+            'kl_loss': numpy.mean(val_kl_loss) if val_kl_loss else 0.0
         }
 
     def get_decoder_trained(self):
@@ -434,3 +704,11 @@ class VAELatentDiffusionAlgorithmTorch(nn.Module):
     @property
     def latent_deviation(self):
         return self._latent_standard_deviation
+
+    @property
+    def optimizer(self):
+        return self._optimizer
+
+    @optimizer.setter
+    def optimizer(self, value):
+        self._optimizer = value
