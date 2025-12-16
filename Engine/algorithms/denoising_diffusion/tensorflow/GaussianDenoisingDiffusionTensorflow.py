@@ -58,7 +58,7 @@ class GaussianDenoisingDiffusionTensorflow:
 
     Reference:
     ----------
-        Ho, J., Jain, A., & Abbeel, P. (2020). "Denoising latent_diffusion Probabilistic Architectures."
+        Ho, J., Jain, A., & Abbeel, P. (2020). "Denoising latent_diffusion Probabilistic architectures."
         Advances in Neural Information Processing Systems (NeurIPS).
 
 

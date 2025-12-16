@@ -6,23 +6,23 @@ from datetime import datetime
 def generate_readme(json_data, output_dir="."):
     # Extract dataset information
     dataset_info = {
-        "Name": os.path.basename(json_data["Arguments"]["data_load_path_file_input"]),
+        "Name": os.path.basename(json_data["arguments"]["data_load_path_file_input"]),
         "Size": "N/A",  # Not provided in JSON
-        "Samples per class": json_data["Arguments"]["number_samples_per_class"],
+        "Samples per class": json_data["arguments"]["number_samples_per_class"],
         "Number of columns": "N/A",  # Not provided in JSON
-        "Format": os.path.splitext(json_data["Arguments"]["data_load_path_file_input"])[1][1:].upper(),
-        "Model type": json_data["Arguments"]["model_type"]
+        "Format": os.path.splitext(json_data["arguments"]["data_load_path_file_input"])[1][1:].upper(),
+        "Model type": json_data["arguments"]["model_type"]
     }
 
     # Model information
-    model_type = json_data["Arguments"]["model_type"]
+    model_type = json_data["arguments"]["model_type"]
     model_info = {
         "Type": model_type,
-        "Latent dimension": json_data["Arguments"].get("autoencoder_latent_dimension", "N/A"),
-        "Epochs": json_data["Arguments"].get("autoencoder_number_epochs", "N/A"),
-        "Batch size": json_data["Arguments"].get("autoencoder_batch_size", "N/A"),
-        "Learning rate": json_data["Arguments"].get("adam_optimizer_learning_rate", "N/A"),
-        "Activation": json_data["Arguments"].get("autoencoder_activation_function", "N/A")
+        "Latent dimension": json_data["arguments"].get("autoencoder_latent_dimension", "N/A"),
+        "Epochs": json_data["arguments"].get("autoencoder_number_epochs", "N/A"),
+        "Batch size": json_data["arguments"].get("autoencoder_batch_size", "N/A"),
+        "Learning rate": json_data["arguments"].get("adam_optimizer_learning_rate", "N/A"),
+        "Activation": json_data["arguments"].get("autoencoder_activation_function", "N/A")
     }
 
     # Get current date

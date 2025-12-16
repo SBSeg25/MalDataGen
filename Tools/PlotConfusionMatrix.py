@@ -226,7 +226,7 @@ class PlotConfusionMatrix(Plot):
         Calculate the maximum number of folds across all classifiers and groups.
 
         Args:
-            data (Dict): Evaluation data dictionary.
+            data (Dict): evaluation data dictionary.
 
         Returns:
             int: Maximum number of folds found in the data.

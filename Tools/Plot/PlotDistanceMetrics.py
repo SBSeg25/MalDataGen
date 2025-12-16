@@ -160,7 +160,7 @@ class PlotDistanceMetrics(Plot):
             ...     input_files=["data1.json", "data2.json"],
             ...     groups=["Control", "Experimental"],
             ...     metrics=["accuracy", "precision"],
-            ...     title="Performance Metrics",
+            ...     title="Performance metrics",
             ...     option="mean_std"
             ... )
         """

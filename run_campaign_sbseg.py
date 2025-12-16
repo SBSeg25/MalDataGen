@@ -30,8 +30,8 @@ of generative and supervised classification models, focused on
 digital security and malware analysis applications.
 
 Supported campaigns include:
-- Generative Architectures: Autoencoders, Variational Autoencoders,
-  wasserstein_gp GANs, latent_diffusion Architectures, CTGAN, TVAE, Copula GANs.
+- Generative architectures: Autoencoders, Variational Autoencoders,
+  wasserstein_gp GANs, latent_diffusion architectures, CTGAN, TVAE, Copula GANs.
 - classifiers: Random Forest, SVM, KNN, etc.
 
 This script sets up the campaign parameters, composes the execution commands,

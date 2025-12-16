@@ -34,7 +34,7 @@ try:
     from dataclasses import dataclass
     import json
 
-    from Engine.DataIO.CSVLoader import CSVDataProcessor
+    from Engine.data_io.CSVLoader import CSVDataProcessor
     from Tools.PlotHeatMap import HeatmapComparator
 
     from Tools.PlotTrainingCurve import PlotTrainingCurve

@@ -41,7 +41,7 @@ try:
     from dataclasses import dataclass
     import json
     import seaborn as sns
-    from Engine.DataIO.CSVLoader import CSVDataProcessor
+    from Engine.data_io.CSVLoader import CSVDataProcessor
     from Tools.PlotHeatMap import HeatmapComparator
 
     from Tools.PlotTrainingCurve import PlotTrainingCurve

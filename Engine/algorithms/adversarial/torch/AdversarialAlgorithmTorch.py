@@ -148,7 +148,7 @@ class AdversarialAlgorithmTorch(nn.Module):
             raise ValueError("Generator file name must be a non-empty string.")
 
         if not isinstance(models_saved_path, str) or not models_saved_path:
-            raise ValueError("Architectures saved path must be a non-empty string.")
+            raise ValueError("architectures saved path must be a non-empty string.")
 
         if not isinstance(latent_mean_distribution, (int, float)):
             raise TypeError("Latent mean distribution must be a number.")

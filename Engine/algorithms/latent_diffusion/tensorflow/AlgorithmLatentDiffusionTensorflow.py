@@ -92,7 +92,7 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
             - The embedding dimension is invalid (<=0).
 
     References:
-        - Ho, J., Jain, A., & Abbeel, P. (2020). "Denoising latent_diffusion Probabilistic Architectures."
+        - Ho, J., Jain, A., & Abbeel, P. (2020). "Denoising latent_diffusion Probabilistic architectures."
         Advances in Neural Information Processing Systems (NeurIPS).
         Available at: https://arxiv.org/abs/2006.11239
 
