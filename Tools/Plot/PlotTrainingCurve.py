@@ -72,8 +72,8 @@ class PlotTrainingCurve(Plot):
 
     Attributes:
         groups (list): List of data groups to analyze
-        metrics (list): Metrics to plot (e.g., ['accuracy', 'loss'])
-        classifiers (list): Classifiers used in the experiment
+        metrics (list): metrics to plot (e.g., ['accuracy', 'loss'])
+        classifiers (list): classifiers used in the experiment
         x_label (str): Label for x-axis
         y_label (str): Label for y-axis
         title (str): Main title for the plot
@@ -116,8 +116,8 @@ class PlotTrainingCurve(Plot):
         Args:
             input_file (str or list): Path to training data JSON file(s)
             groups (list, optional): Data groups to include. Defaults to config.GROUPS
-            metrics (list, optional): Metrics to plot. Defaults to config.METRICS
-            classifiers (list, optional): Classifiers to include. Defaults to config.CLASSIFIERS
+            metrics (list, optional): metrics to plot. Defaults to config.METRICS
+            classifiers (list, optional): classifiers to include. Defaults to config.CLASSIFIERS
             title (str, optional): Plot title. Defaults to DEFAULT_TITLE
             x_label (str, optional): X-axis label. Defaults to DEFAULT_X_LABEL
             y_label (str, optional): Y-axis label. Defaults to DEFAULT_Y_LABEL
@@ -134,8 +134,8 @@ class PlotTrainingCurve(Plot):
         Args:
             input_file (str or list): Input file path(s)
             groups (list): Data groups
-            metrics (list): Metrics to track
-            classifiers (list): Classifiers used
+            metrics (list): metrics to track
+            classifiers (list): classifiers used
             title (str): Plot title
             x_label (str): X-axis label
             y_label (str): Y-axis label
@@ -276,7 +276,7 @@ class PlotTrainingCurve(Plot):
 
         Args:
             ax (matplotlib.axes.Axes): Axis to plot on
-            metrics_data (dict): Metrics data to plot
+            metrics_data (dict): metrics data to plot
         """
         for metric, data in metrics_data.items():
             ax.plot(data['epochs'], data['values'], label=metric, linestyle='-')

@@ -80,8 +80,8 @@ class PlotClassificationMetrics(Plot):
     Args:
         input_files (List[str]): Paths to JSON files containing evaluation metrics
         groups (List[str], optional): List of group names to include. Defaults to config.GROUPS.
-        metrics (List[str], optional): Metrics to visualize. Defaults to config.METRICS.
-        classifiers (List[str], optional): Classifiers to include. Defaults to config.CLASSIFIERS.
+        metrics (List[str], optional): metrics to visualize. Defaults to config.METRICS.
+        classifiers (List[str], optional): classifiers to include. Defaults to config.CLASSIFIERS.
         color_map (Dict[str, List], optional): Color palette for each group. If None, uses default palettes.
         title (str, optional): Main plot title. Defaults to DEFAULT_TITLE.
         legend_title (str, optional): Title for the legend. Defaults to DEFAULT_LEGEND_TITLE.
@@ -293,7 +293,7 @@ class PlotClassificationMetrics(Plot):
         Parameters:
             ax : Matplotlib axes object
             clf : Classifier name being plotted
-            data : Metrics data structure
+            data : metrics data structure
             datasets : Dataset names
             colors_metrics : Color mapping dictionary
             x : Base x-positions for dataset groups
@@ -508,7 +508,7 @@ class PlotClassificationMetrics(Plot):
     def metrics(self, value: List[str]) -> None:
         """Set the performance metrics with validation."""
         if not isinstance(value, list) or not all(isinstance(x, str) for x in value):
-            raise ValueError("Metrics must be a list of strings")
+            raise ValueError("metrics must be a list of strings")
         self._metrics = value
 
     @property
@@ -520,7 +520,7 @@ class PlotClassificationMetrics(Plot):
     def classifiers(self, value: List[str]) -> None:
         """Set the classifiers with validation."""
         if not isinstance(value, list) or not all(isinstance(x, str) for x in value):
-            raise ValueError("Classifiers must be a list of strings")
+            raise ValueError("classifiers must be a list of strings")
         self._classifiers = value
 
     @property

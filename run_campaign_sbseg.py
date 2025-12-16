@@ -31,8 +31,8 @@ digital security and malware analysis applications.
 
 Supported campaigns include:
 - Generative Architectures: Autoencoders, Variational Autoencoders,
-  wasserstein_gp GANs, LatentDiffusion Architectures, CTGAN, TVAE, Copula GANs.
-- Classifiers: Random Forest, SVM, KNN, etc.
+  wasserstein_gp GANs, latent_diffusion Architectures, CTGAN, TVAE, Copula GANs.
+- classifiers: Random Forest, SVM, KNN, etc.
 
 This script sets up the campaign parameters, composes the execution commands,
 and interfaces with the training (`main.py`) and visualization (`plots.py`) modules.
@@ -613,7 +613,7 @@ def main():
         - Calls training and plotting scripts.
         - Logs time and performance statistics for each run.
 
-    CLI Arguments
+    CLI arguments
     -------------
         --campaign / -c : list of campaign identifiers
         --dryrun / -d   : disables actual execution, useful for debugging
@@ -842,7 +842,7 @@ def main():
         logging.info("\t Dataset duration: {}".format(time_end_dataset - time_start_dataset))
 
     time_end_evaluation = datetime.datetime.now()
-    logging.info("Evaluation duration: {}".format(time_end_evaluation - time_start_evaluation))
+    logging.info("evaluation duration: {}".format(time_end_evaluation - time_start_evaluation))
 
 
 if __name__ == '__main__':

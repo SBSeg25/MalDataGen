@@ -43,30 +43,30 @@ try:
 
     from sklearn.utils import shuffle
 
-    from Engine.Metrics.Metrics import Metrics
+    from Engine.metrics.Metrics import Metrics
 
-    from Engine.DataIO.CSVLoader import autosave
-    from Engine.DataIO.CSVLoader import autoload
+    from Engine.data_io.CSVLoader import autosave
+    from Engine.data_io.CSVLoader import autoload
 
-    from Framework.Arguments.Arguments import Arguments
-    from Framework.Arguments.Arguments import arguments
+    from Framework.arguments.Arguments import Arguments
+    from Framework.arguments.Arguments import arguments
 
-    from Engine.Metrics.Metrics import import_metrics
+    from Engine.metrics.Metrics import import_metrics
 
-    from Engine.Evaluation.Evaluation import Evaluation
+    from Engine.evaluation.Evaluation import Evaluation
     from sklearn.model_selection import StratifiedKFold
 
-    from Engine.DataIO.CSVLoader import CSVDataProcessor
+    from Engine.data_io.CSVLoader import CSVDataProcessor
 
-    from Engine.Classifiers.Classifiers import Classifiers
+    from Engine.classifiers.Classifiers import Classifiers
 
     from Framework.GenerativeModels import import_models
 
     from Framework.GenerativeModels import GenerativeModels
 
-    from Engine.Evaluation.CrossValidation import StratifiedData
-    from Engine.Classifiers.Classifiers import import_classifiers
-    from Engine.Support.HardwareManager import HardwareManager
+    from Engine.evaluation.CrossValidation import StratifiedData
+    from Engine.classifiers.Classifiers import import_classifiers
+    from Engine.support.HardwareManager import HardwareManager
 
 except ImportError as error:
     print(error)
@@ -136,21 +136,21 @@ class SynDataGen(Arguments, CSVDataProcessor, Metrics, GenerativeModels, Classif
     ---------------------
 
                                 +--------+-------+      +--------+-------+      +--------+-------+
-                                |  Activations   +------+     Layers     +------+    Specials    |
+                                |  activations   +------+     layers     +------+    Specials    |
                                 +-------+--------+      +-------+--------+      +--------+-------+
                                                                 |
                                                                 |
                                 +-----------------+     +-------+--------+    +--------+-------+
-                                |    Arguments    |     |     Architectures     |    |      Loss      |
+                                |    arguments    |     |     Architectures     |    |      loss      |
                                 +--------+--------+     +--------+-------+    +--------+-------+
                                         |                        |                     |
         +---------------+       +-------+--------+               |            +--------+-------+         +--------+-------+
-        | DataProcessor +-------+   Generative   +---------------@------------+   Algorithms   +---------+   Optimizers   |
+        | DataProcessor +-------+   Generative   +---------------@------------+   algorithms   +---------+   optimizers   |
         +---------------+       |     Architectures     |                            +----------------+         +----------------+
                                 +-------+--------+
                                         |
         +-------v--------+      +-------v--------+               +----------------+
-        |     Plotter    +------+     Metrics    +---------------+   Classifiers  |
+        |     Plotter    +------+     metrics    +---------------+   classifiers  |
         +-------+--------+      +-------+--------+               +----------------+
                                         |
                                 +-------v--------+
@@ -224,9 +224,9 @@ class SynDataGen(Arguments, CSVDataProcessor, Metrics, GenerativeModels, Classif
             This model integrates an autoencoder and a diffusion network, enabling both data
             reconstruction and controlled generative modeling through Gaussian diffusion.
 
-        9. Copy/Paste [model_type='copy']
+        9. copy/Paste [model_type='copy']
 
-            Copy is a naive machine learning model designed to generate synthetic data samples
+            copy is a naive machine learning model designed to generate synthetic data samples
             for specific classes based on provided real samples. This simple approach is primarily used
             for testing and comparison purposes, serving as a baseline method in experiments.
 
@@ -235,9 +235,9 @@ class SynDataGen(Arguments, CSVDataProcessor, Metrics, GenerativeModels, Classif
     ---------
         1. Input Data → 2. Preprocessing → 3. Stratified Splitting
         ↓                                    ↓
-        7. Results Collection ← 6. Evaluation ← 5. Generation ← 4. Model Training
+        7. Results Collection ← 6. evaluation ← 5. Generation ← 4. Model Training
 
-    Evaluation Strategies:
+    evaluation Strategies:
     --------------------
         A. TS-TR (Train Synthetic - Assess Real)
             - Trains: On generated synthetic data
@@ -249,12 +249,12 @@ class SynDataGen(Arguments, CSVDataProcessor, Metrics, GenerativeModels, Classif
             - Tests: On generated synthetic data
             - Measures: Generation quality
 
-    Metrics Tracked:
+    metrics Tracked:
     ---------------
-        Primary Metrics:
+        Primary metrics:
         - Accuracy, Precision, Recall, F1, ROC-AUC, FalseNegativeRate, MSE, MAE, TrueNegativeRate
 
-        Secondary Metrics:
+        Secondary metrics:
         - EuclideanDistance, HellingerDistance, LogLikelihood, ManhattanDistance
 
     Example Workflows:
@@ -287,11 +287,11 @@ class SynDataGen(Arguments, CSVDataProcessor, Metrics, GenerativeModels, Classif
         Detailed Initialization Sequence:
         -------------------------------
         1. Parent Class Initialization:
-           - Arguments: Loads CLI/config file parameters
+           - arguments: Loads CLI/config file parameters
            - CSVDataProcessor: Initializes data loading pipelines
-           - Metrics: Sets up metric tracking structures
+           - metrics: Sets up metric tracking structures
            - GenerativeModels: Prepares model architectures
-           - Classifiers: Loads evaluation classifiers
+           - classifiers: Loads evaluation classifiers
 
         2. Instance Variable Setup:
            - fold_number: Initialized to None, tracks current CV fold [0, n_folds-1]
@@ -346,7 +346,7 @@ class SynDataGen(Arguments, CSVDataProcessor, Metrics, GenerativeModels, Classif
         This method involves the following steps:
             1. Stratified data splitting for training and evaluation.
             2. Model training and prediction for each fold.
-            3. Evaluation using synthetic and real data.
+            3. evaluation using synthetic and real data.
             4. Saving the results to a JSON file.
 
         Args:
@@ -448,7 +448,7 @@ class SynDataGen(Arguments, CSVDataProcessor, Metrics, GenerativeModels, Classif
             k_fold (int): The fold number in a cross-validation setup, used to save models and data for each fold.
 
         Raises:
-            Exception: If an error occurs during model creation, training, or data generation, an exception is raised.
+            exception: If an error occurs during model creation, training, or data generation, an exception is raised.
         """
 
         logging.info("Starting model creation and prediction process.")
@@ -466,7 +466,7 @@ class SynDataGen(Arguments, CSVDataProcessor, Metrics, GenerativeModels, Classif
                 self.generator_name = self.arguments.model_type
                 logging.info(f"Training SDV's model {self.generator_name} algorithm.")
                 
-                from Engine.Algorithms.ThirdParty.SDVInterfaceAlgorithm import SDVInterfaceAlgorithm
+                from Engine.algorithms.third_part.SDVInterfaceAlgorithm import SDVInterfaceAlgorithm
                 
                 self._sdv = SDVInterfaceAlgorithm()
                 
@@ -581,7 +581,7 @@ class SynDataGen(Arguments, CSVDataProcessor, Metrics, GenerativeModels, Classif
 
                 # Using diffusion model to generate synthetic data
                 self.generator_name = 'latent_diffusion'
-                logging.info("Generating data using LatentDiffusion algorithm.")
+                logging.info("Generating data using latent_diffusion algorithm.")
                 self.data_generated = self._latent_diffusion_algorithm.get_samples(number_samples_per_class)
 
             elif self.arguments.model_type == "denoising_diffusion":
@@ -617,9 +617,9 @@ class SynDataGen(Arguments, CSVDataProcessor, Metrics, GenerativeModels, Classif
 
             elif self.arguments.model_type == "smote":
 
-                # Using SMOTE model to generate synthetic data
+                # Using smote model to generate synthetic data
                 self.generator_name = 'smote'
-                logging.info("Generating data using SMOTE algorithm.")
+                logging.info("Generating data using smote algorithm.")
                 self.data_generated = self._smote_algorithm.get_samples(number_samples_per_class)
 
             elif self.arguments.model_type in ["copula", "ctgan", "tvae"]:

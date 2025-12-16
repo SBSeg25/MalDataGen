@@ -12,14 +12,14 @@ import numpy as np
 
 os.environ["ML_FRAMEWORK"] = "pytorch"
 
-from Engine.Models.QuantizedVAE import QuantizedVAE
-from Engine.Models.LatentDiffusion import LatentDiffusion
-from Engine.Models.Wasserstein import Wasserstein
-from Engine.Models.WassersteinGP import WassersteinGP
-from Engine.Models.Adversarial import Adversarial
-from Engine.Models.Autoencoder import Autoencoder
-from Engine.Models.VariationalAutoencoder import VariationalAutoencoder
-from Engine.Models.DenoisingDiffusion import DenoisingDiffusion
+from Engine.models.QuantizedVAE import QuantizedVAE
+from Engine.models.LatentDiffusion import LatentDiffusion
+from Engine.models.Wasserstein import Wasserstein
+from Engine.models.WassersteinGP import WassersteinGP
+from Engine.models.Adversarial import Adversarial
+from Engine.models.Autoencoder import Autoencoder
+from Engine.models.VariationalAutoencoder import VariationalAutoencoder
+from Engine.models.DenoisingDiffusion import DenoisingDiffusion
 
 # =====================
 # Configurações MNIST
@@ -79,14 +79,14 @@ print(f"✓ Dataset carregado: {x_real_samples.shape}")
 # =====================
 
 models = {
-    #"LatentDiffusion": LatentDiffusion(number_classes=N_CLASSES),
-    #"QuantizedVAE": QuantizedVAE(number_classes=N_CLASSES),
-    # "DenoisingDiffusion": DenoisingDiffusion(number_classes=N_CLASSES),
-    # "Autoencoder": Autoencoder(number_classes=N_CLASSES),
-    # "Adversarial": Adversarial(number_classes=N_CLASSES),
-    #"Wasserstein": Wasserstein(number_classes=N_CLASSES),
-    "WassersteinGP": WassersteinGP(number_classes=N_CLASSES),
-    #"VariationalAutoencoder": VariationalAutoencoder(number_classes=N_CLASSES)
+    #"latent_diffusion": latent_diffusion(number_classes=N_CLASSES),
+    #"quantized_vae": quantized_vae(number_classes=N_CLASSES),
+    # "denoising_diffusion": denoising_diffusion(number_classes=N_CLASSES),
+    # "autoencoder": autoencoder(number_classes=N_CLASSES),
+    # "adversarial": adversarial(number_classes=N_CLASSES),
+    #"wasserstein": wasserstein(number_classes=N_CLASSES),
+    "wasserstein_gp": WassersteinGP(number_classes=N_CLASSES),
+    #"variational_autoencoder": variational_autoencoder(number_classes=N_CLASSES)
 }
 
 # =====================
@@ -191,14 +191,14 @@ print(f"{'=' * 60}")
 # import os
 # import numpy as np
 # os.environ["ML_FRAMEWORK"] = "pytorch"
-# from Engine.Models.LatentDiffusion import LatentDiffusion
-# from Engine.Models.Wasserstein import Wasserstein
-# from Engine.Models.WassersteinGP import WassersteinGP
+# from Engine.models.latent_diffusion import latent_diffusion
+# from Engine.models.wasserstein import wasserstein
+# from Engine.models.wasserstein_gp import wasserstein_gp
 #
 #
-# from Engine.Models.Adversarial import Adversarial
-# from Engine.Models.Autoencoder import Autoencoder
-# from Engine.Models.VariationalAutoencoder import VariationalAutoencoder
+# from Engine.models.adversarial import adversarial
+# from Engine.models.autoencoder import autoencoder
+# from Engine.models.variational_autoencoder import variational_autoencoder
 #
 #
 #
@@ -256,7 +256,7 @@ print(f"{'=' * 60}")
 # # Modelo
 # # =====================
 #
-# model = LatentDiffusion(number_classes=N_CLASSES)
+# model = latent_diffusion(number_classes=N_CLASSES)
 #
 # model.fit_model(
 #     input_shape=INPUT_SHAPE,
@@ -323,9 +323,9 @@ print(f"{'=' * 60}")
 # # import numpy as np
 # # os.environ["ML_FRAMEWORK"] = "pytorch"
 # #
-# # from Engine.Models.Adversarial import Adversarial
-# # from Engine.Models.Autoencoder import Autoencoder
-# # from Engine.Models.VariationalAutoencoder import VariationalAutoencoder
+# # from Engine.models.adversarial import adversarial
+# # from Engine.models.autoencoder import autoencoder
+# # from Engine.models.variational_autoencoder import variational_autoencoder
 # #
 # #
 # # # =====================
@@ -381,7 +381,7 @@ print(f"{'=' * 60}")
 # # # Modelo
 # # # =====================
 # #
-# # model = LatentDiffusion(number_classes=N_CLASSES)
+# # model = latent_diffusion(number_classes=N_CLASSES)
 # #
 # # model.fit_model(
 # #     input_shape=INPUT_SHAPE,

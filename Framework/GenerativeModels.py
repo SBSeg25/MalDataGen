@@ -18,26 +18,26 @@ try:
     import logging
     import tensorflow
 
-    from Engine.Models.Adversarial import Adversarial
-    from Engine.Models.Autoencoder import Autoencoder
-    from Engine.Models.QuantizedVAE import QuantizedVAE
+    from Engine.models.Adversarial import Adversarial
+    from Engine.models.Autoencoder import Autoencoder
+    from Engine.models.QuantizedVAE import QuantizedVAE
 
     from tensorflow.keras.optimizers import Adam
     from tensorflow.keras.utils import to_categorical
-    from Engine.Models.LatentDiffusion import LatentDiffusion
+    from Engine.models.LatentDiffusion import LatentDiffusion
     from tensorflow.python.keras.losses import MeanSquaredError
-    from Engine.Callbacks.CallbackEarlyStop import EarlyStopping
+    from Engine.callbacks.CallbackEarlyStop import EarlyStopping
     from tensorflow.python.keras.losses import BinaryCrossentropy
 
-    from Engine.Algorithms.Copy.CopyAlgorithm import CopyAlgorithm
-    from Engine.Models.DenoisingDiffusion import DenoisingDiffusion
-    from Engine.Algorithms.RandomNoise.AlgorithmRandomNoise import RandomNoiseAlgorithm
-    from Engine.Callbacks.CallbackModel import ModelMonitorCallback
-    from Engine.Callbacks.CallbackResources import ResourceMonitorCallback
-    from Engine.Models.Smote import Smote
-    from Engine.Models.VariationalAutoencoder import VariationalAutoencoder
-    from Engine.Models.Wasserstein import Wasserstein
-    from Engine.Models.WassersteinGP import WassersteinGP
+    from Engine.algorithms.copy.CopyAlgorithm import CopyAlgorithm
+    from Engine.models.DenoisingDiffusion import DenoisingDiffusion
+    from Engine.algorithms.random_noise.AlgorithmRandomNoise import RandomNoiseAlgorithm
+    from Engine.callbacks.CallbackModel import ModelMonitorCallback
+    from Engine.callbacks.CallbackResources import ResourceMonitorCallback
+    from Engine.models.Smote import Smote
+    from Engine.models.VariationalAutoencoder import VariationalAutoencoder
+    from Engine.models.Wasserstein import Wasserstein
+    from Engine.models.WassersteinGP import WassersteinGP
 
 except ImportError as error:
     logging.error(error)
@@ -46,7 +46,7 @@ except ImportError as error:
 
 class GenerativeModels:
     """
-    Generative Models Manager - Uses composition instead of multiple inheritance
+    Generative models Manager - Uses composition instead of multiple inheritance
     """
 
     def __init__(self, arguments):
@@ -289,7 +289,7 @@ class GenerativeModels:
             args.variational_autoencoder_path_output_models
         )
 
-        # Initialize SMOTE Model
+        # Initialize smote Model
         self._smote_algorithm = Smote(args)
 
     def _get_random_noise(self, input_shape):
@@ -300,7 +300,7 @@ class GenerativeModels:
         )
 
     def _get_smote(self, input_shape):
-        """Initialize SMOTE algorithm."""
+        """Initialize smote algorithm."""
         pass
 
     def training_model(self, arguments, input_shape, x_real_samples, y_real_samples, monitor_path, k_fold):
