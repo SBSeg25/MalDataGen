@@ -36,6 +36,7 @@ try:
     import numpy as np
     import logging
     import torch
+    from tensorflow.keras.optimizers import Adam
     import torch.nn.functional as F
     from Engine.Architectures.QuantizedVAE.QuantizedVAEModel import QuantizedVAEModel
     from Engine.Algorithms.quantized_vae.QuantizedVAEAlgorithm import QuantizedVAEAlgorithm
@@ -45,17 +46,17 @@ except ImportError as error:
     sys.exit(-1)
 
 # Default values from your constants file
-DEFAULT_QUANTIZED_VAE_LATENT_DIMENSION = 16
-DEFAULT_QUANTIZED_VAE_NUMBER_EMBEDDING = 16
+DEFAULT_QUANTIZED_VAE_LATENT_DIMENSION = 32
+DEFAULT_QUANTIZED_VAE_NUMBER_EMBEDDING = 32
 DEFAULT_QUANTIZED_VAE_TRAINING_ALGORITHM = "Adam"
 DEFAULT_QUANTIZED_VAE_ACTIVATION_INTERMEDIARY = "swish"
 DEFAULT_QUANTIZED_VAE_DROPOUT_DECAY_RATE_ENCODER = 0.25
 DEFAULT_QUANTIZED_VAE_DROPOUT_DECAY_RATE_DECODER = 0.25
 DEFAULT_QUANTIZED_VAE_BATCH_SIZE = 64
-DEFAULT_QUANTIZED_VAE_NUMBER_EPOCHS = 5000
+DEFAULT_QUANTIZED_VAE_NUMBER_EPOCHS = 200
 DEFAULT_QUANTIZED_VAE_NUMBER_CLASSES = 2
-DEFAULT_QUANTIZED_VAE_DENSE_LAYERS_SETTINGS_ENCODER = [320, 160]
-DEFAULT_QUANTIZED_VAE_DENSE_LAYERS_SETTINGS_DECODER = [160, 320]
+DEFAULT_QUANTIZED_VAE_DENSE_LAYERS_SETTINGS_ENCODER = [512, 512]
+DEFAULT_QUANTIZED_VAE_DENSE_LAYERS_SETTINGS_DECODER = [512, 512]
 DEFAULT_QUANTIZED_VAE_LOSS = "binary_crossentropy"
 DEFAULT_QUANTIZED_VAE_MOMENTUM = 0.8
 DEFAULT_QUANTIZED_VAE_LAST_ACTIVATION_LAYER = "sigmoid"
@@ -76,9 +77,13 @@ class QuantizedVAE:
     This implementation provides complete configuration, training, and management capabilities
     for quantized latent space learning tasks within the Synthetic Ocean ecosystem.
 
+    NOW SUPPORTS MULTI-DIMENSIONAL DATA: Automatically handles 1D, 2D, 3D, and N-D inputs
+    by flattening them during training and reshaping them during generation.
+
     Attributes:
         _quantizedVAE_algorithm (QuantizedVAEAlgorithm): Manages the VQ-VAE training process
         _quantizedVAE_model (QuantizedVAEModel): Contains encoder, decoder and quantization components
+        _original_input_shape (tuple): Stores the original shape of input data for reconstruction
 
     Configuration Parameters (with getters/setters):
         _quantized_vae_number_epochs (int): Number of training epochs
@@ -116,13 +121,9 @@ class QuantizedVAE:
                  file_name_encoder: str = DEFAULT_QUANTIZED_VAE_FILE_NAME_ENCODER,
                  file_name_decoder: str = DEFAULT_QUANTIZED_VAE_FILE_NAME_DECODER,
                  path_output_models: str = DEFAULT_QUANTIZED_VAE_PATH_OUTPUT_MODELS,
-                 number_classes: int = DEFAULT_QUANTIZED_VAE_NUMBER_CLASSES,  # ADD THIS
+                 number_classes: int = DEFAULT_QUANTIZED_VAE_NUMBER_CLASSES,
                  algorithm: QuantizedVAEAlgorithm | None = None,
                  model: QuantizedVAEModel | None = None) -> None:
-
-
-        # ADD THIS LINE after the existing initializations:
-        self._number_samples_per_class = {"number_classes": number_classes}
         """
         Initializes the quantized VAE instance with configuration parameters.
 
@@ -143,6 +144,7 @@ class QuantizedVAE:
             file_name_encoder: Encoder model filename (default: "encoder_model")
             file_name_decoder: Decoder model filename (default: "decoder_model")
             path_output_models: Path for saving models (default: "models_saved/")
+            number_classes: Number of classes (default: 2)
             algorithm: Optional pre-initialized QuantizedVAEAlgorithm (default: None)
             model: Optional pre-initialized QuantizedVAEModel (default: None)
         """
@@ -179,9 +181,15 @@ class QuantizedVAE:
         self._quantized_vae_file_name_decoder: str = file_name_decoder
         self._quantized_vae_path_output_models: str = path_output_models
 
+        # Number of classes configuration
+        self._number_samples_per_class = {"number_classes": number_classes}
+
         # Flags to indicate if instances were provided
         self._has_external_algorithm: bool = algorithm is not None
         self._has_external_model: bool = model is not None
+
+        # Storage for original input shape (for multi-dimensional data)
+        self._original_input_shape = None
 
     def _get_quantized_vae(self, input_shape: tuple[int, ...]) -> None:
         """
@@ -196,7 +204,7 @@ class QuantizedVAE:
         If pre-initialized instances were provided in the constructor, they are used instead of creating new ones.
 
         Args:
-            input_shape: The shape of the input data, which determines the output shape for the models.
+            input_shape: The shape of the input data (flattened dimension), which determines the output shape for the models.
 
         Initializes:
             self._quantized_vae_model:
@@ -269,22 +277,52 @@ class QuantizedVAE:
     def fit_model(
             self,
             input_shape: tuple[int, ...],
-            arguments: 'argparse.Namespace',
             x_real_samples: np.ndarray,
             y_real_samples: np.ndarray
     ) -> None:
         """
-        Executes the complete quantized VAE training process.
-        """
-        # Initialize the quantized VAE model (or use provided)
-        self._get_quantized_vae(input_shape)
+        Executes the complete quantized VAE training process with automatic data flattening.
 
-        # Print the model summaries for the encoder and decoder if available
-        if self._quantized_vae_model is not None:
-            print("\nEncoder Model:")
-            print(self._quantized_vae_model.get_encoder())
-            print("\nDecoder Model:")
-            print(self._quantized_vae_model.get_decoder())
+        NOW SUPPORTS MULTI-DIMENSIONAL DATA:
+        - Automatically flattens N-D input data (1D, 2D, 3D, etc.)
+        - Converts labels to one-hot format
+        - Passes data and labels as separate inputs (model concatenates internally)
+        - Stores original shape for reconstruction during generation
+
+        Args:
+            input_shape: Shape of input data samples (e.g., (784,) for 1D, (28, 28, 1) for 2D, (16, 16, 16) for 3D)
+            x_real_samples: Training data samples (can be N-dimensional)
+            y_real_samples: Corresponding class labels (1D array of class indices)
+
+        Process:
+            1. Stores original input shape for later reconstruction
+            2. Flattens multi-dimensional input data
+            3. Converts labels to one-hot encoding format
+            4. Initializes model architecture with flattened dimension
+            5. Compiles model with optimizer
+            6. Executes quantized VAE training
+            7. Manages model saving and monitoring
+        """
+        # Store original input shape for later reconstruction
+        self._original_input_shape = input_shape
+
+        # Calculate total flattened dimension
+        flattened_dim = int(np.prod(input_shape))
+
+        # Flatten the input data if it has more than 2 dimensions
+        # (batch_size, ...) -> (batch_size, flattened_features)
+        if len(x_real_samples.shape) > 2:
+            x_real_samples_flat = x_real_samples.reshape(x_real_samples.shape[0], -1)
+        else:
+            x_real_samples_flat = x_real_samples
+
+        # Convert labels to one-hot encoding
+        num_classes = self._number_samples_per_class["number_classes"]
+        y_one_hot = np.zeros((len(y_real_samples), num_classes))
+        y_one_hot[np.arange(len(y_real_samples)), y_real_samples.astype(int)] = 1
+
+        # Initialize the quantized VAE model with flattened dimension
+        self._get_quantized_vae(flattened_dim)
 
         # Ensure we have an algorithm
         if self._quantized_vae_algorithm is None:
@@ -300,7 +338,6 @@ class QuantizedVAE:
                 lr=0.0001
             )
         else:
-            from tensorflow.keras.optimizers import Adam
             optimizer = Adam(learning_rate=0.0001)
 
         self._quantized_vae_algorithm.compile(optimizer=optimizer)
@@ -314,23 +351,21 @@ class QuantizedVAE:
         if hasattr(self, '_callback_model_monitor') and self._callback_model_monitor is not None:
             callbacks_list.append(self._callback_model_monitor)
 
-        if (hasattr(arguments, 'use_early_stop') and arguments.use_early_stop and
-                hasattr(self, '_callback_early_stop') and self._callback_early_stop is not None):
+        if hasattr(self, '_callback_early_stop') and self._callback_early_stop is not None:
             callbacks_list.append(self._callback_early_stop)
 
-        # Convert labels to one-hot encoding
-        num_classes = self._number_samples_per_class["number_classes"]
-        y_one_hot = np.zeros((len(y_real_samples), num_classes))
-        y_one_hot[np.arange(len(y_real_samples)), y_real_samples.astype(int)] = 1
-
         # Fit the quantized VAE model
+        # IMPORTANT: Pass as tuple (data, labels) - model concatenates internally!
+        # Input: [flattened_data, labels] as separate inputs
+        # Target: flattened data only (reconstruction target)
         self._quantized_vae_algorithm.fit(
-            (x_real_samples, y_one_hot),
-            x_real_samples,
+            (x_real_samples_flat, y_one_hot),  # Input: tuple of (data, labels)
+            x_real_samples_flat,  # Target: only the data (no labels)
             epochs=self._quantized_vae_number_epochs,
             batch_size=self._quantized_vae_batch_size,
             callbacks=callbacks_list if callbacks_list else None
         )
+
     # Additional getters for the algorithm and model
     @property
     def quantized_vae_algorithm(self) -> QuantizedVAEAlgorithm | None:
@@ -503,6 +538,56 @@ class QuantizedVAE:
         """Set the output models path."""
         self._quantized_vae_path_output_models = value
 
-    def get_samples(self, number_samples_per_class):
+    @property
+    def original_input_shape(self) -> tuple:
+        """Get the original input shape (before flattening)."""
+        return self._original_input_shape
 
-        return self._quantized_vae_algorithm.get_samples(number_samples_per_class)
+    def get_samples(self, number_samples_per_class):
+        """
+        Generate synthetic samples and reshape them to original input shape.
+
+        NOW SUPPORTS MULTI-DIMENSIONAL OUTPUT:
+        - Automatically reshapes generated samples to original input dimensions
+        - Works with 1D, 2D, 3D, and N-D data
+
+        Args:
+            number_samples_per_class: Dictionary specifying number of samples per class
+                Format 1: {"number_classes": N, "classes": {0: n0, 1: n1, ...}}
+                Format 2 (simplified): {"number_classes": N, 0: n0, 1: n1, ...}
+
+        Returns:
+            np.ndarray: Generated samples reshaped to original input dimensions
+                - Shape: (total_samples, *original_input_shape)
+                - Example: For 3D input (16, 16, 16) with 100 total samples -> (100, 16, 16, 16)
+        """
+        # Generate flattened samples from algorithm
+        generated_data = self._quantized_vae_algorithm.get_samples(number_samples_per_class)
+
+        # Check if we have stored original input shape
+        if not hasattr(self, '_original_input_shape') or self._original_input_shape is None:
+            # If no original shape stored, return flattened data
+            # Convert dict to array if needed
+            if isinstance(generated_data, dict):
+                all_samples = []
+                for label in sorted(generated_data.keys()):
+                    all_samples.append(generated_data[label])
+                return np.concatenate(all_samples, axis=0)
+            return generated_data
+
+        # Reshape generated samples to original input shape
+        reshaped_samples = []
+
+        if isinstance(generated_data, dict):
+            # If returned as dict, reshape each class
+            for label in sorted(generated_data.keys()):
+                samples = generated_data[label]
+                # Reshape from (n_samples, flattened_features) to (n_samples, *original_shape)
+                reshaped = samples.reshape(-1, *self._original_input_shape)
+                reshaped_samples.append(reshaped)
+
+            # Concatenate all classes
+            return np.concatenate(reshaped_samples, axis=0)
+        else:
+            # If returned as array, reshape directly
+            return generated_data.reshape(-1, *self._original_input_shape)

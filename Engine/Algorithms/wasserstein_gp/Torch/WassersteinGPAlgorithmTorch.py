@@ -268,35 +268,28 @@ class WassersteinGPAlgorithmTorch(nn.Module):
 
     def gradient_penalty(self, batch_size, real_feature, real_label, synthetic_feature):
         """
-        Compute the gradient penalty for the wasserstein_gp GAN.
+        Compute the gradient penalty for the Wasserstein GAN with improved numerical stability.
 
-        The gradient penalty is used to enforce the Lipschitz constraint on the discriminator's output.
+        Args:
+            batch_size (int): The batch size of the input data.
+            real_feature (torch.Tensor): Real data features.
+            real_label (torch.Tensor): Real data labels.
+            synthetic_feature (torch.Tensor): Synthetic (generated) data features.
 
-        Parameters:
-            batch_size (int):
-                The batch size of the input data.
-            real_feature (torch.Tensor):
-                Real data features.
-            real_label (torch.Tensor):
-                Real data labels.
-            synthetic_feature (torch.Tensor):
-                Synthetic (generated) data features.
-
+        Returns:
+            torch.Tensor: Computed gradient penalty value.
         """
-        # Generate random noise for smoothing.
-        random_smooth = torch.randn(batch_size, 1, device=self._device) * 0.1
+        # Generate random epsilon for interpolation (uniform distribution)
+        epsilon = torch.rand(batch_size, 1, device=self._device)
 
-        # Calculate the linear distance between real and synthetic features.
-        linear_distance = synthetic_feature - real_feature
-
-        # Interpolate between real and synthetic features using the random noise.
-        interpolated_feature = real_feature + random_smooth * linear_distance
+        # Interpolate between real and synthetic features
+        interpolated_feature = epsilon * real_feature + (1 - epsilon) * synthetic_feature
         interpolated_feature.requires_grad_(True)
 
-        # Get discriminator's output for the interpolated features.
+        # Get discriminator's output for the interpolated features
         labels_predicted = self.discriminator([interpolated_feature, real_label])
 
-        # Calculate the gradient of the discriminator's output with respect to the interpolated features.
+        # Calculate gradients with proper handling
         gradients = torch.autograd.grad(
             outputs=labels_predicted,
             inputs=interpolated_feature,
@@ -306,11 +299,13 @@ class WassersteinGPAlgorithmTorch(nn.Module):
             only_inputs=True
         )[0]
 
-        # Compute the gradient magnitude and normalize it.
-        gradient_normalized = torch.sqrt(torch.sum(gradients ** 2, dim=1))
+        # Compute gradient norm with numerical stability
+        # Add epsilon to prevent sqrt(0) = NaN
+        gradients_norm = torch.sqrt(torch.sum(gradients ** 2, dim=1) + 1e-8)
 
-        # Calculate the final gradient penalty as the mean squared difference from 1.0 and return.
-        gradient_penalty_final = torch.mean((gradient_normalized - 1.0) ** 2)
+        # Calculate gradient penalty
+        # Penalize deviation from norm = 1 (Lipschitz constraint)
+        gradient_penalty_final = torch.mean((gradients_norm - 1.0) ** 2)
 
         return gradient_penalty_final
 
@@ -733,7 +728,6 @@ class WassersteinGPAlgorithmTorch(nn.Module):
 
                 # Convert to numpy and round to integer values
                 generated_samples = generated_samples.cpu().numpy()
-                generated_samples = numpy.rint(generated_samples)
 
                 # Store generated samples for the current class.
                 generated_data[label_class] = generated_samples

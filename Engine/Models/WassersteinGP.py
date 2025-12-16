@@ -56,12 +56,12 @@ DEFAULT_WASSERSTEIN_GAN_GP_DROPOUT_DECAY_RATE_G = 0.0
 DEFAULT_WASSERSTEIN_GAN_GP_DROPOUT_DECAY_RATE_D = 0.1
 DEFAULT_WASSERSTEIN_GAN_GP_BATCH_SIZE = 512
 DEFAULT_WASSERSTEIN_GAN_GP_NUMBER_CLASSES = 2
-DEFAULT_WASSERSTEIN_GAN_GP_NUMBER_EPOCHS = 5000
+DEFAULT_WASSERSTEIN_GAN_GP_NUMBER_EPOCHS = 1200
 DEFAULT_WASSERSTEIN_GAN_GP_DENSE_LAYERS_SETTINGS_GENERATOR = [1024]
-DEFAULT_WASSERSTEIN_GAN_GP_DENSE_LAYERS_SETTINGS_DISCRIMINATOR = [256]
+DEFAULT_WASSERSTEIN_GAN_GP_DENSE_LAYERS_SETTINGS_DISCRIMINATOR = [512]
 DEFAULT_WASSERSTEIN_GAN_GP_LOSS = "wasserstein"
 DEFAULT_WASSERSTEIN_GAN_GP_MOMENTUM = 0.8
-DEFAULT_WASSERSTEIN_GAN_GP_LAST_ACTIVATION_LAYER = "sigmoid"
+DEFAULT_WASSERSTEIN_GAN_GP_LAST_ACTIVATION_LAYER = "linear"
 DEFAULT_WASSERSTEIN_GAN_GP_INITIALIZER_MEAN = 0.0
 DEFAULT_WASSERSTEIN_GAN_GP_INITIALIZER_DEVIATION = 0.125
 DEFAULT_WASSERSTEIN_GAN_GP_OPTIMIZER_GENERATOR_LEARNING = 0.0001
@@ -241,7 +241,8 @@ class WassersteinGP:
         # Storage for original input shape (for multi-dimensional data)
         self._original_input_shape = None
 
-    def _calculate_samples_per_class(self, y_labels: np.ndarray) -> dict:
+    @staticmethod
+    def _calculate_samples_per_class(y_labels: np.ndarray) -> dict:
         """
         Calculate the distribution of samples per class from labels.
 
@@ -331,24 +332,34 @@ class WassersteinGP:
             # If algorithm was provided externally, update its configuration if needed
             if hasattr(self._wasserstein_gp_algorithm, 'latent_dimension'):
                 self._wasserstein_gp_algorithm.latent_dimension = self._wasserstein_gp_latent_dimension
+
             if hasattr(self._wasserstein_gp_algorithm, 'generator_loss_fn'):
                 self._wasserstein_gp_algorithm.generator_loss_fn = self._wasserstein_gp_loss_function
+
             if hasattr(self._wasserstein_gp_algorithm, 'discriminator_loss_fn'):
                 self._wasserstein_gp_algorithm.discriminator_loss_fn = self._wasserstein_gp_loss_function
+
             if hasattr(self._wasserstein_gp_algorithm, 'file_name_discriminator'):
                 self._wasserstein_gp_algorithm.file_name_discriminator = self._wasserstein_gp_file_name_discriminator
+
             if hasattr(self._wasserstein_gp_algorithm, 'file_name_generator'):
                 self._wasserstein_gp_algorithm.file_name_generator = self._wasserstein_gp_file_name_generator
+
             if hasattr(self._wasserstein_gp_algorithm, 'models_saved_path'):
                 self._wasserstein_gp_algorithm.models_saved_path = self._wasserstein_gp_path_output_models
+
             if hasattr(self._wasserstein_gp_algorithm, 'latent_mean_distribution'):
                 self._wasserstein_gp_algorithm.latent_mean_distribution = self._wasserstein_gp_latent_mean_distribution
+
             if hasattr(self._wasserstein_gp_algorithm, 'latent_standard_deviation'):
                 self._wasserstein_gp_algorithm.latent_standard_deviation = self._wasserstein_gp_latent_standard_deviation
+
             if hasattr(self._wasserstein_gp_algorithm, 'smoothing_rate'):
                 self._wasserstein_gp_algorithm.smoothing_rate = self._wasserstein_gp_smoothing_rate
+
             if hasattr(self._wasserstein_gp_algorithm, 'gradient_penalty_weight'):
                 self._wasserstein_gp_algorithm.gradient_penalty_weight = self._wasserstein_gp_gradient_penalty
+
             if hasattr(self._wasserstein_gp_algorithm, 'discriminator_steps'):
                 self._wasserstein_gp_algorithm.discriminator_steps = self._wasserstein_gp_discriminator_steps
 

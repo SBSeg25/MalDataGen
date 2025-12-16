@@ -548,7 +548,6 @@ class QuantizedVAEAlgorithmTorch:
 
                 # Convert to numpy and round
                 generated_samples = generated_samples.cpu().numpy()
-                generated_samples = numpy.rint(generated_samples)
 
                 generated_data[label_class] = generated_samples
 

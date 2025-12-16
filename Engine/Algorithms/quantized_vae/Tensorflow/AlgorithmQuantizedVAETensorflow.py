@@ -416,9 +416,6 @@ class QuantizedVAEAlgorithmTensorflow(Model):
             # Decode the latent vectors
             generated_samples = self._decoder.predict([quantized_vectors, label_samples_generated], verbose=0)
 
-            # Round to nearest integer (for discrete data like images)
-            generated_samples = numpy.rint(generated_samples)
-
             generated_data[label_class] = generated_samples
 
         return generated_data
