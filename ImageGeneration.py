@@ -10,7 +10,7 @@ Testa todos os modelos disponíveis e salva resultados
 import os
 import numpy as np
 
-os.environ["ML_FRAMEWORK"] = "pytorch"
+os.environ["ML_FRAMEWORK"] = "tensorflow"
 
 from Engine.models.QuantizedVAE import QuantizedVAE
 from Engine.models.LatentDiffusion import LatentDiffusion
@@ -79,9 +79,9 @@ print(f"✓ Dataset carregado: {x_real_samples.shape}")
 # =====================
 
 models = {
-    #"latent_diffusion": LatentDiffusion(number_classes=N_CLASSES),
+    "latent_diffusion": LatentDiffusion(number_classes=N_CLASSES),
     #"quantized_vae": QuantizedVAE(number_classes=N_CLASSES),
-    "denoising_diffusion": DenoisingDiffusion(number_classes=N_CLASSES),
+    #"denoising_diffusion": DenoisingDiffusion(number_classes=N_CLASSES),
     #"autoencoder": Autoencoder(number_classes=N_CLASSES),
     # "adversarial": adversarial(number_classes=N_CLASSES),
     #"wasserstein": Wasserstein(number_classes=N_CLASSES),

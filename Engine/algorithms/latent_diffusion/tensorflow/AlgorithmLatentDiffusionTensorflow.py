@@ -97,7 +97,7 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
         Available at: https://arxiv.org/abs/2006.11239
 
     Example:
-        >>> diffusion_model = LatentDiffusionAlgorithmTensorflow(
+        >>> diffusion_model = AlgorithmLatentDiffusionTensorflow(
         ...     first_unet_model=primary_unet,
         ...     second_unet_model=ema_unet,
         ...     encoder_model_image=encoder,
@@ -453,79 +453,88 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
             ema_weight.assign(self._ema * ema_weight + (1 - self._ema) * weight)
 
     def generate_data(self, labels, batch_size):
-        """Generates synthetic data by reversing the diffusion process."""
-        self._network.eval()
+        """
+        Generates synthetic data by reversing the diffusion process using TensorFlow.
 
-        # ADD THIS DEBUG LINE
-        print(f"\n[CRITICAL DEBUG] generate_data: self._embedding_dimension = {self._embedding_dimension}")
-        print(f"[CRITICAL DEBUG] labels.shape = {labels.shape}")
+        Args:
+            labels (tf.Tensor): One-hot encoded labels of shape (batch_size, number_classes)
+            batch_size (int): Batch size for generation
 
-        with torch.no_grad():
-            # Start with random noise
-            embedding_diffusion = torch.randn(
-                labels.shape[0], self._embedding_dimension, 1,
-                device=self._device, dtype=torch.float32
+        Returns:
+            numpy.ndarray: Generated synthetic data
+        """
+        print(f"\n[DEBUG] generate_data: self._embedding_dimension = {self._embedding_dimension}")
+        print(f"[DEBUG] labels.shape = {labels.shape}")
+
+        # Start with random noise in TensorFlow
+        embedding_diffusion = tensorflow.random.normal(
+            shape=(tensorflow.shape(labels)[0], self._embedding_dimension, 1),
+            dtype=tensorflow.float32
+        )
+
+        print(f"[DEBUG] Created embedding_diffusion.shape = {embedding_diffusion.shape}")
+
+        # Labels are already in correct shape (batch_size, number_classes)
+        labels_vector = labels
+
+        print(f"[DEBUG] labels_vector.shape = {labels_vector.shape}")
+
+        # Verify shape
+        if len(labels_vector.shape) != 2:
+            raise ValueError(
+                f"Labels must be 2D (batch_size, number_classes), got shape {labels_vector.shape}"
             )
 
-            print(f"[CRITICAL DEBUG] Created embedding_diffusion.shape = {embedding_diffusion.shape}")
+        # Reverse diffusion process
+        print(f"[DEBUG] Starting reverse diffusion for {self._time_steps} steps...")
 
-            print(f"[DEBUG generate_data] Created embedding_diffusion.shape={embedding_diffusion.shape}")
+        for time_step in reversed(range(0, self._time_steps)):
+            # Create time step array for the batch
+            array_time = tensorflow.fill(
+                dims=(tensorflow.shape(labels_vector)[0],),
+                value=time_step
+            )
+            array_time = tensorflow.cast(array_time, tensorflow.int32)
 
-            # CRITICAL FIX: labels is already in correct shape (batch_size, number_classes)
-            # Do NOT unsqueeze - the forward pass expects 2D labels
-            labels_vector = labels
+            # Predict noise using the network
+            if time_step == self._time_steps - 1:  # First iteration
+                print(f"[DEBUG] First iteration - calling _network with:")
+                print(f"  embedding_diffusion.shape = {embedding_diffusion.shape}")
+                print(f"  array_time.shape = {array_time.shape}")
+                print(f"  labels_vector.shape = {labels_vector.shape}")
 
-            print(f"[DEBUG generate_data] labels_vector.shape={labels_vector.shape}")
+            predicted_noise = self._network(
+                [embedding_diffusion, array_time, labels_vector],
+                training=False
+            )
 
-            # Verify shape
-            if len(labels_vector.shape) != 2:
-                raise ValueError(
-                    f"Labels must be 2D (batch_size, number_classes), got shape {labels_vector.shape}"
-                )
+            if time_step == self._time_steps - 1:
+                print(f"[DEBUG] predicted_noise.shape = {predicted_noise.shape}")
 
-            # Reverse diffusion process
-            print(f"[DEBUG generate_data] Starting reverse diffusion for {self._time_steps} steps...")
+            # Apply reverse diffusion step
+            embedding_diffusion = self._gdf_util.p_sample(
+                predicted_noise,
+                embedding_diffusion,
+                array_time,
+                clip_denoised=True
+            )
 
-            for time_step in reversed(range(0, self._time_steps)):
-                array_time = torch.full((labels_vector.shape[0],), time_step,
-                                        device=self._device, dtype=torch.long)
+        print(f"[DEBUG] Final embedding_diffusion.shape = {embedding_diffusion.shape}")
 
-                # Predict noise
-                # embedding_diffusion: (batch, embedding_dimension, 1)
-                # array_time: (batch,)
-                # labels_vector: (batch, number_classes)
-                if time_step == self._time_steps - 1:  # First iteration
-                    print(f"[DEBUG generate_data] First iteration - calling _network with:")
-                    print(f"  embedding_diffusion.shape={embedding_diffusion.shape}")
-                    print(f"  array_time.shape={array_time.shape}")
-                    print(f"  labels_vector.shape={labels_vector.shape}")
+        # Decode embeddings to data
+        print(f"[DEBUG] Calling decoder with:")
+        print(f"  embedding_diffusion.shape = {embedding_diffusion.shape}")
+        print(f"  labels_vector.shape = {labels_vector.shape}")
 
-                predicted_noise = self._network(embedding_diffusion, array_time, labels_vector)
+        generated_data = self._decoder_model_data(
+            [embedding_diffusion, labels_vector],
+            training=False
+        )
 
-                if time_step == self._time_steps - 1:
-                    print(f"[DEBUG generate_data] predicted_noise.shape={predicted_noise.shape}")
+        print(f"[DEBUG] generated_data.shape = {generated_data.shape}")
 
-                # Apply reverse diffusion step
-                embedding_diffusion = self._gdf_util.p_sample(
-                    predicted_noise,
-                    embedding_diffusion,
-                    array_time,
-                    clip_denoised=True
-                )
+        return generated_data.numpy()
 
-            print(f"[DEBUG generate_data] Final embedding_diffusion.shape={embedding_diffusion.shape}")
-
-            # Decode embeddings to data
-            # labels_vector should remain 2D for decoder as well
-            print(f"[DEBUG generate_data] Calling decoder with:")
-            print(f"  embedding_diffusion.shape={embedding_diffusion.shape}")
-            print(f"  labels_vector.shape={labels_vector.shape}")
-
-            generated_data = self._decoder_model_data(embedding_diffusion, labels_vector)
-
-            print(f"[DEBUG generate_data] generated_data.shape={generated_data.shape}")
-
-        return generated_data.cpu().numpy()
     @staticmethod
     def _crop_tensor_to_original_size(tensor: numpy.ndarray, original_size: int) -> numpy.ndarray:
         """
@@ -619,7 +628,7 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
 
     def get_samples(self, number_samples_per_class):
         """
-        Generates synthetic data samples for each class.
+        Generates synthetic data samples for each class using TensorFlow.
 
         Args:
             number_samples_per_class (dict): Dictionary with class info.
@@ -642,9 +651,13 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
             print(f"[DEBUG] Generating {number_instances} samples for class {label_class}")
 
             # Create one-hot encoded labels - shape: (number_instances, number_classes)
-            labels = torch.zeros(number_instances, number_samples_per_class["number_classes"])
-            labels[:, label_class] = 1
-            labels = labels.float().to(self._device)
+            labels = tensorflow.zeros((number_instances, number_samples_per_class["number_classes"]))
+            labels = tensorflow.tensor_scatter_nd_update(
+                labels,
+                indices=[[i, label_class] for i in range(number_instances)],
+                updates=tensorflow.ones(number_instances)
+            )
+            labels = tensorflow.cast(labels, tensorflow.float32)
 
             print(f"[DEBUG] Labels shape: {labels.shape}")
             print(f"[DEBUG] Calling generate_data with batch_size=64")
