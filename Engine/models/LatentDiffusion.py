@@ -447,6 +447,195 @@ class LatentDiffusion:
             models_saved_path=self._latent_diffusion_VAE_path_output_models
         )
 
+    def fit_model_tensorflow(
+            self,
+            input_shape: Union[int, tuple],
+            x_real_samples: np.ndarray,
+            y_real_samples: np.ndarray,
+            verbose: int = 1
+    ) -> None:
+
+        """
+
+
+        TensorFlow-specific training pipeline.
+
+
+
+
+
+        Args:
+
+
+            input_shape (Union[int, tuple]): Input data shape
+
+
+            x_real_samples (np.ndarray): Training samples
+
+
+            y_real_samples (np.ndarray): Training labels
+
+
+            verbose (int): Verbosity mode
+
+
+        """
+
+        # Initialize the diffusion model
+
+        self._get_latent_diffusion_tensorflow(input_shape)
+
+        # Initialize the variational autoencoder model for diffusion
+
+        self._get_variational_autoencoder_tensorflow(input_shape)
+
+        # Compile the variational algorithm for diffusion
+
+        self._latent_variational_algorithm.compile(loss=self._latent_diffusion_VAE_loss_function)
+
+        callbacks_list = self._training_callbacks.copy() if hasattr(self, '_training_callbacks') else []
+
+        if self._callback_model_monitor:
+            callbacks_list.append(self._callback_model_monitor)
+
+        if self._callback_early_stop:
+            callbacks_list.append(self._callback_early_stop)
+
+        # Fit the diffusion model with the training data
+
+        self._latent_variational_algorithm.fit(
+
+            (x_real_samples, to_categorical(y_real_samples,
+
+                                            num_classes=self._number_samples_per_class["number_classes"])),
+
+            x_real_samples,
+
+            epochs=self._latent_diffusion_VAE_epochs,
+
+            batch_size=self._latent_diffusion_VAE_batch_size_training,
+
+            callbacks=callbacks_list,
+
+            verbose=verbose
+
+        )
+
+        # Retrieve the trained encoder and decoder
+
+        self._encoder_latent_diffusion = self._latent_variational_algorithm.get_encoder_trained()
+
+        self._decoder_latent_diffusion = self._latent_variational_algorithm.get_decoder_trained()
+
+        # Initialize the final diffusion algorithm
+
+        self._latent_diffusion_algorithm = LatentDiffusionAlgorithm(
+
+            first_unet_model=self._latent_first_unet_model,
+
+            second_unet_model=self._latent_second_unet_model,
+
+            encoder_model_image=self._encoder_latent_diffusion,
+
+            decoder_model_image=self._decoder_latent_diffusion,
+
+            gdf_util=self._latent_gaussian_diffusion_util,
+
+            optimizer_autoencoder=Adam(learning_rate=0.0001),
+
+            optimizer_diffusion=Adam(learning_rate=0.0001),
+
+            time_steps=self._latent_diffusion_gaussian_time_steps,
+
+            ema=self._latent_diffusion_ema,
+
+            margin=self._latent_diffusion_margin,
+
+            embedding_dimension=self._latent_diffusion_latent_dimension
+
+        )
+
+        # Compile the diffusion model
+
+        self._latent_diffusion_algorithm.compile(
+
+            loss=MeanSquaredError(),
+
+            optimizer=Adam(learning_rate=0.0001)
+
+        )
+
+        # Prepare the data embedding and train the diffusion model
+
+        data_embedding = self._latent_variational_algorithm.create_embedding([
+
+            x_real_samples,
+
+            to_categorical(y_real_samples,
+
+                           num_classes=self._number_samples_per_class["number_classes"])
+
+        ])
+
+        data_embedding = numpy.array(data_embedding)
+
+        data_embedding = tensorflow.expand_dims(data_embedding, axis=-1)
+
+        callbacks_list = self._training_callbacks.copy() if hasattr(self, '_training_callbacks') else []
+
+        if self._callback_model_monitor:
+            callbacks_list.append(self._callback_model_monitor)
+
+        if self._callback_early_stop:
+            callbacks_list.append(self._callback_early_stop)
+
+        self._latent_diffusion_algorithm.fit(
+
+            data_embedding,
+
+            to_categorical(y_real_samples,
+
+                           num_classes=self._number_samples_per_class["number_classes"]),
+
+            epochs=self._latent_diffusion_unet_epochs,
+
+            batch_size=self._latent_diffusion_unet_batch_size,
+
+            callbacks=callbacks_list,
+
+            verbose=verbose
+
+        )
+
+    def _detect_embedding_shape_pytorch(self, x_real_samples):
+
+        """PyTorch-specific helper to detect embedding shape."""
+
+        if len(x_real_samples) > 32:
+
+            sample = x_real_samples[:32]
+
+
+        else:
+
+            sample = x_real_samples
+
+        test_embedding = self._latent_variational_algorithm.create_embedding(
+
+            sample,
+
+            batch_size=min(16, len(sample))
+
+        )
+
+        test_embedding = torch.from_numpy(test_embedding).float()
+
+        if len(test_embedding.shape) == 2:
+            test_embedding = test_embedding.unsqueeze(-1)
+
+        actual_shape = test_embedding.shape[1:]
+
+        return actual_shape
     def fit_model_pytorch(
             self,
             input_shape: Union[int, tuple],
@@ -688,7 +877,7 @@ class LatentDiffusion:
 
 
 
-    def fit_model(self, input_shape, x_real_samples, y_real_samples):
+    def fit_model(self, input_shape, x_real_samples, y_real_samples, batch_size=32, epochs=1000, verbose=1, callbacks=None):
         """
         Executes the complete training pipeline for latent diffusion with automatic data flattening.
 

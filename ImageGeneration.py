@@ -10,7 +10,7 @@ Testa todos os modelos disponíveis e salva resultados
 import os
 import numpy as np
 
-os.environ["ML_FRAMEWORK"] = "pytorch"
+os.environ["ML_FRAMEWORK"] = "tensorflow"
 
 from Engine.models.QuantizedVAE import QuantizedVAE
 from Engine.models.LatentDiffusion import LatentDiffusion
