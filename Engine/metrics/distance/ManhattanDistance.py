@@ -43,7 +43,7 @@ except ImportError as error:
 
 class ManhattanDistance:
     """
-    A class for calculating Manhattan Distance, Average Manhattan Distance between two distributions,
+    A class for calculating Manhattan distance, Average Manhattan distance between two distributions,
     and returning the mean of a single distribution.
 
     Attributes:
@@ -51,10 +51,10 @@ class ManhattanDistance:
 
     Methods:
         get_manhattan_distance(first_distribution, second_distribution):
-            Calculate the Manhattan Distance between two distributions.
+            Calculate the Manhattan distance between two distributions.
 
         get_average_manhattan_distance(first_distribution, second_distribution):
-            Calculate the Average Manhattan Distance between corresponding pairs of distributions.
+            Calculate the Average Manhattan distance between corresponding pairs of distributions.
 
         get_mean_distribution(distribution):
             Return the mean of a single distribution.
@@ -62,18 +62,18 @@ class ManhattanDistance:
 
     def get_metric(self, first_distribution, second_distribution):
         """
-        Calculate the Manhattan Distance between two distributions.
+        Calculate the Manhattan distance between two distributions.
         """
         try:
             manhattan_distance = sum(abs(x - y) for x, y in zip(first_distribution, second_distribution))
             logging.info(f"\t\t\t\t   {self.__class__.__name__}: {manhattan_distance}")
             return self.get_mean_distribution(manhattan_distance)
         except Exception as e:
-            return f"Manhattan Distance Error: {e}"
+            return f"Manhattan distance Error: {e}"
 
     def get_average_manhattan_distance(self, first_distribution, second_distribution):
         """
-        Calculate the Average Manhattan Distance between corresponding pairs of distributions.
+        Calculate the Average Manhattan distance between corresponding pairs of distributions.
         """
         try:
             total_distance = 0
@@ -82,7 +82,7 @@ class ManhattanDistance:
                 total_distance += distance
             return total_distance / len(first_distribution)
         except Exception as e:
-            return f"Manhattan Distance Error: {e}"
+            return f"Manhattan distance Error: {e}"
 
     def get_mean_distribution(self, distribution):
         """

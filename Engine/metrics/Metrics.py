@@ -41,36 +41,36 @@ try:
      
     import time 
 
-    from Engine.metrics.Binary.Recall import Recall
+    from Engine.metrics.binary.Recall import Recall
 
-    from Engine.metrics.Binary.F1_Score import F1Score
-    from Engine.metrics.Binary.Accuracy import Accuracy
+    from Engine.metrics.binary.F1_Score import F1Score
+    from Engine.metrics.binary.Accuracy import Accuracy
 
-    from Engine.metrics.Binary.Precision import Precision
+    from Engine.metrics.binary.Precision import Precision
 
-    from Engine.metrics.Binary.Specificity import Specificity
+    from Engine.metrics.binary.Specificity import Specificity
 
-    from Engine.metrics.Binary.TruePositive import TruePositive
-    from Engine.metrics.Binary.TrueNegative import TrueNegative
+    from Engine.metrics.binary.TruePositive import TruePositive
+    from Engine.metrics.binary.TrueNegative import TrueNegative
 
-    from Engine.metrics.Binary.FalsePositive import FalsePositive
-    from Engine.metrics.Binary.FalseNegative import FalseNegative
+    from Engine.metrics.binary.FalsePositive import FalsePositive
+    from Engine.metrics.binary.FalseNegative import FalseNegative
 
-    from Engine.metrics.Binary.AreaUnderCurve import AreaUnderCurve
+    from Engine.metrics.binary.AreaUnderCurve import AreaUnderCurve
 
-    from Engine.metrics.Binary.MeanSquaredError import MeanSquareError
-    from Engine.metrics.Binary.TrueNegativeRate import TrueNegativeRate
+    from Engine.metrics.binary.MeanSquaredError import MeanSquareError
+    from Engine.metrics.binary.TrueNegativeRate import TrueNegativeRate
 
-    from Engine.metrics.Binary.FalsePositiveRate import FalsePositiveRate
-    from Engine.metrics.Binary.MeanAbsoluteError import MeanAbsoluteError
+    from Engine.metrics.binary.FalsePositiveRate import FalsePositiveRate
+    from Engine.metrics.binary.MeanAbsoluteError import MeanAbsoluteError
 
-    from Engine.metrics.Distance.EuclideanDistance import EuclideanDistance
-    from Engine.metrics.Distance.HellingerDistance import HellingerDistance
-    from Engine.metrics.Distance.ManhattanDistance import ManhattanDistance
+    from Engine.metrics.distance.EuclideanDistance import EuclideanDistance
+    from Engine.metrics.distance.HellingerDistance import HellingerDistance
+    from Engine.metrics.distance.ManhattanDistance import ManhattanDistance
 
-    from Engine.metrics.Distance.HammingDistance import HammingDistance
-    from Engine.metrics.Distance.JaccardDistance import JaccardDistance
-    from Engine.metrics.Distance.PermutationTest import PermutationTest
+    from Engine.metrics.distance.HammingDistance import HammingDistance
+    from Engine.metrics.distance.JaccardDistance import JaccardDistance
+    from Engine.metrics.distance.PermutationTest import PermutationTest
 
 
 except ImportError as error:

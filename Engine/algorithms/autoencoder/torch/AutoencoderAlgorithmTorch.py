@@ -3,7 +3,7 @@
 
 __author__ = 'Kayuã Oleques Paim'
 __email__ = 'kayuaolequesp@gmail.com'
-__version__ = '{1}.{0}.{1}'
+__version__ = '{1}.{1}.{0}'
 __initial_data__ = '2022/06/01'
 __last_update__ = '2025/12/07'
 __credits__ = ['Kayuã Oleques']
@@ -46,20 +46,19 @@ except ImportError as error:
     print(error)
     sys.exit(-1)
 
-DEFAULT_LATENT_MEAN_DISTRIBUTION=0.0
-DEFAULT_latent_standard_deviation=1.0
-DEFAULT_LATENT_DIMENSION=64
-DEFAULT_NUMBER_CLASSES=2
-
+DEFAULT_LATENT_MEAN_DISTRIBUTION = 0.0
+DEFAULT_latent_standard_deviation = 1.0
+DEFAULT_LATENT_DIMENSION = 64
+DEFAULT_NUMBER_CLASSES = 2
 
 
 class AutoencoderAlgorithmTorch(nn.Module):
     """
-    An abstract class for AutoEncoder models with Keras-style API compatibility.
+    An adaptive AutoEncoder class for PyTorch that handles any input shape dynamically.
 
     This class provides a foundation for AutoEncoder models with methods for training,
-    generating synthetic data, saving and loading models. Designed to work with conditional
-    autoencoders where both encoder and decoder expect [data, labels] as input.
+    generating synthetic data, saving and loading models. It automatically adapts to
+    different input shapes: (x), (x, y), (x, y, z), etc.
 
     Args:
         @encoder_model (nn.Module):
@@ -80,21 +79,38 @@ class AutoencoderAlgorithmTorch(nn.Module):
             Standard deviation of the latent space distribution (default: 1.0).
         @latent_dimension (int, optional):
             The dimensionality of the latent space (default: 64).
-        @number_classes (int, optional):
-            The number of classes for conditional generation (default: 2).
+        @input_shape (tuple, optional):
+            Expected input shape. If None, will be inferred from data.
+        @auto_adapt_shape (bool, optional):
+            If True, automatically adapts to input data shape. Default: True
 
     Example:
-        >>> encoder_model = build_encoder(...)
-        >>> decoder_model = build_decoder(...)
-        >>> autoencoder = AutoencoderAlgorithmTorch(
-        ...     encoder_model=encoder_model,
-        ...     decoder_model=decoder_model,
-        ...     loss_function=nn.MSELoss(),
-        ...     number_classes=2,
-        ...     latent_dimension=64
+        >>> # Example with 1D data
+        >>> encoder_1d = build_encoder(input_dim=100, latent_dim=64)
+        >>> decoder_1d = build_decoder(latent_dim=64, output_dim=100)
+        >>> autoencoder_1d = AutoencoderAlgorithmTorch(
+        ...     encoder_model=encoder_1d,
+        ...     decoder_model=decoder_1d,
+        ...     input_shape=(100,)
         ... )
-        >>> autoencoder.compile(loss='mse')
-        >>> history = autoencoder.fit(x_train, y_train, epochs=50, batch_size=32)
+
+        >>> # Example with 2D data
+        >>> encoder_2d = build_encoder(input_shape=(28, 28), latent_dim=64)
+        >>> decoder_2d = build_decoder(latent_dim=64, output_shape=(28, 28))
+        >>> autoencoder_2d = AutoencoderAlgorithmTorch(
+        ...     encoder_model=encoder_2d,
+        ...     decoder_model=decoder_2d,
+        ...     input_shape=(28, 28)
+        ... )
+
+        >>> # Example with 3D data (images)
+        >>> encoder_3d = build_encoder(input_shape=(3, 128, 128), latent_dim=64)
+        >>> decoder_3d = build_decoder(latent_dim=64, output_shape=(3, 128, 128))
+        >>> autoencoder_3d = AutoencoderAlgorithmTorch(
+        ...     encoder_model=encoder_3d,
+        ...     decoder_model=decoder_3d,
+        ...     input_shape=(3, 128, 128)
+        ... )
     """
 
     def __init__(self,
@@ -106,7 +122,9 @@ class AutoencoderAlgorithmTorch(nn.Module):
                  models_saved_path=None,
                  latent_mean_distribution=DEFAULT_LATENT_MEAN_DISTRIBUTION,
                  latent_standard_deviation=DEFAULT_latent_standard_deviation,
-                 latent_dimension=DEFAULT_LATENT_DIMENSION):
+                 latent_dimension=DEFAULT_LATENT_DIMENSION,
+                 input_shape=None,
+                 auto_adapt_shape=True):
 
         super().__init__()
 
@@ -117,13 +135,13 @@ class AutoencoderAlgorithmTorch(nn.Module):
             raise TypeError("decoder_model must be a nn.Module instance.")
 
         if file_name_encoder is not None and (not isinstance(file_name_encoder, str) or not file_name_encoder):
-            raise ValueError("file_name_encoder must be a non-empty string.")
+            raise ValueError("file_name_encoder must be a non-empty string or None.")
 
         if file_name_decoder is not None and (not isinstance(file_name_decoder, str) or not file_name_decoder):
-            raise ValueError("file_name_decoder must be a non-empty string.")
+            raise ValueError("file_name_decoder must be a non-empty string or None.")
 
         if models_saved_path is not None and (not isinstance(models_saved_path, str) or not models_saved_path):
-            raise ValueError("models_saved_path must be a non-empty string.")
+            raise ValueError("models_saved_path must be a non-empty string or None.")
 
         if not isinstance(latent_mean_distribution, (int, float)):
             raise TypeError("latent_mean_distribution must be a number.")
@@ -148,7 +166,6 @@ class AutoencoderAlgorithmTorch(nn.Module):
         self._latent_standard_deviation = latent_standard_deviation
         self._latent_dimension = latent_dimension
 
-
         # File names for saving models
         self._file_name_encoder = file_name_encoder
         self._file_name_decoder = file_name_decoder
@@ -156,10 +173,116 @@ class AutoencoderAlgorithmTorch(nn.Module):
         # Path for saving models
         self._models_saved_path = models_saved_path
 
+        # Shape adaptation
+        self._input_shape = input_shape
+        self._auto_adapt_shape = auto_adapt_shape
+        self._inferred_shape = None
+
         # Device configuration
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self._encoder.to(self.device)
         self._decoder.to(self.device)
+
+    def _infer_data_shape(self, data):
+        """
+        Infer the shape of input data, excluding the batch dimension.
+
+        Args:
+            data: Input data (tensor, array, tuple/list, or DataLoader).
+
+        Returns:
+            tuple: Shape of the data excluding batch dimension.
+        """
+        if isinstance(data, DataLoader):
+            # Get first batch from DataLoader
+            for batch in data:
+                if isinstance(batch, (tuple, list)):
+                    data = batch[0]
+                else:
+                    data = batch
+                break
+
+        if isinstance(data, (tuple, list)):
+            # If data is a tuple/list, infer from first element
+            data = data[0]
+
+        if isinstance(data, torch.Tensor):
+            shape = tuple(data.shape[1:])
+        elif isinstance(data, numpy.ndarray):
+            shape = data.shape[1:] if len(data.shape) > 1 else data.shape
+        else:
+            # Try to convert to tensor and get shape
+            try:
+                tensor_data = torch.tensor(data)
+                shape = tuple(tensor_data.shape[1:])
+            except:
+                raise ValueError(f"Cannot infer shape from data of type {type(data)}")
+
+        return shape
+
+    def _validate_and_adapt_shape(self, data):
+        """
+        Validate input data shape and adapt if necessary.
+
+        Args:
+            data: Input data.
+
+        Returns:
+            bool: True if shape is valid or successfully adapted.
+        """
+        current_shape = self._infer_data_shape(data)
+
+        if self._inferred_shape is None:
+            self._inferred_shape = current_shape
+            if self._input_shape is not None and self._input_shape != current_shape:
+                print(f"Warning: Specified input_shape {self._input_shape} differs from inferred shape {current_shape}")
+                if self._auto_adapt_shape:
+                    print(f"Auto-adapting to shape: {current_shape}")
+                    self._input_shape = current_shape
+            elif self._input_shape is None:
+                self._input_shape = current_shape
+                print(f"Inferred input shape: {current_shape}")
+        else:
+            if current_shape != self._inferred_shape:
+                if self._auto_adapt_shape:
+                    print(f"Warning: Input shape changed from {self._inferred_shape} to {current_shape}")
+                    self._inferred_shape = current_shape
+                else:
+                    raise ValueError(
+                        f"Input shape mismatch: expected {self._inferred_shape}, got {current_shape}. "
+                        f"Set auto_adapt_shape=True to allow dynamic shape changes."
+                    )
+
+        return True
+
+    def _prepare_batch(self, batch):
+        """
+        Prepare batch data, handling different input formats.
+
+        Args:
+            batch: Input batch (can be single tensor, tuple, or list).
+
+        Returns:
+            tuple: (batch_x, batch_y) where batch_y is the reconstruction target.
+        """
+        if isinstance(batch, (tuple, list)):
+            if len(batch) == 1:
+                # Single input, use as both input and target
+                batch_x = batch[0]
+                batch_y = batch[0]
+            elif len(batch) == 2:
+                # Input and target provided
+                batch_x, batch_y = batch
+            else:
+                # Multiple inputs, use first as input and last as target
+                batch_x = batch[0]
+                batch_y = batch[-1]
+        else:
+            # Single tensor, use as both input and target
+            batch_x = batch
+            batch_y = batch
+
+        return batch_x, batch_y
 
     def compile(self, loss=None, optimizer=None, metrics=None, **kwargs):
         """
@@ -202,6 +325,7 @@ class AutoencoderAlgorithmTorch(nn.Module):
     def forward(self, x, labels=None):
         """
         Forward pass through the encoder-decoder model.
+        Automatically handles different input formats.
 
         Args:
             x: Input tensor or tuple of (data, labels).
@@ -234,21 +358,18 @@ class AutoencoderAlgorithmTorch(nn.Module):
 
     def train_step(self, batch, optimizer):
         """
-        Perform a training step for the conditional AutoEncoder.
-
-        This implementation assumes the encoder and decoder are ALWAYS conditional,
-        meaning they expect [data, labels] as input.
+        Perform a training step for the AutoEncoder.
+        Automatically adapts to different batch formats.
 
         Args:
-            batch: Input data batch (tuple of batch_x, batch_y).
-                   - batch_x: Input data features
-                   - batch_y: Target reconstruction concatenated with one-hot labels [data | labels]
+            batch: Input data batch (tuple of batch_x, batch_y or single tensor).
             optimizer: PyTorch optimizer.
 
         Returns:
             dict: Dictionary containing the loss value.
         """
-        batch_x, batch_y = batch
+        # Prepare batch data
+        batch_x, batch_y = self._prepare_batch(batch)
 
         # Move data to device
         batch_x = batch_x.to(self.device)
@@ -260,27 +381,43 @@ class AutoencoderAlgorithmTorch(nn.Module):
         # Zero the gradients
         optimizer.zero_grad()
 
-        # The encoder/decoder in this implementation are ALWAYS conditional
-        # They always expect [data, labels] as input
-
-        # Check if batch_y is larger than batch_x (indicates concatenated data + labels)
-        # Check if batch_y is larger than batch_x (indicates concatenated data + labels)
+        # Check if this is a conditional autoencoder (batch_y has extra dimensions for labels)
         if batch_y.shape[1] > batch_x.shape[1]:
             # Extract target data (first part, same size as input)
             target_data = batch_y[:, :batch_x.shape[1]]
             # Extract one-hot labels (remaining part)
             one_hot_labels = batch_y[:, batch_x.shape[1]:]
+
+            # Forward pass for conditional model
+            latent_representation, labels_passthrough = self._encoder([batch_x, one_hot_labels])
+            reconstructed_data = self._decoder([latent_representation, one_hot_labels])
+
+        elif hasattr(self._encoder, 'forward') and len(list(self._encoder.parameters())) > 0:
+            # Check if encoder expects conditional input by trying to detect input signature
+            try:
+                # Try conditional forward pass
+                # Assume batch_y might be labels
+                if batch_y.shape == batch_x.shape:
+                    # Standard autoencoder: batch_y is target
+                    target_data = batch_y
+                    latent_representation = self._encoder(batch_x)
+                    reconstructed_data = self._decoder(latent_representation)
+                else:
+                    # Might be conditional with separate labels
+                    target_data = batch_x
+                    one_hot_labels = batch_y
+                    latent_representation, _ = self._encoder([batch_x, one_hot_labels])
+                    reconstructed_data = self._decoder([latent_representation, one_hot_labels])
+            except:
+                # Fall back to standard autoencoder
+                target_data = batch_y if batch_y.shape == batch_x.shape else batch_x
+                latent_representation = self._encoder(batch_x)
+                reconstructed_data = self._decoder(latent_representation)
         else:
-            # batch_y contains only labels, use batch_x as reconstruction target
-            target_data = batch_x  #  Use input as target for autoencoder
-            # Assume batch_y is already one-hot encoded labels
-            one_hot_labels = batch_y
-
-        # Forward pass: encoder expects [data, labels], returns (latent, labels)
-        latent_representation, labels_passthrough = self._encoder([batch_x, one_hot_labels])
-
-        # Decoder expects [latent, labels]
-        reconstructed_data = self._decoder([latent_representation, one_hot_labels])
+            # Standard autoencoder
+            target_data = batch_y
+            latent_representation = self._encoder(batch_x)
+            reconstructed_data = self._decoder(latent_representation)
 
         # Calculate the loss
         if self._loss_function is not None:
@@ -301,17 +438,16 @@ class AutoencoderAlgorithmTorch(nn.Module):
         # Return a dictionary containing the current loss value
         return {"loss": self._total_loss_tracker}
 
-
     def fit(self, x=None, y=None, batch_size=32, epochs=1, verbose=1,
             callbacks=None, validation_data=None, shuffle=True,
             initial_epoch=0, steps_per_epoch=None, validation_steps=None,
             validation_freq=1, optimizer=None, learning_rate=0.001, **kwargs):
         """
-        Train the model with a simplified progress bar.
+        Train the model with automatic shape adaptation.
 
         Args:
             x: Input data (array, tensor, tuple of (x,y), or DataLoader).
-            y: Target data.
+            y: Target data (if None, x is used as target).
             batch_size: Number of samples per gradient update.
             epochs: Number of epochs to train.
             verbose: 0 = silent, 1 = progress bar, 2 = one line per epoch.
@@ -336,15 +472,26 @@ class AutoencoderAlgorithmTorch(nn.Module):
         # Handle different input formats
         if isinstance(x, DataLoader):
             dataloader = x
+            # Validate and adapt shape from DataLoader
+            self._validate_and_adapt_shape(x)
 
         elif isinstance(x, tuple) and len(x) == 2:
+            # Validate and adapt shape
+            self._validate_and_adapt_shape(x[0])
+
             x_data, y_data = x
             x_tensor = torch.FloatTensor(x_data) if not isinstance(x_data, torch.Tensor) else x_data
             y_tensor = torch.FloatTensor(y_data) if not isinstance(y_data, torch.Tensor) else y_data
             dataset = TensorDataset(x_tensor, y_tensor)
             dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
 
-        elif x is not None and y is not None:
+        elif x is not None:
+            # Validate and adapt shape
+            self._validate_and_adapt_shape(x)
+
+            if y is None:
+                y = x
+
             x_tensor = torch.FloatTensor(x) if not isinstance(x, torch.Tensor) else x
             y_tensor = torch.FloatTensor(y) if not isinstance(y, torch.Tensor) else y
             dataset = TensorDataset(x_tensor, y_tensor)
@@ -355,7 +502,10 @@ class AutoencoderAlgorithmTorch(nn.Module):
 
         # Calculate steps per epoch if not provided
         if steps_per_epoch is None:
-            steps_per_epoch = len(dataloader)
+            try:
+                steps_per_epoch = len(dataloader)
+            except:
+                steps_per_epoch = 100  # Default value if length cannot be determined
 
         # History to store metrics
         history = self.History()
@@ -402,7 +552,6 @@ class AutoencoderAlgorithmTorch(nn.Module):
 
             # Validation
             if validation_data is not None and (epoch + 1) % validation_freq == 0:
-
                 val_loss = self._evaluate_validation(validation_data, validation_steps)
 
                 if 'val_loss' not in history.history:
@@ -423,7 +572,7 @@ class AutoencoderAlgorithmTorch(nn.Module):
 
     def _evaluate_validation(self, validation_data, validation_steps=None):
         """
-        Evaluate the model on validation data.
+        Evaluate the model on validation data with automatic shape handling.
 
         Args:
             validation_data: Validation dataset (DataLoader or tuple).
@@ -455,21 +604,28 @@ class AutoencoderAlgorithmTorch(nn.Module):
 
         with torch.no_grad():
             for batch_data in val_dataloader:
-                batch_x, batch_y = batch_data
+                batch_x, batch_y = self._prepare_batch(batch_data)
                 batch_x = batch_x.to(self.device)
                 batch_y = batch_y.to(self.device)
 
-                # Extract target data and labels (same logic as train_step)
+                # Check format and process accordingly
                 if batch_y.shape[1] > batch_x.shape[1]:
                     target_data = batch_y[:, :batch_x.shape[1]]
                     one_hot_labels = batch_y[:, batch_x.shape[1]:]
+                    latent_representation, _ = self._encoder([batch_x, one_hot_labels])
+                    reconstructed = self._decoder([latent_representation, one_hot_labels])
                 else:
-                    target_data = batch_x
-                    one_hot_labels = batch_y
-
-                # Forward pass
-                latent_representation, _ = self._encoder([batch_x, one_hot_labels])
-                reconstructed = self._decoder([latent_representation, one_hot_labels])
+                    try:
+                        # Try standard autoencoder first
+                        target_data = batch_y if batch_y.shape == batch_x.shape else batch_x
+                        latent_representation = self._encoder(batch_x)
+                        reconstructed = self._decoder(latent_representation)
+                    except:
+                        # Fall back to conditional if standard fails
+                        target_data = batch_x
+                        one_hot_labels = batch_y
+                        latent_representation, _ = self._encoder([batch_x, one_hot_labels])
+                        reconstructed = self._decoder([latent_representation, one_hot_labels])
 
                 # Calculate loss
                 if self._loss_function is not None:
@@ -567,6 +723,16 @@ class AutoencoderAlgorithmTorch(nn.Module):
             'model_architecture': str(self._decoder)
         }, decoder_file_name)
 
+        # Save shape information
+        shape_info = {
+            'input_shape': self._input_shape,
+            'inferred_shape': self._inferred_shape,
+            'latent_dimension': self._latent_dimension
+        }
+        shape_file = os.path.join(directory, f"fold_{file_name}_shape_info.json")
+        with open(shape_file, 'w') as f:
+            json.dump({k: list(v) if isinstance(v, tuple) else v for k, v in shape_info.items()}, f)
+
     def load_models(self, directory, file_name):
         """
         Load the encoder and decoder models from a directory.
@@ -588,9 +754,49 @@ class AutoencoderAlgorithmTorch(nn.Module):
         decoder_checkpoint = torch.load(decoder_file_name, map_location=self.device)
         self._decoder.load_state_dict(decoder_checkpoint['model_state_dict'])
 
+        # Load shape information if available
+        shape_file = os.path.join(directory, f"{file_name}_shape_info.json")
+        if os.path.exists(shape_file):
+            with open(shape_file, 'r') as f:
+                shape_info = json.load(f)
+                self._input_shape = tuple(shape_info.get('input_shape', [])) if shape_info.get('input_shape') else None
+                self._inferred_shape = tuple(shape_info.get('inferred_shape', [])) if shape_info.get(
+                    'inferred_shape') else None
+                self._latent_dimension = shape_info.get('latent_dimension', self._latent_dimension)
+
         # Set to evaluation mode
         self._encoder.eval()
         self._decoder.eval()
+
+    def get_input_shape(self):
+        """
+        Get the current input shape.
+
+        Returns:
+            tuple: Current input shape (excluding batch dimension).
+        """
+        return self._inferred_shape if self._inferred_shape is not None else self._input_shape
+
+    def reshape_data(self, data, target_shape):
+        """
+        Reshape data to target shape if needed.
+
+        Args:
+            data: Input data (tensor or array).
+            target_shape: Desired shape (excluding batch dimension).
+
+        Returns:
+            Reshaped data.
+        """
+        if isinstance(data, torch.Tensor):
+            if tuple(data.shape[1:]) != target_shape:
+                batch_size = data.shape[0]
+                return data.reshape((batch_size,) + target_shape)
+        elif isinstance(data, numpy.ndarray):
+            if data.shape[1:] != target_shape:
+                batch_size = data.shape[0]
+                return data.reshape((batch_size,) + target_shape)
+        return data
 
     @property
     def decoder(self):
@@ -599,6 +805,10 @@ class AutoencoderAlgorithmTorch(nn.Module):
     @property
     def encoder(self):
         return self._encoder
+
+    @property
+    def input_shape(self):
+        return self.get_input_shape()
 
     @decoder.setter
     def decoder(self, decoder):

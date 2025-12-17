@@ -25,8 +25,8 @@ from Engine.models.DenoisingDiffusion import DenoisingDiffusion
 # Configurações MNIST
 # =====================
 
-IMAGE_SIZE = (32, 32)
-INPUT_SHAPE = (32, 32, 1)
+IMAGE_SIZE = (64, 64)
+INPUT_SHAPE = (64, 64, 1)
 
 N_CLASSES = 10
 BATCH_LIMIT = 4800
@@ -79,14 +79,14 @@ print(f"✓ Dataset carregado: {x_real_samples.shape}")
 # =====================
 
 models = {
-    #"latent_diffusion": latent_diffusion(number_classes=N_CLASSES),
+    #"latent_diffusion": LatentDiffusion(number_classes=N_CLASSES),
     #"quantized_vae": quantized_vae(number_classes=N_CLASSES),
     # "denoising_diffusion": denoising_diffusion(number_classes=N_CLASSES),
-    # "autoencoder": autoencoder(number_classes=N_CLASSES),
+    #"autoencoder": Autoencoder(number_classes=N_CLASSES),
     # "adversarial": adversarial(number_classes=N_CLASSES),
     #"wasserstein": wasserstein(number_classes=N_CLASSES),
-    "wasserstein_gp": WassersteinGP(number_classes=N_CLASSES),
-    #"variational_autoencoder": variational_autoencoder(number_classes=N_CLASSES)
+    #"wasserstein_gp": WassersteinGP(number_classes=N_CLASSES),
+    "variational_autoencoder": VariationalAutoencoder(number_classes=N_CLASSES)
 }
 
 # =====================

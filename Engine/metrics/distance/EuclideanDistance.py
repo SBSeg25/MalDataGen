@@ -44,23 +44,23 @@ except ImportError as error:
 
 class EuclideanDistance:
     """
-    A class for calculating Euclidean Distance and Mean Euclidean Distance between two distributions.
+    A class for calculating Euclidean distance and Mean Euclidean distance between two distributions.
 
     Attributes:
         None
 
     Methods:
         get_mean_euclidean_distance(first_distribution, second_distribution):
-            Calculate the Mean Euclidean Distance between two distributions.
+            Calculate the Mean Euclidean distance between two distributions.
 
         get_euclidean_distance(first_distribution, second_distribution):
-            Calculate the Euclidean Distance between two distributions.
+            Calculate the Euclidean distance between two distributions.
 
         _check_input_labels(first_distribution, second_distribution):
             Check the validity and type of input distributions.
 
     Exceptions:
-        EuclideanDistanceError: Custom exception class for handling Euclidean Distance calculation errors.
+        EuclideanDistanceError: Custom exception class for handling Euclidean distance calculation errors.
 
     Example:
         # Create an instance of the EuclideanDistance class
@@ -70,31 +70,31 @@ class EuclideanDistance:
         first_distribution = np.array([1, 2, 3])
         second_distribution = np.array([4, 5, 6])
 
-        # Calculate Euclidean Distance between the two distributions
+        # Calculate Euclidean distance between the two distributions
         distance = euclidean_distance.get_euclidean_distance(first_distribution, second_distribution)
 
-        # Calculate Mean Euclidean Distance between two distributions
+        # Calculate Mean Euclidean distance between two distributions
         mean_distance = euclidean_distance.get_mean_euclidean_distance(first_distribution, second_distribution)
 
-        # Print Euclidean Distance and Mean Euclidean Distance
-        print(f"Euclidean Distance: {distance}")
-        print(f"Mean Euclidean Distance: {mean_distance}")
+        # Print Euclidean distance and Mean Euclidean distance
+        print(f"Euclidean distance: {distance}")
+        print(f"Mean Euclidean distance: {mean_distance}")
     """
     
 
     def get_metric(self, first_distribution, second_distribution):
         """
-        Calculate the Mean Euclidean Distance between two distributions.
+        Calculate the Mean Euclidean distance between two distributions.
 
         Args:
             first_distribution (numpy.ndarray): First distribution as an array of numerical values.
             second_distribution (numpy.ndarray): Second distribution as an array of numerical values.
 
         Returns:
-            float: The Mean Euclidean Distance as a floating-point number.
+            float: The Mean Euclidean distance as a floating-point number.
 
         Raises:
-            EuclideanDistanceError: Custom exception class for handling Euclidean Distance calculation errors.
+            EuclideanDistanceError: Custom exception class for handling Euclidean distance calculation errors.
         """
         # Check if the input distributions are valid and of the correct type
 
@@ -116,21 +116,21 @@ class EuclideanDistance:
 
         except EuclideanDistanceError as e:
             # Handle the case where an EuclideanDistanceError is raised and return an error message
-            return f"Euclidean Distance Error: {e}"
+            return f"Euclidean distance Error: {e}"
 
     def get_euclidean_distance(self, first_distribution, second_distribution):
         """
-        Calculate the Euclidean Distance between two distributions.
+        Calculate the Euclidean distance between two distributions.
 
         Args:
             first_distribution (numpy.ndarray): First distribution as an array of numerical values.
             second_distribution (numpy.ndarray): Second distribution as an array of numerical values.
 
         Returns:
-            float: The Euclidean Distance as a floating-point number.
+            float: The Euclidean distance as a floating-point number.
 
         Raises:
-            EuclideanDistanceError: Custom exception class for handling Euclidean Distance calculation errors.
+            EuclideanDistanceError: Custom exception class for handling Euclidean distance calculation errors.
         """
         # Check if the input distributions are valid and of the correct type
 
@@ -146,4 +146,4 @@ class EuclideanDistance:
 
         except EuclideanDistanceError as e:
             # Handle the case where an EuclideanDistanceError is raised and return an error message
-            return f"Euclidean Distance Error: {e}"
+            return f"Euclidean distance Error: {e}"

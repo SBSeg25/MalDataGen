@@ -46,20 +46,20 @@ except ImportError as error:
 
 class HellingerDistance:
     """
-    A class for calculating Hellinger Distance and Average Hellinger Distance between probability distributions.
+    A class for calculating Hellinger distance and Average Hellinger distance between probability distributions.
 
     Attributes:
         None
 
     Methods:
         get_hellinger_distance(first_distribution, second_distribution):
-            Calculate the Hellinger Distance between two probability distributions.
+            Calculate the Hellinger distance between two probability distributions.
 
         get_average_hellinger_distance(first_distribution, second_distribution):
-            Calculate the Average Hellinger Distance between corresponding pairs of probability distributions.
+            Calculate the Average Hellinger distance between corresponding pairs of probability distributions.
 
     Exceptions:
-        HellingerDistanceError: Custom exception class for handling Hellinger Distance calculation errors.
+        HellingerDistanceError: Custom exception class for handling Hellinger distance calculation errors.
 
     Example:
         # Create an instance of the HellingerDistance class (not required, as methods are static)
@@ -69,16 +69,16 @@ class HellingerDistance:
         first_distribution = np.array([0.1, 0.4, 0.5])
         second_distribution = np.array([0.2, 0.3, 0.5])
 
-        # Calculate Hellinger Distance between the two distributions
+        # Calculate Hellinger distance between the two distributions
         distance = HellingerDistance.get_hellinger_distance(first_distribution, second_distribution)
 
-        # Calculate Average Hellinger Distance between two lists of distributions
+        # Calculate Average Hellinger distance between two lists of distributions
         avg_distance = HellingerDistance.get_average_hellinger_distance([first_distribution, second_distribution],
                                                                       [second_distribution, first_distribution])
 
-        # Print Hellinger Distance and Average Hellinger Distance
-        print(f"Hellinger Distance: {distance}")
-        print(f"Average Hellinger Distance: {avg_distance}")
+        # Print Hellinger distance and Average Hellinger distance
+        print(f"Hellinger distance: {distance}")
+        print(f"Average Hellinger distance: {avg_distance}")
     """
 
     def safe_sqrt(self, data):
@@ -111,17 +111,17 @@ class HellingerDistance:
 
     def get_metric(self, first_distribution, second_distribution):
         """
-        Calculate the Hellinger Distance between two probability distributions.
+        Calculate the Hellinger distance between two probability distributions.
 
         Args:
             first_distribution (numpy.ndarray): First probability distribution as an array of numerical values.
             second_distribution (numpy.ndarray): Second probability distribution as an array of numerical values.
 
         Returns:
-            float: The Hellinger Distance as a floating-point number.
+            float: The Hellinger distance as a floating-point number.
 
         Raises:
-            HellingerDistanceError: Custom exception class for handling Hellinger Distance calculation errors.
+            HellingerDistanceError: Custom exception class for handling Hellinger distance calculation errors.
         """
         # Check if the input distributions are valid and of the correct type
 
@@ -133,7 +133,7 @@ class HellingerDistance:
             sqrt_p =  self.robust_sqrt(first_distribution)
             sqrt_q =  self.robust_sqrt(second_distribution)
 
-            # Calculate Hellinger Distance using the formula
+            # Calculate Hellinger distance using the formula
             hellinger_distance = numpy.sqrt(0.5 * numpy.sum((sqrt_p - sqrt_q) ** 2))
             
             logging.info(f"\t\t\t\t   {self.__class__.__name__}: {hellinger_distance}")
@@ -141,21 +141,21 @@ class HellingerDistance:
 
         except HellingerDistanceError as e:
             # Handle the case where a HellingerDistanceError is raised and return an error message
-            return f"Hellinger Distance Error: {e}"
+            return f"Hellinger distance Error: {e}"
 
     def get_average_hellinger_distance(self, first_distribution, second_distribution):
         """
-        Calculate the Average Hellinger Distance between corresponding pairs of probability distributions.
+        Calculate the Average Hellinger distance between corresponding pairs of probability distributions.
 
         Args:
             first_distribution (list of numpy.ndarray): List of first probability distributions.
             second_distribution (list of numpy.ndarray): List of second probability distributions.
 
         Returns:
-            float: The Average Hellinger Distance as a floating-point number.
+            float: The Average Hellinger distance as a floating-point number.
 
         Raises:
-            HellingerDistanceError: Custom exception class for handling Hellinger Distance calculation errors.
+            HellingerDistanceError: Custom exception class for handling Hellinger distance calculation errors.
         """
         # Check if the input distributions are valid and of the correct type
 
@@ -166,7 +166,7 @@ class HellingerDistance:
             # Iterate through corresponding pairs of distributions and calculate the Hellinger distance for each pair
             for p, q in zip(first_distribution, second_distribution):
 
-                # Calculate Hellinger Distance for each pair of distributions
+                # Calculate Hellinger distance for each pair of distributions
                 distance = HellingerDistance.get_metric(p, q)
                 total_distance += distance
 
@@ -178,5 +178,5 @@ class HellingerDistance:
 
         except HellingerDistanceError as e:
             # Handle the case where a HellingerDistanceError is raised and return an error message
-            return f"Hellinger Distance Error: {e}"
+            return f"Hellinger distance Error: {e}"
 

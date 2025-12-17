@@ -68,7 +68,7 @@ class WassersteinModelTensorflow(VanillaDiscriminatorTensorflow, VanillaGenerato
 
     This class implements a wasserstein_gp GAN, a type of Generative adversarial
     Network designed to improve training stability and provide a more meaningful
-    loss metric by approximating the Earth Mover's Distance (wasserstein_gp-1 Distance)
+    loss metric by approximating the Earth Mover's distance (wasserstein_gp-1 distance)
     between real and generated data distributions.
 
     The model integrates both the **generator** (which synthesizes new data samples)

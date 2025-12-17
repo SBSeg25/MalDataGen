@@ -43,20 +43,20 @@ except ImportError as error:
 
 class HammingDistance:
     """
-    A class for calculating Hamming Distance and Mean Hamming Distance between two binary distributions.
+    A class for calculating Hamming distance and Mean Hamming distance between two binary distributions.
 
     Attributes:
         None
 
     Methods:
         get_metric(first_distribution, second_distribution):
-            Calculate the Mean Hamming Distance between two binary distributions.
+            Calculate the Mean Hamming distance between two binary distributions.
 
         get_hamming_distance(first_distribution, second_distribution):
-            Calculate the Hamming Distance between two binary distributions.
+            Calculate the Hamming distance between two binary distributions.
 
     Exceptions:
-        HammingDistanceError: Custom exception class for handling Hamming Distance calculation errors.
+        HammingDistanceError: Custom exception class for handling Hamming distance calculation errors.
 
     Example:
         # Create an instance of the HammingDistance class
@@ -66,27 +66,27 @@ class HammingDistance:
         first_distribution = np.array([1, 0, 1, 1])
         second_distribution = np.array([0, 0, 1, 0])
 
-        # Calculate Hamming Distance between the two distributions
+        # Calculate Hamming distance between the two distributions
         distance = hamming_distance.get_hamming_distance(first_distribution, second_distribution)
 
-        # Calculate Mean Hamming Distance between two distributions
+        # Calculate Mean Hamming distance between two distributions
         mean_distance = hamming_distance.get_metric(first_distribution, second_distribution)
 
-        # Print Hamming Distance and Mean Hamming Distance
-        print(f"Hamming Distance: {distance}")
-        print(f"Mean Hamming Distance: {mean_distance}")
+        # Print Hamming distance and Mean Hamming distance
+        print(f"Hamming distance: {distance}")
+        print(f"Mean Hamming distance: {mean_distance}")
     """
 
     def get_metric(self, first_distribution, second_distribution):
         """
-        Calculate the Mean Hamming Distance between two binary distributions.
+        Calculate the Mean Hamming distance between two binary distributions.
 
         Args:
             first_distribution (numpy.ndarray): First binary distribution as an array of 0s and 1s.
             second_distribution (numpy.ndarray): Second binary distribution as an array of 0s and 1s.
 
         Returns:
-            float: The Mean Hamming Distance as a floating-point number (normalized to [0, 1]).
+            float: The Mean Hamming distance as a floating-point number (normalized to [0, 1]).
 
         Raises:
             HammingDistanceError: If inputs are not binary or have different lengths.
@@ -107,18 +107,18 @@ class HammingDistance:
             return float(mean_distance)
 
         except HammingDistanceError as e:
-            return f"Hamming Distance Error: {e}"
+            return f"Hamming distance Error: {e}"
 
     def get_hamming_distance(self, first_distribution, second_distribution):
         """
-        Calculate the Hamming Distance between two binary distributions.
+        Calculate the Hamming distance between two binary distributions.
 
         Args:
             first_distribution (numpy.ndarray): First binary distribution as an array of 0s and 1s.
             second_distribution (numpy.ndarray): Second binary distribution as an array of 0s and 1s.
 
         Returns:
-            float: The Hamming Distance as a floating-point number (normalized to [0, 1]).
+            float: The Hamming distance as a floating-point number (normalized to [0, 1]).
 
         Raises:
             HammingDistanceError: If inputs are not binary or have different lengths.
@@ -132,11 +132,11 @@ class HammingDistance:
             return float(normalized_distance)
 
         except HammingDistanceError as e:
-            return f"Hamming Distance Error: {e}"
+            return f"Hamming distance Error: {e}"
 
     def _check_input_labels(self, first_distribution, second_distribution):
         """
-        Validate input distributions for Hamming Distance calculation.
+        Validate input distributions for Hamming distance calculation.
 
         Args:
             first_distribution (numpy.ndarray): First distribution to check.

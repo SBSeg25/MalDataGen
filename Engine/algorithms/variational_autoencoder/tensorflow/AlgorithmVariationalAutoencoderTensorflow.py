@@ -3,7 +3,7 @@
 
 __author__ = 'Kayuã Oleques Paim'
 __email__ = 'kayuaolequesp@gmail.com'
-__version__ = '{1}.{0}.{1}'
+__version__ = '{1}.{1}.{0}'
 __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Kayuã Oleques']
@@ -11,25 +11,6 @@ __credits__ = ['Kayuã Oleques']
 # MIT License
 #
 # Copyright (c) 2025 Synthetic Ocean AI
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 
 try:
     import os
@@ -56,63 +37,36 @@ except ImportError as error:
 
 class VariationalAutoencoderAlgorithmTensorflow(Model):
     """
-    Implements a Variational AutoEncoder (VAE) model for generating synthetic data.
+    Implements an adaptive Variational AutoEncoder (VAE) model for generating synthetic data.
 
     The model includes an encoder and a decoder for encoding input data and reconstructing
     it from a learned latent space. During training, it computes both the reconstruction loss
     and the KL divergence loss. The trained decoder can be used to generate synthetic data.
 
     This class supports customizable latent space parameters and loss functions, making it
-    adaptable for different generative tasks.
-
-    Attributes:
-        @_encoder (Model):
-            Encoder model that encodes input data into the latent space.
-        @_decoder (Model):
-            Decoder model that reconstructs data from the latent representation.
-        @_loss_function (callable):
-            Function used to compute the total loss during training.
-        @_total_loss_tracker (Mean):
-            Tracks the overall loss during training.
-        @_reconstruction_loss_tracker (Mean):
-            Tracks the reconstruction loss during training.
-        @_kl_loss_tracker (Mean):
-            Tracks the KL divergence loss during training.
-        @_latent_mean_distribution (float):
-            Mean of the latent distribution.
-        @_latent_standard_deviation (float):
-            Standard deviation of the latent distribution.
-        @_latent_dimension (int):
-            Dimensionality of the latent space.
-        @_decoder_latent_dimension (int):
-            Dimensionality of the latent space used by the decoder.
-        @_file_name_encoder (str):
-            File name for saving the encoder model.
-        @_file_name_decoder (str):
-            File name for saving the decoder model.
-        @_models_saved_path (str):
-            Directory path where the encoder and decoder models are saved.
-
-    Raises:
-        ValueError:
-            Raised in cases where:
-            - The latent dimension is non-positive.
-            - The standard deviation of the latent space is non-positive.
-            - The file paths are invalid.
+    adaptable for different generative tasks. It automatically adapts to any input shape:
+    (x), (x, y), (x, y, z), etc.
 
     Example:
-        >>> vae_model = VariationalAlgorithm(
-        ...     encoder_model=encoder,
-        ...     decoder_model=decoder,
-        ...     loss_function=custom_loss_function,
-        ...     latent_dimension=128,
-        ...     latent_mean_distribution=0.0,
-        ...     latent_standard_deviation=1.0,
-        ...     file_name_encoder="encoder_model.h5",
-        ...     file_name_decoder="decoder_model.h5",
-        ...     models_saved_path="models/"
+        >>> # Example with 1D data
+        >>> vae_1d = VariationalAutoencoderAlgorithmTensorflow(
+        ...     encoder_model=encoder_1d,
+        ...     decoder_model=decoder_1d,
+        ...     loss_function='mse',
+        ...     latent_dimension=64,
+        ...     input_shape=(100,)
         ... )
-        >>> vae_model.train_step(data)
+        >>> vae_1d.fit(data_1d, epochs=50)
+
+        >>> # Example with 2D data (images)
+        >>> vae_2d = VariationalAutoencoderAlgorithmTensorflow(
+        ...     encoder_model=encoder_2d,
+        ...     decoder_model=decoder_2d,
+        ...     loss_function='bce',
+        ...     latent_dimension=128,
+        ...     input_shape=(28, 28)
+        ... )
+        >>> vae_2d.fit(data_2d, epochs=100)
     """
 
     def __init__(self,
@@ -120,77 +74,226 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
                  decoder_model,
                  loss_function,
                  latent_dimension,
-                 decoder_latent_dimension,
-                 latent_mean_distribution,
-                 latent_standard_deviation,  # CORRIGIDO: typo "stander" → "standard"
-                 file_name_encoder,
-                 file_name_decoder,
-                 models_saved_path,
+                 decoder_latent_dimension=None,
+                 latent_mean_distribution=0.0,
+                 latent_standard_deviation=1.0,
+                 file_name_encoder=None,
+                 file_name_decoder=None,
+                 models_saved_path=None,
+                 input_shape=None,
+                 auto_adapt_shape=True,
                  *args,
                  **kwargs):
 
         super().__init__(*args, **kwargs)
         """
-        Initializes the VariationalAlgorithm model with provided encoder and decoder models,
+        Initializes the VariationalAutoencoderAlgorithmTensorflow model with provided encoder and decoder models,
         loss function, and latent space parameters.
 
-        This constructor sets up the architecture, metrics, and paths for saving the models.
-
         Args:
-            @encoder_model (Model):
-                The encoder model responsible for encoding input data into latent variables.
-            @decoder_model (Model):
-                The decoder model responsible for reconstructing data from the latent space.
-            @loss_function (callable):
-                The loss function used to compute the training loss.
-            @latent_dimension (int):
-                The dimensionality of the latent space.
-            @latent_mean_distribution (float):
-                The mean of the latent distribution (usually 0).
-            @latent_standard_deviation (float):
-                The standard deviation of the latent distribution (usually 1).
-            @file_name_encoder (str):
-                The filename for saving the encoder model.
-            @file_name_decoder (str):
-                The filename for saving the decoder model.
-            @models_saved_path (str):
-                The directory where the models will be saved.
-            @*args:
-                Additional arguments for the parent class.
-            @**kwargs:
-                Additional keyword arguments for the parent class.
-
-        Raises:
-            ValueError:
-                If latent_dimension <= 0.
-                If latent_standard_deviation <= 0.
-                If file paths are invalid.
+            @encoder_model (Model): The encoder model.
+            @decoder_model (Model): The decoder model.
+            @loss_function (callable or str): The loss function (auto-compiled if string).
+            @latent_dimension (int): The dimensionality of the latent space.
+            @decoder_latent_dimension (int): The dimensionality for decoder (defaults to latent_dimension).
+            @latent_mean_distribution (float): The mean of the latent distribution.
+            @latent_standard_deviation (float): The standard deviation of the latent distribution.
+            @file_name_encoder (str): The filename for saving the encoder model.
+            @file_name_decoder (str): The filename for saving the decoder model.
+            @models_saved_path (str): The directory where models will be saved.
+            @input_shape (tuple): Expected input shape (without batch dimension).
+            @auto_adapt_shape (bool): Whether to automatically adapt to input data shape.
         """
         # Initialize the encoder and decoder models
         self._encoder = encoder_model
         self._decoder = decoder_model
 
-        # loss function and metrics for tracking losses
-        self._loss_function = loss_function
+        # Loss function - will be auto-compiled if string
+        self._loss_function_string = loss_function if isinstance(loss_function, str) else None
+        self._loss_function = self._convert_loss_to_object(loss_function)
+
+        # Metrics for tracking losses
         self._total_loss_tracker = Mean(name="loss")
         self._reconstruction_loss_tracker = Mean(name="reconstruction_loss")
         self._kl_loss_tracker = Mean(name="kl_loss")
+
         self._latent_mean_distribution = latent_mean_distribution
-        self._latent_standard_deviation = latent_standard_deviation  # CORRIGIDO
+        self._latent_standard_deviation = latent_standard_deviation
         self._latent_dimension = latent_dimension
-        self._decoder_latent_dimension = decoder_latent_dimension
+        self._decoder_latent_dimension = decoder_latent_dimension if decoder_latent_dimension is not None else latent_dimension
+
         # File names for saving models
         self._file_name_encoder = file_name_encoder
         self._file_name_decoder = file_name_decoder
 
         # Path for saving models
         self._models_saved_path = models_saved_path
+
+        # Shape adaptation
+        self._input_shape = input_shape
+        self._auto_adapt_shape = auto_adapt_shape
+        self._inferred_shape = None
+
+        # Compiled flag
+        self._is_compiled = True  # Auto-compiled
+
         self.configure_optimizer()
+
+    def _convert_loss_to_object(self, loss):
+        """
+        Convert string loss names to TensorFlow loss objects.
+
+        Args:
+            loss: Loss function (string, callable, or loss object)
+
+        Returns:
+            Loss object or callable
+        """
+        if loss is None:
+            return tensorflow.keras.losses.BinaryCrossentropy()
+
+        if isinstance(loss, str):
+            loss_map = {
+                'mse': tensorflow.keras.losses.MeanSquaredError(),
+                'mean_squared_error': tensorflow.keras.losses.MeanSquaredError(),
+                'mae': tensorflow.keras.losses.MeanAbsoluteError(),
+                'mean_absolute_error': tensorflow.keras.losses.MeanAbsoluteError(),
+                'bce': tensorflow.keras.losses.BinaryCrossentropy(),
+                'binary_crossentropy': tensorflow.keras.losses.BinaryCrossentropy(),
+                'crossentropy': tensorflow.keras.losses.CategoricalCrossentropy(),
+                'categorical_crossentropy': tensorflow.keras.losses.CategoricalCrossentropy(),
+                'sparse_categorical_crossentropy': tensorflow.keras.losses.SparseCategoricalCrossentropy(),
+                'huber': tensorflow.keras.losses.Huber(),
+                'kld': tensorflow.keras.losses.KLDivergence(),
+                'kullback_leibler_divergence': tensorflow.keras.losses.KLDivergence(),
+            }
+            loss_lower = loss.lower()
+            if loss_lower in loss_map:
+                return loss_map[loss_lower]
+            else:
+                raise ValueError(f"Unknown loss function: {loss}. Available: {list(loss_map.keys())}")
+
+        return loss
+
+    def compile(self, loss=None, optimizer=None, metrics=None, **kwargs):
+        """
+        Compile the VAE model (TensorFlow-compatible version).
+
+        Args:
+            loss: Loss function (can be string name, function, or loss object)
+            optimizer: Optimizer (can be passed to fit() method instead)
+            metrics: Metrics to track (stored but not implemented yet)
+            **kwargs: Additional arguments (ignored)
+
+        Returns:
+            self: Returns self for method chaining
+        """
+        if loss is not None:
+            self._loss_function = self._convert_loss_to_object(loss)
+            self._loss_function_string = loss if isinstance(loss, str) else None
+
+        self._is_compiled = True
+        return self
+
+    @staticmethod
+    def _infer_data_shape(data):
+        """
+        Infer the shape of input data, excluding the batch dimension.
+
+        Args:
+            data: Input data (tensor, array, or tuple/list).
+
+        Returns:
+            tuple: Shape of the data excluding batch dimension.
+        """
+        if isinstance(data, (tuple, list)):
+            # If data is a tuple/list, infer from first element
+            data = data[0]
+
+        if isinstance(data, tensorflow.Tensor):
+            shape = tuple(data.shape.as_list()[1:])
+        elif isinstance(data, numpy.ndarray):
+            shape = data.shape[1:] if len(data.shape) > 1 else data.shape
+        else:
+            # Try to convert to tensor and get shape
+            try:
+                tensor_data = tensorflow.convert_to_tensor(data)
+                shape = tuple(tensor_data.shape.as_list()[1:])
+            except:
+                raise ValueError(f"Cannot infer shape from data of type {type(data)}")
+
+        return shape
+
+    def _validate_and_adapt_shape(self, data):
+        """
+        Validate input data shape and adapt if necessary.
+
+        Args:
+            data: Input data.
+
+        Returns:
+            bool: True if shape is valid or successfully adapted.
+        """
+        current_shape = self._infer_data_shape(data)
+
+        if self._inferred_shape is None:
+            self._inferred_shape = current_shape
+            if self._input_shape is not None and self._input_shape != current_shape:
+                print(f"Warning: Specified input_shape {self._input_shape} differs from inferred shape {current_shape}")
+                if self._auto_adapt_shape:
+                    print(f"Auto-adapting to shape: {current_shape}")
+                    self._input_shape = current_shape
+            elif self._input_shape is None:
+                self._input_shape = current_shape
+                print(f"Inferred input shape: {current_shape}")
+        else:
+            if current_shape != self._inferred_shape:
+                if self._auto_adapt_shape:
+                    print(f"Warning: Input shape changed from {self._inferred_shape} to {current_shape}")
+                    self._inferred_shape = current_shape
+                else:
+                    raise ValueError(
+                        f"Input shape mismatch: expected {self._inferred_shape}, got {current_shape}. "
+                        f"Set auto_adapt_shape=True to allow dynamic shape changes."
+                    )
+
+        return True
+
+    @staticmethod
+    def _prepare_batch(batch):
+        """
+        Prepare batch data, handling different input formats.
+
+        Args:
+            batch: Input batch (can be single tensor, tuple, or list).
+
+        Returns:
+            tuple: (batch_x, batch_y) where batch_y is the reconstruction target.
+        """
+        if isinstance(batch, (tuple, list)):
+            if len(batch) == 1:
+                # Single input, use as both input and target
+                batch_x = batch[0]
+                batch_y = batch[0]
+            elif len(batch) == 2:
+                # Input and target provided
+                batch_x, batch_y = batch
+            else:
+                # Multiple inputs, use first as input and last as target
+                batch_x = batch[0]
+                batch_y = batch[-1]
+        else:
+            # Single tensor, use as both input and target
+            batch_x = batch
+            batch_y = batch
+
+        return batch_x, batch_y
 
     @tensorflow.function
     def train_step(self, batch):
         """
         Perform a training step for the Variational AutoEncoder (VAE).
+        Automatically adapts to different batch formats.
 
         Args:
             batch: Input data batch.
@@ -198,8 +301,8 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
         Returns:
             dict: Dictionary containing the loss values (total loss, reconstruction loss, KL divergence loss).
         """
-        # Use tf.function decorator for improved TensorFlow performance
-        batch_x, batch_y = batch
+        # Prepare batch data
+        batch_x, batch_y = self._prepare_batch(batch)
 
         with tensorflow.GradientTape() as tape:
             # Forward pass: Encode input data and sample from the latent space
@@ -208,12 +311,14 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
             # Decode the sampled latent space and generate reconstructed data
             reconstruction_data = self._decoder([latent, label])
 
-            # Calculate binary cross-entropy loss for reconstruction
-            binary_cross_entropy_loss = tensorflow.keras.losses.binary_crossentropy(batch_y, reconstruction_data)
-            sum_reduced = binary_cross_entropy_loss
-            reconstruction_loss = tensorflow.reduce_mean(sum_reduced)
+            # Calculate reconstruction loss
+            if isinstance(self._loss_function, tensorflow.keras.losses.BinaryCrossentropy):
+                binary_cross_entropy_loss = tensorflow.keras.losses.binary_crossentropy(batch_y,
+                                                                                        reconstruction_data)
+                reconstruction_loss = tensorflow.reduce_mean(binary_cross_entropy_loss)
+            else:
+                reconstruction_loss = self._loss_function(batch_y, reconstruction_data)
 
-            # CORRIGIDO: Fórmula KL divergence correta
             # KL divergence: -0.5 * sum(1 + log(var) - mean^2 - var)
             kl_loss = -0.5 * (1 + latent_log_variation - tensorflow.square(latent_mean) - tensorflow.exp(
                 latent_log_variation))
@@ -241,11 +346,11 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
             initial_epoch=0, steps_per_epoch=None, validation_steps=None,
             validation_freq=1, optimizer=None, learning_rate=0.001, **kwargs):
         """
-        Train the model with a simplified progress bar.
+        Train the model with automatic shape adaptation.
 
         Args:
-            x: Input data.
-            y: Target data.
+            x: Input data (any shape).
+            y: Target data (if None, x is used as target).
             batch_size: Number of samples per gradient update.
             epochs: Number of epochs to train.
             verbose: 0 = silent, 1 = progress bar, 2 = one line per epoch.
@@ -273,17 +378,28 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
         # Prepare the dataset
         if isinstance(x, tensorflow.data.Dataset):
             train_dataset = x
+            # Try to infer shape from dataset
+            for batch in train_dataset.take(1):
+                self._validate_and_adapt_shape(batch)
         else:
+            # Validate and adapt shape
+            self._validate_and_adapt_shape(x)
+
             if y is None:
                 y = x
+
             train_dataset = tensorflow.data.Dataset.from_tensor_slices((x, y))
             if shuffle:
-                train_dataset = train_dataset.shuffle(buffer_size=len(x))
+                buffer_size = len(x) if hasattr(x, '__len__') else 1000
+                train_dataset = train_dataset.shuffle(buffer_size=buffer_size)
             train_dataset = train_dataset.batch(batch_size)
 
         # Calculate steps per epoch if not provided
         if steps_per_epoch is None:
-            steps_per_epoch = len(train_dataset)
+            try:
+                steps_per_epoch = len(train_dataset)
+            except:
+                steps_per_epoch = 100
 
         # History to store metrics
         history = {'loss': [], 'reconstruction_loss': [], 'kl_loss': []}
@@ -373,7 +489,7 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
 
     def _evaluate_validation(self, validation_data, validation_steps=None):
         """
-        Evaluate the model on validation data.
+        Evaluate the model on validation data with automatic shape handling.
 
         Args:
             validation_data: Validation dataset (tf.data.Dataset or tuple).
@@ -396,19 +512,21 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
             val_dataset = val_dataset.batch(32)
 
         for batch_data in val_dataset:
-            batch_x, batch_y = batch_data
+            batch_x, batch_y = self._prepare_batch(batch_data)
 
             # Forward pass through encoder and decoder
             latent_mean, latent_log_variation, latent, label = self._encoder(batch_x, training=False)
             reconstruction_data = self._decoder([latent, label], training=False)
 
-            # Calculate binary cross-entropy loss for reconstruction
-            binary_cross_entropy_loss = tensorflow.keras.losses.binary_crossentropy(batch_y, reconstruction_data)
-            sum_reduced = binary_cross_entropy_loss
-            reconstruction_loss = tensorflow.reduce_mean(sum_reduced)
+            # Calculate reconstruction loss
+            if isinstance(self._loss_function, tensorflow.keras.losses.BinaryCrossentropy):
+                binary_cross_entropy_loss = tensorflow.keras.losses.binary_crossentropy(batch_y,
+                                                                                        reconstruction_data)
+                reconstruction_loss = tensorflow.reduce_mean(binary_cross_entropy_loss)
+            else:
+                reconstruction_loss = self._loss_function(batch_y, reconstruction_data)
 
-            # CORRIGIDO: Fórmula KL divergence correta
-            # KL divergence: -0.5 * sum(1 + log(var) - mean^2 - var)
+            # KL divergence
             kl_loss = -0.5 * (1 + latent_log_variation - tensorflow.square(latent_mean) - tensorflow.exp(
                 latent_log_variation))
             kl_divergence_loss = tensorflow.reduce_mean(tensorflow.reduce_sum(kl_loss, axis=1))
@@ -459,21 +577,23 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
                             beta_2=0.999,
                             epsilon=1e-7,
                             amsgrad=False,
-                            weight_decay=1e-5):
+                            weight_decay=None):
         """
         Configure the Adam optimizer with custom parameters.
         """
-        self.optimizer = tensorflow.keras.optimizers.Adam(
-            learning_rate=learning_rate,
-            beta_1=beta_1,
-            beta_2=beta_2,
-            epsilon=epsilon,
-            amsgrad=amsgrad,
-            decay=weight_decay
-        )
+        # Nota: weight_decay não é mais suportado como 'decay' no Keras moderno
+        optimizer_kwargs = {
+            'learning_rate': learning_rate,
+            'beta_1': beta_1,
+            'beta_2': beta_2,
+            'epsilon': epsilon,
+            'amsgrad': amsgrad
+        }
 
-        # FIX: Compile the model after setting up the optimizer
-        self.compile(optimizer=self.optimizer)
+        self.optimizer = tensorflow.keras.optimizers.Adam(**optimizer_kwargs)
+
+        # Compile the model after setting up the optimizer
+        super().compile(optimizer=self.optimizer)
 
     def get_decoder_trained(self):
         return self._decoder
@@ -492,7 +612,6 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
         Returns:
             ndarray: Latent space representations (mean vectors).
         """
-        # CORRIGIDO: Aceitar labels opcionais
         if labels is not None:
             encoder_output = self._encoder.predict([data, labels], batch_size=32)
         else:
@@ -504,9 +623,6 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
     def get_samples(self, number_samples_per_class):
         """
         Generate synthetic samples for each specified class using the trained decoder.
-
-        This function generates samples by sampling from a normal distribution in the latent space
-        and conditioning the generation process on class labels.
 
         Args:
             number_samples_per_class (dict):
@@ -520,7 +636,6 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
         Returns:
             dict:
                 A dictionary where each key is a class label and the value is an array of generated samples.
-                Each array contains the synthetic samples generated for the corresponding class.
         """
 
         # Initialize a dictionary to store the generated samples for each class
@@ -538,9 +653,6 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
             # Use the decoder to generate samples conditioned on the latent vectors and class labels
             generated_samples = self._decoder.predict([latent_noise, label_samples_generated], verbose=0)
 
-            # CORRIGIDO: Arredondamento removido - mantém valores contínuos
-            # Se precisar de valores discretos, aplique externamente conforme necessário
-
             # Store the generated samples in the dictionary under the corresponding class label
             generated_data[label_class] = generated_samples
 
@@ -555,12 +667,11 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
             number_samples_generate (int): Number of synthetic samples to generate.
             label_class (int): Class label to generate.
             num_classes (int): Total number of classes.
-            latent_dimension (int, optional): Dimension of the latent space (uses self._latent_dimension if None).
+            latent_dimension (int, optional): Dimension of the latent space.
 
         Returns:
             numpy.ndarray: Synthetic data generated by the decoder.
         """
-        # CORRIGIDO: Usar latent_dimension correto
         if latent_dimension is None:
             latent_dimension = self._latent_dimension
 
@@ -568,11 +679,11 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
         random_noise_generate = tensorflow.random.normal(
             shape=(number_samples_generate, latent_dimension),
             mean=self._latent_mean_distribution,
-            stddev=self._latent_standard_deviation,  # CORRIGIDO: nome da variável
+            stddev=self._latent_standard_deviation,
             dtype=tensorflow.float32
         )
 
-        # CORRIGIDO: Create one-hot encoded labels para compatibilidade com decoder
+        # Create one-hot encoded labels for compatibility with decoder
         label_list = tensorflow.one_hot(
             tensorflow.fill((number_samples_generate,), label_class),
             depth=num_classes
@@ -585,6 +696,33 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
         # Return the generated synthetic data
         return synthetic_data
 
+    def get_input_shape(self):
+        """
+        Get the current input shape.
+
+        Returns:
+            tuple: Current input shape (excluding batch dimension).
+        """
+        return self._inferred_shape if self._inferred_shape is not None else self._input_shape
+
+    @staticmethod
+    def reshape_data(data, target_shape):
+        """
+        Reshape data to target shape if needed.
+
+        Args:
+            data: Input data.
+            target_shape: Desired shape (excluding batch dimension).
+
+        Returns:
+            Reshaped data.
+        """
+        if isinstance(data, numpy.ndarray):
+            if data.shape[1:] != target_shape:
+                batch_size = data.shape[0]
+                return data.reshape((batch_size,) + target_shape)
+        return data
+
     @property
     def metrics(self):
         """
@@ -592,6 +730,10 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
             list: List of metrics to track during training.
         """
         return [self._total_loss_tracker, self._reconstruction_loss_tracker, self._kl_loss_tracker]
+
+    @property
+    def input_shape(self):
+        return self.get_input_shape()
 
     def save_model(self, directory, file_name):
         """
@@ -615,6 +757,17 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
         # Save decoder model
         self._save_model_to_json(self._decoder, f"{decoder_file_name}.json")
         self._decoder.save_weights(f"{decoder_file_name}.weights.h5")
+
+        # Save shape information
+        shape_info = {
+            'input_shape': self._input_shape,
+            'inferred_shape': self._inferred_shape,
+            'latent_dimension': self._latent_dimension,
+            'decoder_latent_dimension': self._decoder_latent_dimension
+        }
+        shape_file = os.path.join(directory, f"fold_{file_name}_shape_info.json")
+        with open(shape_file, 'w') as f:
+            json.dump(shape_info, f)
 
     @staticmethod
     def _save_model_to_json(model, file_path):
@@ -644,6 +797,17 @@ class VariationalAutoencoderAlgorithmTensorflow(Model):
         # Load the encoder and decoder models from the specified directory
         self._encoder = self._save_neural_network_model(encoder_file_name, directory)
         self._decoder = self._save_neural_network_model(decoder_file_name, directory)
+
+        # Load shape information if available
+        shape_file = os.path.join(directory, f"{file_name}_shape_info.json")
+        if os.path.exists(shape_file):
+            with open(shape_file, 'r') as f:
+                shape_info = json.load(f)
+                self._input_shape = tuple(shape_info.get('input_shape', ()))
+                self._inferred_shape = tuple(shape_info.get('inferred_shape', ()))
+                self._latent_dimension = shape_info.get('latent_dimension', self._latent_dimension)
+                self._decoder_latent_dimension = shape_info.get('decoder_latent_dimension',
+                                                                self._decoder_latent_dimension)
 
     @property
     def decoder(self):

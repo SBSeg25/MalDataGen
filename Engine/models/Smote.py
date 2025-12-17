@@ -113,7 +113,7 @@ class Smote:
                                                k_neighbors = self._smote_k_neighbors)
 
 
-    def _training_smote_model(self, input_shape, arguments, x_real_samples, y_real_samples):
+    def fit_model(self, input_shape, x_real_samples, y_real_samples):
         """
         Executes the smote training process to generate synthetic samples.
 

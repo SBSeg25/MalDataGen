@@ -42,20 +42,20 @@ except ImportError as error:
 
 class JaccardDistance:
     """
-    A class for calculating Jaccard Distance and Mean Jaccard Distance between two binary distributions.
+    A class for calculating Jaccard distance and Mean Jaccard distance between two binary distributions.
 
     Attributes:
         None
 
     Methods:
         get_metric(first_distribution, second_distribution):
-            Calculate the Mean Jaccard Distance between two binary distributions.
+            Calculate the Mean Jaccard distance between two binary distributions.
 
         get_jaccard_distance(first_distribution, second_distribution):
-            Calculate the Jaccard Distance between two binary distributions.
+            Calculate the Jaccard distance between two binary distributions.
 
     Exceptions:
-        JaccardDistanceError: Custom exception class for handling Jaccard Distance calculation errors.
+        JaccardDistanceError: Custom exception class for handling Jaccard distance calculation errors.
 
     Example:
         # Create an instance of the JaccardDistance class
@@ -65,27 +65,27 @@ class JaccardDistance:
         first_distribution = np.array([1, 0, 1, 1])
         second_distribution = np.array([0, 0, 1, 0])
 
-        # Calculate Jaccard Distance between the two distributions
+        # Calculate Jaccard distance between the two distributions
         distance = jaccard_distance.get_jaccard_distance(first_distribution, second_distribution)
 
-        # Calculate Mean Jaccard Distance between two distributions
+        # Calculate Mean Jaccard distance between two distributions
         mean_distance = jaccard_distance.get_metric(first_distribution, second_distribution)
 
-        # Print Jaccard Distance and Mean Jaccard Distance
-        print(f"Jaccard Distance: {distance}")
-        print(f"Mean Jaccard Distance: {mean_distance}")
+        # Print Jaccard distance and Mean Jaccard distance
+        print(f"Jaccard distance: {distance}")
+        print(f"Mean Jaccard distance: {mean_distance}")
     """
 
     def get_metric(self, first_distribution, second_distribution):
         """
-        Calculate the Mean Jaccard Distance between two binary distributions.
+        Calculate the Mean Jaccard distance between two binary distributions.
 
         Args:
             first_distribution (numpy.ndarray): First binary distribution as an array of 0s and 1s.
             second_distribution (numpy.ndarray): Second binary distribution as an array of 0s and 1s.
 
         Returns:
-            float: The Mean Jaccard Distance as a floating-point number (normalized to [0, 1]).
+            float: The Mean Jaccard distance as a floating-point number (normalized to [0, 1]).
 
         Raises:
             JaccardDistanceError: If inputs are not binary or have different lengths.
@@ -106,18 +106,18 @@ class JaccardDistance:
             return float(mean_distance)
 
         except JaccardDistanceError as e:
-            return f"Jaccard Distance Error: {e}"
+            return f"Jaccard distance Error: {e}"
 
     def get_jaccard_distance(self, first_distribution, second_distribution):
         """
-        Calculate the Jaccard Distance between two binary distributions.
+        Calculate the Jaccard distance between two binary distributions.
 
         Args:
             first_distribution (numpy.ndarray): First binary distribution as an array of 0s and 1s.
             second_distribution (numpy.ndarray): Second binary distribution as an array of 0s and 1s.
 
         Returns:
-            float: The Jaccard Distance as a floating-point number (normalized to [0, 1]).
+            float: The Jaccard distance as a floating-point number (normalized to [0, 1]).
 
         Raises:
             JaccardDistanceError: If inputs are not binary or have different lengths.
@@ -134,18 +134,18 @@ class JaccardDistance:
                 return 0.0
             
             # Jaccard Similarity = intersection / union
-            # Jaccard Distance = 1 - Jaccard Similarity
+            # Jaccard distance = 1 - Jaccard Similarity
             jaccard_similarity = intersection / union
             jaccard_distance = 1.0 - jaccard_similarity
             
             return float(jaccard_distance)
 
         except JaccardDistanceError as e:
-            return f"Jaccard Distance Error: {e}"
+            return f"Jaccard distance Error: {e}"
 
     def _check_input_labels(self, first_distribution, second_distribution):
         """
-        Validate input distributions for Jaccard Distance calculation.
+        Validate input distributions for Jaccard distance calculation.
 
         Args:
             first_distribution (numpy.ndarray): First distribution to check.

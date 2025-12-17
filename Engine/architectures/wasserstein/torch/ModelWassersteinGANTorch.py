@@ -68,7 +68,7 @@ class WassersteinModelTorch(VanillaDiscriminatorTorch, VanillaGeneratorTorch):
 
     This class implements a wasserstein GAN, a type of Generative adversarial
     Network designed to improve training stability and provide a more meaningful
-    loss metric by approximating the Earth Mover's Distance (wasserstein-1 Distance)
+    loss metric by approximating the Earth Mover's distance (wasserstein-1 distance)
     between real and generated data distributions.
 
     The model integrates both the **generator** (which synthesizes new data samples)

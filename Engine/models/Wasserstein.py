@@ -52,8 +52,8 @@ DEFAULT_WASSERSTEIN_DROPOUT_DECAY_RATE_D = 0.1
 DEFAULT_WASSERSTEIN_BATCH_SIZE = 512
 DEFAULT_WASSERSTEIN_NUMBER_EPOCHS = 1000
 DEFAULT_WASSERSTEIN_NUMBER_CLASSES = 2
-DEFAULT_WASSERSTEIN_DENSE_LAYERS_SETTINGS_GENERATOR = [2048]
-DEFAULT_WASSERSTEIN_DENSE_LAYERS_SETTINGS_DISCRIMINATOR = [512]
+DEFAULT_WASSERSTEIN_DENSE_LAYERS_SETTINGS_GENERATOR = [1024]
+DEFAULT_WASSERSTEIN_DENSE_LAYERS_SETTINGS_DISCRIMINATOR = [256]
 DEFAULT_WASSERSTEIN_LOSS_FUNCTION = "wasserstein"
 DEFAULT_WASSERSTEIN_MOMENTUM = 0.5
 DEFAULT_WASSERSTEIN_LAST_ACTIVATION_LAYER = "linear"
@@ -323,10 +323,14 @@ class Wasserstein:
             self,
             input_shape: tuple[int, ...],
             x_real_samples: np.ndarray,
-            y_real_samples: np.ndarray
+            y_real_samples: np.ndarray,
+            batch_size: int = None,
+            epochs: int = None,
+            verbose: int = 1,
+            callbacks: list = None
     ) -> None:
         """
-        Executes the complete training pipeline for wasserstein GAN with Gradient Penalty.
+        Executes the complete training pipeline for wasserstein GAN.
 
         NOW SUPPORTS MULTI-DIMENSIONAL DATA:
         - Automatically flattens N-D input data (1D, 2D, 3D, etc.)
@@ -343,10 +347,18 @@ class Wasserstein:
 
         Args:
             input_shape: Shape of input data samples (e.g., (784,) for 1D, (28, 28, 1) for 2D, (16, 16, 16) for 3D)
-            arguments: Training configuration
             x_real_samples: Training samples (can be N-dimensional)
             y_real_samples: Corresponding labels (1D array of class indices)
+            batch_size: Batch size for training. If None, uses the instance's default batch size.
+            epochs: Number of training epochs. If None, uses the instance's default number of epochs.
+            verbose: Verbosity mode (0 = silent, 1 = progress bar, 2 = one line per epoch)
+            callbacks: List of callback instances to apply during training.
+                       These will be merged with internally defined callbacks.
         """
+        # Use provided parameters or fall back to instance defaults
+        effective_batch_size = batch_size if batch_size is not None else self._wasserstein_batch_size
+        effective_epochs = epochs if epochs is not None else self._wasserstein_number_epochs
+
         # Store original input shape for later reconstruction
         self._original_input_shape = input_shape
 
@@ -360,7 +372,7 @@ class Wasserstein:
         else:
             x_real_samples_flat = x_real_samples
 
-        # Initialize the wasserstein_gp model (or use provided) with flattened dimension
+        # Initialize the wasserstein model (or use provided) with flattened dimension
         self._get_wasserstein(flattened_dim)
 
         # Ensure we have an algorithm
@@ -407,16 +419,22 @@ class Wasserstein:
             None  # loss_discriminator - Use default wasserstein loss
         )
 
-        # Prepare callbacks list with safety wrapper
+        # Setup callbacks list
         callbacks_list = []
 
-        # Add callbacks if they exist
+        # Add internally defined callbacks if they exist
         if hasattr(self, '_callback_model_monitor') and self._callback_model_monitor:
             callbacks_list.append(self._callback_model_monitor)
 
-
         if hasattr(self, '_callback_early_stop') and self._callback_early_stop:
             callbacks_list.append(self._callback_early_stop)
+
+        # Merge with user-provided callbacks
+        if callbacks is not None:
+            if isinstance(callbacks, list):
+                callbacks_list.extend(callbacks)
+            else:
+                callbacks_list.append(callbacks)
 
         # Ensure callbacks have proper initialization
         import time
@@ -451,13 +469,12 @@ class Wasserstein:
         self._wasserstein_algorithm.fit(
             x_real_samples_flat,
             y_real_samples,
-            epochs=self._wasserstein_number_epochs,
-            batch_size=self._wasserstein_batch_size,
+            epochs=effective_epochs,
+            batch_size=effective_batch_size,
             lambda_gp=10.0,
             callbacks=callbacks_list if callbacks_list else None,
-            verbose=1
+            verbose=verbose
         )
-
 
     def get_samples(self, number_samples_per_class):
         """

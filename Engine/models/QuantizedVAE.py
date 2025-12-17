@@ -55,8 +55,8 @@ DEFAULT_QUANTIZED_VAE_DROPOUT_DECAY_RATE_DECODER = 0.25
 DEFAULT_QUANTIZED_VAE_BATCH_SIZE = 64
 DEFAULT_QUANTIZED_VAE_NUMBER_EPOCHS = 200
 DEFAULT_QUANTIZED_VAE_NUMBER_CLASSES = 2
-DEFAULT_QUANTIZED_VAE_DENSE_LAYERS_SETTINGS_ENCODER = [512, 512]
-DEFAULT_QUANTIZED_VAE_DENSE_LAYERS_SETTINGS_DECODER = [512, 512]
+DEFAULT_QUANTIZED_VAE_DENSE_LAYERS_SETTINGS_ENCODER = [256, 256]
+DEFAULT_QUANTIZED_VAE_DENSE_LAYERS_SETTINGS_DECODER = [256, 256]
 DEFAULT_QUANTIZED_VAE_LOSS = "binary_crossentropy"
 DEFAULT_QUANTIZED_VAE_MOMENTUM = 0.8
 DEFAULT_QUANTIZED_VAE_LAST_ACTIVATION_LAYER = "sigmoid"
@@ -278,7 +278,11 @@ class QuantizedVAE:
             self,
             input_shape: tuple[int, ...],
             x_real_samples: np.ndarray,
-            y_real_samples: np.ndarray
+            y_real_samples: np.ndarray,
+            batch_size: int = None,
+            epochs: int = None,
+            verbose: int = 1,
+            callbacks: list = None
     ) -> None:
         """
         Executes the complete quantized VAE training process with automatic data flattening.
@@ -293,6 +297,11 @@ class QuantizedVAE:
             input_shape: Shape of input data samples (e.g., (784,) for 1D, (28, 28, 1) for 2D, (16, 16, 16) for 3D)
             x_real_samples: Training data samples (can be N-dimensional)
             y_real_samples: Corresponding class labels (1D array of class indices)
+            batch_size: Batch size for training. If None, uses the instance's default batch size.
+            epochs: Number of training epochs. If None, uses the instance's default number of epochs.
+            verbose: Verbosity mode (0 = silent, 1 = progress bar, 2 = one line per epoch)
+            callbacks: List of callback instances to apply during training.
+                       These will be merged with internally defined callbacks.
 
         Process:
             1. Stores original input shape for later reconstruction
@@ -303,6 +312,10 @@ class QuantizedVAE:
             6. Executes quantized VAE training
             7. Manages model saving and monitoring
         """
+        # Use provided parameters or fall back to instance defaults
+        effective_batch_size = batch_size if batch_size is not None else self._quantized_vae_batch_size
+        effective_epochs = epochs if epochs is not None else self._quantized_vae_number_epochs
+
         # Store original input shape for later reconstruction
         self._original_input_shape = input_shape
 
@@ -342,9 +355,10 @@ class QuantizedVAE:
 
         self._quantized_vae_algorithm.compile(optimizer=optimizer)
 
-        # Build callbacks list, only including callbacks that exist
+        # Setup callbacks list
         callbacks_list = []
 
+        # Add internally defined callbacks if they exist
         if hasattr(self, '_callback_resources_monitor') and self._callback_resources_monitor is not None:
             callbacks_list.append(self._callback_resources_monitor)
 
@@ -354,6 +368,13 @@ class QuantizedVAE:
         if hasattr(self, '_callback_early_stop') and self._callback_early_stop is not None:
             callbacks_list.append(self._callback_early_stop)
 
+        # Merge with user-provided callbacks
+        if callbacks is not None:
+            if isinstance(callbacks, list):
+                callbacks_list.extend(callbacks)
+            else:
+                callbacks_list.append(callbacks)
+
         # Fit the quantized VAE model
         # IMPORTANT: Pass as tuple (data, labels) - model concatenates internally!
         # Input: [flattened_data, labels] as separate inputs
@@ -361,10 +382,12 @@ class QuantizedVAE:
         self._quantized_vae_algorithm.fit(
             (x_real_samples_flat, y_one_hot),  # Input: tuple of (data, labels)
             x_real_samples_flat,  # Target: only the data (no labels)
-            epochs=self._quantized_vae_number_epochs,
-            batch_size=self._quantized_vae_batch_size,
-            callbacks=callbacks_list if callbacks_list else None
+            epochs=effective_epochs,
+            batch_size=effective_batch_size,
+            callbacks=callbacks_list if callbacks_list else None,
+            verbose=verbose
         )
+
 
     # Additional getters for the algorithm and model
     @property

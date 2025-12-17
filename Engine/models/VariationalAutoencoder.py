@@ -52,8 +52,8 @@ DEFAULT_VARIATIONAL_AUTOENCODER_DROPOUT_DECAY_RATE_DECODER = 0.0
 DEFAULT_VARIATIONAL_AUTOENCODER_BATCH_SIZE = 512
 DEFAULT_VARIATIONAL_AUTOENCODER_NUMBER_EPOCHS = 500
 DEFAULT_VARIATIONAL_AUTOENCODER_NUMBER_CLASSES = 2
-DEFAULT_VARIATIONAL_AUTOENCODER_DENSE_LAYERS_SETTINGS_ENCODER = [512]
-DEFAULT_VARIATIONAL_AUTOENCODER_DENSE_LAYERS_SETTINGS_DECODER = [512]
+DEFAULT_VARIATIONAL_AUTOENCODER_DENSE_LAYERS_SETTINGS_ENCODER = [256]
+DEFAULT_VARIATIONAL_AUTOENCODER_DENSE_LAYERS_SETTINGS_DECODER = [256]
 DEFAULT_VARIATIONAL_AUTOENCODER_LOSS = "mse"
 DEFAULT_VARIATIONAL_AUTOENCODER_MOMENTUM = 0.8
 DEFAULT_VARIATIONAL_AUTOENCODER_LAST_ACTIVATION_LAYER = "sigmoid"
@@ -313,7 +313,11 @@ class VariationalAutoencoder:
             self,
             input_shape: tuple[int, ...],
             x_real_samples: np.ndarray,
-            y_real_samples: np.ndarray
+            y_real_samples: np.ndarray,
+            batch_size: int = None,
+            epochs: int = None,
+            verbose: int = 1,
+            callbacks: list = None
     ) -> None:
         """
         Executes the complete variational autoencoder training process with automatic data flattening.
@@ -325,9 +329,13 @@ class VariationalAutoencoder:
 
         Args:
             input_shape: Shape of input data samples (e.g., (784,) for 1D, (28, 28, 1) for 2D, (16, 16, 16) for 3D)
-            arguments: Configuration parameters namespace
             x_real_samples: Training data samples (can be N-dimensional)
             y_real_samples: Corresponding class labels (1D array of class indices)
+            batch_size: Batch size for training. If None, uses the instance's default batch size.
+            epochs: Number of training epochs. If None, uses the instance's default number of epochs.
+            verbose: Verbosity mode (0 = silent, 1 = progress bar, 2 = one line per epoch)
+            callbacks: List of callback instances to apply during training.
+                       These will be merged with internally defined callbacks.
 
         Process:
             1. Flattens multi-dimensional input data
@@ -338,6 +346,10 @@ class VariationalAutoencoder:
             6. Executes VAE training with reconstruction target
             7. Manages model saving and monitoring
         """
+        # Use provided parameters or fall back to instance defaults
+        effective_batch_size = batch_size if batch_size is not None else self._variational_batch_size
+        effective_epochs = epochs if epochs is not None else self._variational_number_epochs
+
         # Store original input shape for later reconstruction
         self._original_input_shape = input_shape
 
@@ -354,7 +366,6 @@ class VariationalAutoencoder:
         # Initialize the variational autoencoder model (or use provided) with flattened dimension
         self._get_variational(flattened_dim)
 
-
         # Ensure we have an algorithm
         if self._variational_algorithm is None:
             raise ValueError("VariationalAutoencoderAlgorithm instance is required but was not provided or created.")
@@ -370,11 +381,19 @@ class VariationalAutoencoder:
             beta_2=beta_2
         )
 
-        # Prepare callbacks list
+        # Setup callbacks list
         callbacks_list = []
 
-        if hasattr(self, '_callback_early_stop'):
+        # Add internally defined callbacks if they exist
+        if hasattr(self, '_callback_early_stop') and self._callback_early_stop:
             callbacks_list.append(self._callback_early_stop)
+
+        # Merge with user-provided callbacks
+        if callbacks is not None:
+            if isinstance(callbacks, list):
+                callbacks_list.extend(callbacks)
+            else:
+                callbacks_list.append(callbacks)
 
         # One-hot encode labels for conditional VAE
         y_labels_one_hot = self._one_hot_encode(
@@ -389,12 +408,15 @@ class VariationalAutoencoder:
         self._variational_algorithm.fit(
             (x_real_samples_flat, y_labels_one_hot),  # x and labels
             y_data,  # y (target for reconstruction)
-            epochs=self._variational_number_epochs,
-            batch_size=self._variational_batch_size,
-            callbacks=callbacks_list if callbacks_list else None
+            epochs=effective_epochs,
+            batch_size=effective_batch_size,
+            callbacks=callbacks_list if callbacks_list else None,
+            verbose=verbose
         )
 
-    def _one_hot_encode(self, labels: np.ndarray | torch.Tensor, num_classes: int) -> torch.Tensor:
+
+    @staticmethod
+    def _one_hot_encode(labels: np.ndarray | torch.Tensor, num_classes: int) -> torch.Tensor:
         """
         One-hot encode labels for PyTorch compatibility.
 

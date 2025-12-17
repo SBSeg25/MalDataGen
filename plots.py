@@ -61,7 +61,7 @@ Key Features:
 1. Multi-modal Visualization:
    - Comparative analysis: Side-by-side heatmap comparisons
    - Model diagnostics: Training curves, confusion matrices
-   - Statistical analysis: Distance metrics, classification reports
+   - Statistical analysis: distance metrics, classification reports
 
 2. Advanced Configuration:
    - Dynamic parameterization via command line interface

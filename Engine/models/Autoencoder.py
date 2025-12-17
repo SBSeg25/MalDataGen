@@ -57,8 +57,8 @@ DEFAULT_AUTOENCODER_DROPOUT_DECAY_RATE_ENCODER = 0.0
 DEFAULT_AUTOENCODER_DROPOUT_DECAY_RATE_DECODER = 0.0
 DEFAULT_AUTOENCODER_BATCH_SIZE = 256
 DEFAULT_AUTOENCODER_NUMBER_CLASSES = 2
-DEFAULT_AUTOENCODER_DENSE_LAYERS_SETTINGS_ENCODER = [512, 512, 512]
-DEFAULT_AUTOENCODER_DENSE_LAYERS_SETTINGS_DECODER = [512, 512, 512]
+DEFAULT_AUTOENCODER_DENSE_LAYERS_SETTINGS_ENCODER = [256, 256, 256]
+DEFAULT_AUTOENCODER_DENSE_LAYERS_SETTINGS_DECODER = [256, 256, 256]
 DEFAULT_AUTOENCODER_MOMENTUM = 0.8
 DEFAULT_AUTOENCODER_LAST_ACTIVATION_LAYER = "sigmoid"
 DEFAULT_AUTOENCODER_INITIALIZER_MEAN = 0.0
@@ -295,7 +295,8 @@ class Autoencoder:
             if hasattr(self._autoencoder_algorithm, 'latent_dimension'):
                 self._autoencoder_algorithm.latent_dimension = self._autoencoder_latent_dimension
 
-    def _validate_callbacks(self, callbacks) -> list:
+    @staticmethod
+    def _validate_callbacks(callbacks) -> list:
         """
         Validates and sanitizes the callbacks parameter.
 

@@ -681,7 +681,7 @@ class WassersteinAlgorithmTorch:
             total_samples = int(num_samples)
 
             if labels is None:
-                # Binary classification - split samples between 2 classes
+                # binary classification - split samples between 2 classes
                 num_classes = 2
                 samples_per_class = total_samples // num_classes
 

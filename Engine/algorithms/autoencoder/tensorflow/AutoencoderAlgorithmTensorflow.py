@@ -3,7 +3,7 @@
 
 __author__ = 'Kayuã Oleques Paim'
 __email__ = 'kayuaolequesp@gmail.com'
-__version__ = '{1}.{0}.{1}'
+__version__ = '{1}.{1}.{0}'
 __initial_data__ = '2022/06/01'
 __last_update__ = '2025/03/29'
 __credits__ = ['Kayuã Oleques']
@@ -47,18 +47,19 @@ except ImportError as error:
     print(error)
     sys.exit(-1)
 
-DEFAULT_LATENT_MEAN_DISTRIBUTION=0.0
-DEFAULT_latent_standard_deviation=1.0
-DEFAULT_LATENT_DIMENSION=64
-DEFAULT_NUMBER_CLASSES=2
+DEFAULT_LATENT_MEAN_DISTRIBUTION = 0.0
+DEFAULT_latent_standard_deviation = 1.0
+DEFAULT_LATENT_DIMENSION = 64
+DEFAULT_NUMBER_CLASSES = 2
 
 
 class AutoencoderAlgorithmTensorflow(Model):
     """
-    An abstract class for AutoEncoder models.
+    An adaptive AutoEncoder class that handles any input shape dynamically.
 
     This class provides a foundation for AutoEncoder models with methods for training,
-    generating synthetic data, saving and loading models.
+    generating synthetic data, saving and loading models. It automatically adapts to
+    different input shapes: (x), (x, y), (x, y, z), etc.
 
     Args:
         @encoder_model (Model, optional):
@@ -79,41 +80,44 @@ class AutoencoderAlgorithmTensorflow(Model):
             Standard deviation of the latent space distribution.
         @latent_dimension (int, optional):
             The dimensionality of the latent space.
-
-    Attributes:
-        @_encoder (Model):
-            The encoder part of the AutoEncoder.
-        @_decoder (Model):
-            The decoder part of the AutoEncoder.
-        @_loss_function (loss):
-            loss function for training.
-        @_total_loss_tracker (Mean):
-            Metric for tracking total loss.
-        @_file_name_encoder (str):
-            File name for saving the encoder model.
-        @_file_name_decoder (str):
-            File name for saving the decoder model.
-        @_models_saved_path (str):
-            Path to save the models.
-        @_encoder_decoder_model (Model):
-            Combined encoder-decoder model.
+        @input_shape (tuple, optional):
+            Expected input shape. If None, will be inferred from data.
+        @auto_adapt_shape (bool, optional):
+            If True, automatically adapts to input data shape. Default: True
 
     Example:
-        >>> encoder_model = build_encoder(input_shape=(128, 128, 3), latent_dimension=64)
-        >>> decoder_model = build_decoder(latent_dimension=64, output_shape=(128, 128, 3))
-        ...     autoencoder = AutoencoderAlgorithm(
-        ...     encoder_model=encoder_model,
-        ...     decoder_model=decoder_model,
+        >>> # Example with 1D data
+        >>> encoder_1d = build_encoder(input_shape=(100,), latent_dimension=64)
+        >>> decoder_1d = build_decoder(latent_dimension=64, output_shape=(100,))
+        >>> autoencoder_1d = AutoencoderAlgorithmTensorflow(
+        ...     encoder_model=encoder_1d,
+        ...     decoder_model=decoder_1d,
+        ...     input_shape=(100,)
+        ... )
+        >>> autoencoder_1d.compile(loss='mse')  # Compile before training!
+        >>> autoencoder_1d.fit(data_1d, epochs=10)
+
+        >>> # Example with 2D data
+        >>> encoder_2d = build_encoder(input_shape=(28, 28), latent_dimension=64)
+        >>> decoder_2d = build_decoder(latent_dimension=64, output_shape=(28, 28))
+        >>> autoencoder_2d = AutoencoderAlgorithmTensorflow(
+        ...     encoder_model=encoder_2d,
+        ...     decoder_model=decoder_2d,
+        ...     input_shape=(28, 28)
+        ... )
+        >>> autoencoder_2d.compile(loss='mae')
+        >>> autoencoder_2d.fit(data_2d, epochs=10)
+
+        >>> # Example with 3D data (images) and custom loss
+        >>> encoder_3d = build_encoder(input_shape=(128, 128, 3), latent_dimension=64)
+        >>> decoder_3d = build_decoder(latent_dimension=64, output_shape=(128, 128, 3))
+        >>> autoencoder_3d = AutoencoderAlgorithmTensorflow(
+        ...     encoder_model=encoder_3d,
+        ...     decoder_model=decoder_3d,
         ...     loss_function=tensorflow.keras.losses.MeanSquaredError(),
-        ...     file_name_encoder="encoder_model.h5",
-        ...     file_name_decoder="decoder_model.h5",
-        ...     models_saved_path="./autoencoder_models/",
-        ...     latent_mean_distribution=0.0,
-        ...     latent_standard_deviation=1.0,
-        ...     latent_dimension=64
-        ...     )
-        ...     autoencoder.compile(optimizer=tensorflow.keras.optimizers.Adam(learning_rate=0.001))
-        >>> autoencoder.fit(train_dataset, epochs=50)
+        ...     input_shape=(128, 128, 3)
+        ... )
+        >>> autoencoder_3d.fit(data_3d, epochs=10)  # Loss already set in __init__
     """
 
     def __init__(self,
@@ -125,11 +129,13 @@ class AutoencoderAlgorithmTensorflow(Model):
                  models_saved_path=None,
                  latent_mean_distribution=DEFAULT_LATENT_MEAN_DISTRIBUTION,
                  latent_standard_deviation=DEFAULT_latent_standard_deviation,
-                 latent_dimension=DEFAULT_LATENT_DIMENSION):
+                 latent_dimension=DEFAULT_LATENT_DIMENSION,
+                 input_shape=None,
+                 auto_adapt_shape=True):
 
         super().__init__()
         """
-        Initializes an AutoEncoder model with an encoder, decoder, and necessary configurations.
+        Initializes an adaptive AutoEncoder model.
 
         Args:
             @encoder_model (Model):
@@ -150,31 +156,10 @@ class AutoencoderAlgorithmTensorflow(Model):
                 The standard deviation of the latent noise distribution.
             @latent_dimension (int):
                 The number of dimensions in the latent space.
-
-        Attributes:
-            @_encoder (Model):
-                The encoder model.
-            @_decoder (Model):
-                The decoder model.
-            @_loss_function (loss):
-                The loss function used for optimization.
-            @_total_loss_tracker (Mean):
-                Metric for tracking total loss during training.
-            @_latent_mean_distribution (float):
-                The mean of the latent space distribution.
-            @_latent_standard_deviation (float):
-                The standard deviation of the latent space distribution.
-            @_latent_dimension (int):
-                The dimensionality of the latent space.
-            @_file_name_encoder (str):
-                Name of the file where the encoder model is saved.
-            @_file_name_decoder (str): 
-                Name of the file where the decoder model is saved.
-            @_models_saved_path (str):
-                Path where models are saved.
-            @_encoder_decoder_model (Model):
-                A combined model that links the encoder and decoder.
-
+            @input_shape (tuple):
+                Expected input shape (without batch dimension).
+            @auto_adapt_shape (bool):
+                Whether to automatically adapt to input data shape.
         """
         if not isinstance(encoder_model, tensorflow.keras.Model):
             raise TypeError("encoder_model must be a tf.keras.Model instance.")
@@ -182,14 +167,14 @@ class AutoencoderAlgorithmTensorflow(Model):
         if not isinstance(decoder_model, tensorflow.keras.Model):
             raise TypeError("decoder_model must be a tf.keras.Model instance.")
 
-        if not isinstance(file_name_encoder, str) or not file_name_encoder:
-            raise ValueError("file_name_encoder must be a non-empty string.")
+        if file_name_encoder is not None and (not isinstance(file_name_encoder, str) or not file_name_encoder):
+            raise ValueError("file_name_encoder must be a non-empty string or None.")
 
-        if not isinstance(file_name_decoder, str) or not file_name_decoder:
-            raise ValueError("file_name_decoder must be a non-empty string.")
+        if file_name_decoder is not None and (not isinstance(file_name_decoder, str) or not file_name_decoder):
+            raise ValueError("file_name_decoder must be a non-empty string or None.")
 
-        if not isinstance(models_saved_path, str) or not models_saved_path:
-            raise ValueError("models_saved_path must be a non-empty string.")
+        if models_saved_path is not None and (not isinstance(models_saved_path, str) or not models_saved_path):
+            raise ValueError("models_saved_path must be a non-empty string or None.")
 
         if not isinstance(latent_mean_distribution, (int, float)):
             raise TypeError("latent_mean_distribution must be a number.")
@@ -221,31 +206,189 @@ class AutoencoderAlgorithmTensorflow(Model):
         # Path for saving models
         self._models_saved_path = models_saved_path
 
+        # Shape adaptation
+        self._input_shape = input_shape
+        self._auto_adapt_shape = auto_adapt_shape
+        self._inferred_shape = None
+
         # Combined encoder-decoder model
         self._encoder_decoder_model = Model(self._encoder.input, self._decoder(self._encoder.output))
 
+        # Compiled flag
+        self._is_compiled = False
 
-    @tensorflow.function
-    def train_step(self, batch, optimizer = None):
+    def compile(self, loss=None, optimizer=None, metrics=None, **kwargs):
         """
-        Perform a training step for the AutoEncoder.
+        Compile the autoencoder model (TensorFlow-compatible version).
+
+        This method allows setting the loss function using string names or function objects,
+        similar to Keras' compile() method.
 
         Args:
-            batch: Input data batch.
+            loss: Loss function (can be string name, function, or loss object)
+            optimizer: Optimizer (can be passed to fit() method instead)
+            metrics: Metrics to track (stored but not implemented yet)
+            **kwargs: Additional arguments (ignored)
+
+        Returns:
+            self: Returns self for method chaining
+        """
+        if loss is not None:
+            if isinstance(loss, str):
+                # Convert string loss names to TensorFlow loss functions
+                loss_map = {
+                    'mse': tensorflow.keras.losses.MeanSquaredError(),
+                    'mean_squared_error': tensorflow.keras.losses.MeanSquaredError(),
+                    'mae': tensorflow.keras.losses.MeanAbsoluteError(),
+                    'mean_absolute_error': tensorflow.keras.losses.MeanAbsoluteError(),
+                    'bce': tensorflow.keras.losses.BinaryCrossentropy(),
+                    'binary_crossentropy': tensorflow.keras.losses.BinaryCrossentropy(),
+                    'crossentropy': tensorflow.keras.losses.CategoricalCrossentropy(),
+                    'categorical_crossentropy': tensorflow.keras.losses.CategoricalCrossentropy(),
+                    'sparse_categorical_crossentropy': tensorflow.keras.losses.SparseCategoricalCrossentropy(),
+                    'huber': tensorflow.keras.losses.Huber(),
+                    'kld': tensorflow.keras.losses.KLDivergence(),
+                    'kullback_leibler_divergence': tensorflow.keras.losses.KLDivergence(),
+                }
+                loss_lower = loss.lower()
+                if loss_lower in loss_map:
+                    self._loss_function = loss_map[loss_lower]
+                else:
+                    raise ValueError(f"Unknown loss function: {loss}. Available options: {list(loss_map.keys())}")
+            elif callable(loss):
+                self._loss_function = loss
+            else:
+                raise TypeError("loss must be a string, callable function, or TensorFlow loss object")
+
+        self._is_compiled = True
+        return self
+
+    @staticmethod
+    def _infer_data_shape(data):
+        """
+        Infer the shape of input data, excluding the batch dimension.
+
+        Args:
+            data: Input data (tensor, array, or tuple/list).
+
+        Returns:
+            tuple: Shape of the data excluding batch dimension.
+        """
+        if isinstance(data, (tuple, list)):
+            # If data is a tuple/list, infer from first element
+            data = data[0]
+
+        if isinstance(data, tensorflow.Tensor):
+            shape = tuple(data.shape.as_list()[1:])
+        elif isinstance(data, numpy.ndarray):
+            shape = data.shape[1:] if len(data.shape) > 1 else data.shape
+        else:
+            # Try to convert to tensor and get shape
+            try:
+                tensor_data = tensorflow.convert_to_tensor(data)
+                shape = tuple(tensor_data.shape.as_list()[1:])
+            except:
+                raise ValueError(f"Cannot infer shape from data of type {type(data)}")
+
+        return shape
+
+    def _validate_and_adapt_shape(self, data):
+        """
+        Validate input data shape and adapt if necessary.
+
+        Args:
+            data: Input data.
+
+        Returns:
+            bool: True if shape is valid or successfully adapted.
+        """
+        current_shape = self._infer_data_shape(data)
+
+        if self._inferred_shape is None:
+            self._inferred_shape = current_shape
+            if self._input_shape is not None and self._input_shape != current_shape:
+                print(f"Warning: Specified input_shape {self._input_shape} differs from inferred shape {current_shape}")
+                if self._auto_adapt_shape:
+                    print(f"Auto-adapting to shape: {current_shape}")
+                    self._input_shape = current_shape
+            elif self._input_shape is None:
+                self._input_shape = current_shape
+                print(f"Inferred input shape: {current_shape}")
+        else:
+            if current_shape != self._inferred_shape:
+                if self._auto_adapt_shape:
+                    print(f"Warning: Input shape changed from {self._inferred_shape} to {current_shape}")
+                    self._inferred_shape = current_shape
+                else:
+                    raise ValueError(
+                        f"Input shape mismatch: expected {self._inferred_shape}, got {current_shape}. "
+                        f"Set auto_adapt_shape=True to allow dynamic shape changes."
+                    )
+
+        return True
+
+    @staticmethod
+    def _prepare_batch(batch):
+        """
+        Prepare batch data, handling different input formats.
+
+        Args:
+            batch: Input batch (can be single tensor, tuple, or list).
+
+        Returns:
+            tuple: (batch_x, batch_y) where batch_y is the reconstruction target.
+        """
+        if isinstance(batch, (tuple, list)):
+            if len(batch) == 1:
+                # Single input, use as both input and target
+                batch_x = batch[0]
+                batch_y = batch[0]
+            elif len(batch) == 2:
+                # Input and target provided
+                batch_x, batch_y = batch
+            else:
+                # Multiple inputs, use first as input and last as target
+                batch_x = batch[0]
+                batch_y = batch[-1]
+        else:
+            # Single tensor, use as both input and target
+            batch_x = batch
+            batch_y = batch
+
+        return batch_x, batch_y
+
+    @tensorflow.function
+    def train_step(self, batch, optimizer=None):
+        """
+        Perform a training step for the AutoEncoder.
+        Automatically adapts to different batch formats.
+
+        Args:
+            batch: Input data batch (can be single tensor, tuple, or list).
+            optimizer: Optional optimizer (if None, uses self.optimizer).
 
         Returns:
             dict: Dictionary containing the loss value.
         """
-        batch_x, batch_y = batch
-
-        # Use tf.function decorator for improved TensorFlow performance
+        # Prepare batch data
+        batch_x, batch_y = self._prepare_batch(batch)
 
         with tensorflow.GradientTape() as gradient_ae:
             # Forward pass: Generate reconstructed data using the encoder-decoder model
             reconstructed_data = self._encoder_decoder_model(batch_x, training=True)
 
-            # Calculate the mean squared error loss between input batch and reconstructed data
-            update_gradient_loss = tensorflow.reduce_mean(tensorflow.square(batch_y - reconstructed_data))
+            # Calculate the loss between target and reconstructed data
+            if self._loss_function is not None:
+                # Check if loss_function is a string (not compiled)
+                if isinstance(self._loss_function, str):
+                    raise RuntimeError(
+                        "Model not compiled. Please call model.compile(loss='mse') or similar before training."
+                    )
+                # Use the configured loss function
+                update_gradient_loss = self._loss_function(batch_y, reconstructed_data)
+            else:
+                # Default to mean squared error
+                update_gradient_loss = tensorflow.reduce_mean(tensorflow.square(batch_y - reconstructed_data))
 
         # Calculate gradients of the loss with respect to trainable variables
         gradient_update = gradient_ae.gradient(update_gradient_loss, self._encoder_decoder_model.trainable_variables)
@@ -264,11 +407,11 @@ class AutoencoderAlgorithmTensorflow(Model):
             initial_epoch=0, steps_per_epoch=None, validation_steps=None,
             validation_freq=1, optimizer=None, learning_rate=0.001, **kwargs):
         """
-        Train the model with a simplified progress bar.
+        Train the model with automatic shape adaptation.
 
         Args:
-            x: Input data.
-            y: Target data.
+            x: Input data (any shape).
+            y: Target data (if None, x is used as target).
             batch_size: Number of samples per gradient update.
             epochs: Number of epochs to train.
             verbose: 0 = silent, 1 = progress bar, 2 = one line per epoch.
@@ -286,6 +429,13 @@ class AutoencoderAlgorithmTensorflow(Model):
             A History object with training metrics.
         """
 
+        # Check if loss_function is a string and warn user
+        if isinstance(self._loss_function, str):
+            raise RuntimeError(
+                f"Model not compiled. Loss function is set to string '{self._loss_function}'. "
+                f"Please call model.compile(loss='{self._loss_function}') before training."
+            )
+
         # Set optimizer if provided
         if optimizer is not None:
             self.optimizer = optimizer
@@ -296,17 +446,28 @@ class AutoencoderAlgorithmTensorflow(Model):
         # Prepare the dataset
         if isinstance(x, tensorflow.data.Dataset):
             train_dataset = x
+            # Try to infer shape from dataset
+            for batch in train_dataset.take(1):
+                self._validate_and_adapt_shape(batch)
         else:
+            # Validate and adapt shape
+            self._validate_and_adapt_shape(x)
+
             if y is None:
                 y = x
+
             train_dataset = tensorflow.data.Dataset.from_tensor_slices((x, y))
             if shuffle:
-                train_dataset = train_dataset.shuffle(buffer_size=len(x))
+                buffer_size = len(x) if hasattr(x, '__len__') else 1000
+                train_dataset = train_dataset.shuffle(buffer_size=buffer_size)
             train_dataset = train_dataset.batch(batch_size)
 
         # Calculate steps per epoch if not provided
         if steps_per_epoch is None:
-            steps_per_epoch = len(train_dataset)
+            try:
+                steps_per_epoch = len(train_dataset)
+            except:
+                steps_per_epoch = 100  # Default value if length cannot be determined
 
         # History to store metrics
         history = {'loss': []}
@@ -370,7 +531,7 @@ class AutoencoderAlgorithmTensorflow(Model):
 
     def _evaluate_validation(self, validation_data, validation_steps=None):
         """
-        Evaluate the model on validation data.
+        Evaluate the model on validation data with automatic shape handling.
 
         Args:
             validation_data: Validation dataset.
@@ -383,9 +544,19 @@ class AutoencoderAlgorithmTensorflow(Model):
         step = 0
 
         for batch_data in validation_data:
-            batch_x, batch_y = batch_data
+            batch_x, batch_y = self._prepare_batch(batch_data)
             reconstructed = self._encoder_decoder_model(batch_x, training=False)
-            loss = tensorflow.reduce_mean(tensorflow.square(batch_y - reconstructed))
+
+            if self._loss_function is not None:
+                # Check if loss_function is a string (not compiled)
+                if isinstance(self._loss_function, str):
+                    raise RuntimeError(
+                        "Model not compiled. Please call model.compile(loss='mse') or similar before evaluation."
+                    )
+                loss = self._loss_function(batch_y, reconstructed)
+            else:
+                loss = tensorflow.reduce_mean(tensorflow.square(batch_y - reconstructed))
+
             val_losses.append(float(loss))
 
             step += 1
@@ -421,35 +592,26 @@ class AutoencoderAlgorithmTensorflow(Model):
         # Loop through each class label and the corresponding number of samples to generate
         for label_class, number_instances in number_samples_per_class["classes"].items():
             # Create a batch of one-hot encoded class labels, all set to the current class
-            # Example: if label_class = 1 and number_instances = 3, this creates:
-            # [[0, 1], [0, 1], [0, 1]]
             label_samples_generated = to_categorical(
                 [label_class] * number_instances,
                 num_classes=number_samples_per_class["number_classes"]
             )
 
             # Generate random noise vectors (latent space vectors) for each sample
-            # Shape: (number_instances, latent_dimension)
             latent_noise = numpy.random.normal(
-                self._latent_mean_distribution,  # Mean of the latent distribution
-                self._latent_standard_deviation,  # Standard deviation of the latent distribution
+                self._latent_mean_distribution,
+                self._latent_standard_deviation,
                 (number_instances, self._latent_dimension)
             )
 
             # Use the decoder to generate synthetic samples from the latent space and class labels
-            # Inputs: (latent vectors, class labels)
-            # 'verbose=0' suppresses any output from the decoder's predict method
             generated_samples = self._decoder.predict([latent_noise, label_samples_generated], verbose=0)
-
-            # Round the output values to the nearest integer
-            # This is useful if the output is binary (like 0/1) or for discrete data types
 
             # Store the generated samples in the dictionary under the corresponding class label
             generated_data[label_class] = generated_samples
 
         # Return the dictionary containing all generated samples, organized by class
         return generated_data
-
 
     def save_model(self, directory, file_name):
         """
@@ -474,6 +636,15 @@ class AutoencoderAlgorithmTensorflow(Model):
         self._save_model_to_json(self._decoder, f"{decoder_file_name}.json")
         self._decoder.save_weights(f"{decoder_file_name}.weights.h5")
 
+        # Save shape information
+        shape_info = {
+            'input_shape': self._input_shape,
+            'inferred_shape': self._inferred_shape,
+            'latent_dimension': self._latent_dimension
+        }
+        shape_file = os.path.join(directory, f"fold_{file_name}_shape_info.json")
+        with open(shape_file, 'w') as f:
+            json.dump(shape_info, f)
 
     @staticmethod
     def _save_model_to_json(model, file_path):
@@ -486,7 +657,6 @@ class AutoencoderAlgorithmTensorflow(Model):
         """
         with open(file_path, "w") as json_file:
             json.dump(model.to_json(), json_file)
-
 
     def load_models(self, directory, file_name):
         """
@@ -505,6 +675,42 @@ class AutoencoderAlgorithmTensorflow(Model):
         self._encoder = self._save_neural_network_model(encoder_file_name, directory)
         self._decoder = self._save_neural_network_model(decoder_file_name, directory)
 
+        # Load shape information if available
+        shape_file = os.path.join(directory, f"{file_name}_shape_info.json")
+        if os.path.exists(shape_file):
+            with open(shape_file, 'r') as f:
+                shape_info = json.load(f)
+                self._input_shape = tuple(shape_info.get('input_shape', ()))
+                self._inferred_shape = tuple(shape_info.get('inferred_shape', ()))
+                self._latent_dimension = shape_info.get('latent_dimension', self._latent_dimension)
+
+    def get_input_shape(self):
+        """
+        Get the current input shape.
+
+        Returns:
+            tuple: Current input shape (excluding batch dimension).
+        """
+        return self._inferred_shape if self._inferred_shape is not None else self._input_shape
+
+    @staticmethod
+    def reshape_data(data, target_shape):
+        """
+        Reshape data to target shape if needed.
+
+        Args:
+            data: Input data.
+            target_shape: Desired shape (excluding batch dimension).
+
+        Returns:
+            Reshaped data.
+        """
+        if isinstance(data, numpy.ndarray):
+            if data.shape[1:] != target_shape:
+                batch_size = data.shape[0]
+                return data.reshape((batch_size,) + target_shape)
+        return data
+
     @property
     def decoder(self):
         return self._decoder
@@ -513,10 +719,18 @@ class AutoencoderAlgorithmTensorflow(Model):
     def encoder(self):
         return self._encoder
 
+    @property
+    def input_shape(self):
+        return self.get_input_shape()
+
     @decoder.setter
     def decoder(self, decoder):
         self._decoder = decoder
+        # Update combined model
+        self._encoder_decoder_model = Model(self._encoder.input, self._decoder(self._encoder.output))
 
     @encoder.setter
     def encoder(self, encoder):
         self._encoder = encoder
+        # Update combined model
+        self._encoder_decoder_model = Model(self._encoder.input, self._decoder(self._encoder.output))
