@@ -135,27 +135,6 @@ class VanillaGenerator(Activations):
             ValueError: If `latent_dimension`, `output_shape`, or `dropout_decay_rate_g` are invalid.
         """
 
-        if not isinstance(latent_dimension, int) or latent_dimension <= 0:
-            raise ValueError("latent_dimension must be a positive integer.")
-
-        if not isinstance(output_shape, int) or output_shape <= 0:
-            raise ValueError("output_shape must be a positive integer.")
-
-        if not isinstance(activation_function, str):
-            raise ValueError("activation_function must be a string.")
-
-        if not isinstance(initializer_mean, (float, int)):
-            raise ValueError("initializer_mean must be a float or an integer.")
-
-        if not isinstance(initializer_deviation, (float, int)) or initializer_deviation <= 0:
-            raise ValueError("initializer_deviation must be a positive float or integer.")
-
-        if not isinstance(last_layer_activation, str):
-            raise ValueError("last_layer_activation must be a string.")
-
-        if number_samples_per_class is not None and not isinstance(number_samples_per_class, dict):
-            raise ValueError("number_samples_per_class must be a dictionary if provided.")
-
         # super().__init__()
         self._generator_number_samples_per_class = number_samples_per_class
         self._generator_latent_dimension = latent_dimension

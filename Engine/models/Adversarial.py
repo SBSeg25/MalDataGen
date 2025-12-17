@@ -50,7 +50,7 @@ except ImportError as error:
     sys.exit(-1)
 
 # Default values from your constants file
-DEFAULT_ADVERSARIAL_NUMBER_EPOCHS = 5000
+DEFAULT_ADVERSARIAL_NUMBER_EPOCHS = 200
 DEFAULT_ADVERSARIAL_LATENT_DIMENSION = 64
 DEFAULT_ADVERSARIAL_TRAINING_ALGORITHM = "Adam"
 DEFAULT_ADVERSARIAL_INTERMEDIARY_ACTIVATION = "LeakyReLU"
@@ -81,12 +81,13 @@ class Adversarial:
     for adversarial learning tasks within the Synthetic Ocean ecosystem.
 
     NOW SUPPORTS MULTI-DIMENSIONAL DATA: Automatically handles 1D, 2D, 3D, and N-D inputs
-    by flattening them during training and reshaping them during generation.
+    with OPTIONAL flattening during training and reshaping during generation.
 
     Attributes:
         _adversarial_algorithm (AdversarialAlgorithm): Manages the adversarial training process
         _adversarial_model (AdversarialModel): Contains generator and discriminator components
         _original_input_shape (tuple): Stores the original shape of input data for reconstruction
+        _data_was_flattened (bool): Flag indicating if data was flattened during training
 
     Configuration Parameters (with getters/setters):
         _adversarial_number_epochs (int): Number of training epochs
@@ -231,32 +232,24 @@ class Adversarial:
 
         # Storage for original input shape (for multi-dimensional data)
         self._original_input_shape = None
+        # Flag to indicate if data was flattened during training
+        self._data_was_flattened: bool = False
 
     def _get_adversarial_model(self, input_shape: tuple[int, ...]) -> None:
         """
         Initialize and configure the adversarial model, including both the generator and discriminator components.
-
-        This method sets up an adversarial model by configuring both the generator and discriminator using the
-        `AdversarialModel` class and linking them with the `AdversarialAlgorithm` class. The model is initialized
-        with specified configurations such as latent dimension, activation functions, dropout rates, and layer sizes
-        for both the generator and discriminator.
-
-        If pre-initialized instances were provided in the constructor, they are used instead of creating new ones.
-
-        Args:
-            input_shape: The shape of the input data (flattened dimension), which determines the output shape for the models.
-
-        Initializes:
-            self._adversarial_model:
-                An instance of the `AdversarialModel` class, including the generator and discriminator setup, with
-                configurations for activation functions, layer sizes, dropout rates, and more.
-            self._adversarial_algorithm:
-                An instance of the `AdversarialAlgorithm` class, managing the adversarial training process, including
-                the generator and discriminator models, loss functions, latent distributions, and model file paths.
         """
+        # If external model was provided, ensure it has the number_samples_per_class configured
+        if self._has_external_model:
+            # Update the model's number_samples_per_class attribute
+            if hasattr(self._adversarial_model, '_generator_number_samples_per_class'):
+                self._adversarial_model._generator_number_samples_per_class = self._number_samples_per_class
+            if hasattr(self._adversarial_model, '_discriminator_number_samples_per_class'):
+                self._adversarial_model._discriminator_number_samples_per_class = self._number_samples_per_class
+
         # Only create new model if none was provided
         if not self._has_external_model:
-            # adversarial Model setup for Generator and Discriminator
+            # Adversarial Model setup for Generator and Discriminator
             self._adversarial_model = AdversarialModel(
                 latent_dimension=self._adversarial_latent_dimension,
                 output_shape=input_shape,
@@ -278,7 +271,7 @@ class Adversarial:
             if self._adversarial_model is None:
                 raise ValueError("AdversarialModel instance is required but was not provided.")
 
-            # adversarial Algorithm setup for training and model operations
+            # Adversarial Algorithm setup for training and model operations
             self._adversarial_algorithm = AdversarialAlgorithm(
                 generator_model=self._adversarial_model.get_generator(),
                 discriminator_model=self._adversarial_model.get_discriminator(),
@@ -320,7 +313,6 @@ class Adversarial:
 
             if hasattr(self._adversarial_algorithm, 'smoothing_rate'):
                 self._adversarial_algorithm.smoothing_rate = self._adversarial_smoothing_rate
-
     @staticmethod
     def _validate_callbacks(callbacks) -> list:
         """
@@ -375,15 +367,17 @@ class Adversarial:
             batch_size: int = None,
             epochs: int = None,
             verbose: int = 1,
-            callbacks: list = None
+            callbacks: list = None,
+            flatten: bool = True
     ) -> None:
         """
-        Executes the complete adversarial training process with automatic data flattening.
+        Executes the complete adversarial training process with optional data flattening.
 
-        NOW SUPPORTS MULTI-DIMENSIONAL DATA:
-        - Automatically flattens N-D input data (1D, 2D, 3D, etc.)
+        NOW SUPPORTS OPTIONAL FLATTENING:
+        - flatten=True (default): Automatically flattens N-D input data (1D, 2D, 3D, etc.)
+        - flatten=False: Uses data as-is, without flattening
         - Converts labels to categorical format
-        - Stores original shape for reconstruction during generation
+        - Stores original shape and flatten flag for reconstruction during generation
 
         Args:
             input_shape: Shape of input data samples (e.g., (784,) for 1D, (28, 28, 1) for 2D, (16, 16, 16) for 3D)
@@ -394,6 +388,7 @@ class Adversarial:
             verbose: Verbosity mode (0 = silent, 1 = progress bar, 2 = one line per epoch) (default: 1)
             callbacks: List of Keras callbacks to apply during training (default: uses callbacks from __init__)
                       Can be a single callback or a list of callbacks. Invalid callbacks will be filtered out with warnings.
+            flatten: If True, flattens multi-dimensional input data. If False, uses data as-is (default: True)
 
         Raises:
             TypeError: If callbacks parameter has invalid type
@@ -401,7 +396,7 @@ class Adversarial:
 
         Process:
             1. Validates input parameters (batch_size, epochs, callbacks)
-            2. Flattens multi-dimensional input data
+            2. Optionally flattens multi-dimensional input data (if flatten=True)
             3. Converts labels to categorical format
             4. Auto-detects number of classes if not set
             5. Initializes model architecture (or uses provided)
@@ -429,16 +424,25 @@ class Adversarial:
 
         # Store original input shape for later reconstruction
         self._original_input_shape = input_shape
+        self._data_was_flattened = flatten
 
-        # Calculate total flattened dimension
-        flattened_dim = int(np.prod(input_shape))
+        # Determine the dimension to use for model initialization
+        if flatten:
+            # Calculate total flattened dimension
+            flattened_dim = int(np.prod(input_shape))
 
-        # Flatten the input data if it has more than 2 dimensions
-        # (batch_size, ...) -> (batch_size, flattened_features)
-        if len(x_real_samples.shape) > 2:
-            x_real_samples_flat = x_real_samples.reshape(x_real_samples.shape[0], -1)
+            # Flatten the input data if it has more than 2 dimensions
+            # (batch_size, ...) -> (batch_size, flattened_features)
+            if len(x_real_samples.shape) > 2:
+                x_real_samples_processed = x_real_samples.reshape(x_real_samples.shape[0], -1)
+            else:
+                x_real_samples_processed = x_real_samples
+
+            model_input_dim = flattened_dim
         else:
-            x_real_samples_flat = x_real_samples
+            # Use data as-is without flattening
+            x_real_samples_processed = x_real_samples
+            model_input_dim = input_shape
 
         # Auto-detect number_samples_per_class if not set
         if not self._number_samples_per_class:
@@ -451,8 +455,8 @@ class Adversarial:
         # Convert labels to categorical format
         y_categorical = to_categorical(y_real_samples, num_classes=self._number_samples_per_class["number_classes"])
 
-        # Initialize the adversarial model with flattened dimension
-        self._get_adversarial_model(flattened_dim)
+        # Initialize the adversarial model with appropriate dimension
+        self._get_adversarial_model(model_input_dim)
 
         # Print the model summaries for the generator and discriminator if available
         if self._adversarial_model is not None:
@@ -503,9 +507,9 @@ class Adversarial:
                     "Using only default callbacks from initialization."
                 )
 
-        # Fit the model with flattened real samples and the corresponding labels
+        # Fit the model with processed samples and the corresponding labels
         self._adversarial_algorithm.fit(
-            x_real_samples_flat,
+            x_real_samples_processed,
             y_categorical,
             epochs=epochs,
             batch_size=batch_size,
@@ -515,10 +519,11 @@ class Adversarial:
 
     def get_samples(self, number_samples_per_class):
         """
-        Generate synthetic samples and reshape them to original input shape.
+        Generate synthetic samples and optionally reshape them to original input shape.
 
-        NOW SUPPORTS MULTI-DIMENSIONAL OUTPUT:
-        - Automatically reshapes generated samples to original input dimensions
+        NOW SUPPORTS OPTIONAL RESHAPING:
+        - If data was flattened during training: Automatically reshapes to original dimensions
+        - If data was not flattened: Returns data as-is from generator
         - Works with 1D, 2D, 3D, and N-D data
 
         Args:
@@ -527,16 +532,28 @@ class Adversarial:
                 Format 2 (simplified): {"number_classes": N, 0: n0, 1: n1, ...}
 
         Returns:
-            np.ndarray: Generated samples reshaped to original input dimensions
-                - Shape: (total_samples, *original_input_shape)
+            np.ndarray: Generated samples in appropriate shape
+                - If flattened during training: (total_samples, *original_input_shape)
+                - If not flattened: (total_samples, *model_output_shape)
                 - Example: For 3D input (16, 16, 16) with 100 total samples -> (100, 16, 16, 16)
         """
-        # Generate flattened samples from algorithm
+        # Generate samples from algorithm
         generated_data = self._adversarial_algorithm.get_samples(number_samples_per_class)
 
+        # If data was not flattened during training, return as-is
+        if not self._data_was_flattened:
+            # Convert dict to array if needed
+            if isinstance(generated_data, dict):
+                all_samples = []
+                for label in sorted(generated_data.keys()):
+                    all_samples.append(generated_data[label])
+                return np.concatenate(all_samples, axis=0)
+            return generated_data
+
+        # Data was flattened - need to reshape back to original shape
         # Check if we have stored original input shape
         if not hasattr(self, '_original_input_shape') or self._original_input_shape is None:
-            # If no original shape stored, return flattened data
+            # If no original shape stored, return as generated
             # Convert dict to array if needed
             if isinstance(generated_data, dict):
                 all_samples = []
@@ -572,6 +589,11 @@ class Adversarial:
     def adversarial_model(self) -> AdversarialModel | None:
         """Get the adversarial model instance."""
         return self._adversarial_model
+
+    @property
+    def data_was_flattened(self) -> bool:
+        """Get flag indicating if data was flattened during training."""
+        return self._data_was_flattened
 
     # Getter and setter for number_samples_per_class
     @property

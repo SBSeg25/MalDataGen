@@ -227,7 +227,6 @@ class LatentDiffusion:
             else:
                 self._device = device
 
-
         # Store class information
         if number_samples_per_class is None:
             # Provide a default if not specified
@@ -246,7 +245,6 @@ class LatentDiffusion:
         self._latent_first_unet_model = None
         self._latent_second_unet_model = None
         self._latent_autoencoder_diffusion = None
-
 
         # Store all configuration parameters
         self._latent_diffusion_unet_last_layer_activation = unet_last_layer_activation
@@ -452,196 +450,119 @@ class LatentDiffusion:
             input_shape: Union[int, tuple],
             x_real_samples: np.ndarray,
             y_real_samples: np.ndarray,
-            verbose: int = 1
+            batch_size: Optional[int] = None,
+            epochs: Optional[int] = None,
+            verbose: int = 1,
+            callbacks: Optional[List] = None
     ) -> None:
-
         """
-
-
         TensorFlow-specific training pipeline.
 
-
-
-
-
         Args:
-
-
             input_shape (Union[int, tuple]): Input data shape
-
-
             x_real_samples (np.ndarray): Training samples
-
-
             y_real_samples (np.ndarray): Training labels
-
-
+            batch_size (Optional[int]): Override default batch sizes if provided
+            epochs (Optional[int]): Override default epoch counts if provided
             verbose (int): Verbosity mode
-
-
+            callbacks (Optional[List]): List of callback objects for training monitoring
         """
+        # Use provided parameters or fall back to defaults
+        vae_batch_size = batch_size if batch_size is not None else self._latent_diffusion_VAE_batch_size_training
+        vae_epochs = epochs if epochs is not None else self._latent_diffusion_VAE_epochs
+        unet_batch_size = batch_size if batch_size is not None else self._latent_diffusion_unet_batch_size
+        unet_epochs = epochs if epochs is not None else self._latent_diffusion_unet_epochs
 
-        # Initialize the diffusion model
+        # Store callbacks
+        if callbacks is not None:
+            for callback in callbacks:
+                callback_name = type(callback).__name__.lower()
+                if 'early' in callback_name:
+                    self._callback_early_stop = callback
+                elif 'monitor' in callback_name and 'resource' not in callback_name:
+                    self._callback_model_monitor = callback
+                elif 'resource' in callback_name:
+                    self._callback_resources_monitor = callback
 
+        # Initialize latent diffusion components
         self._get_latent_diffusion_tensorflow(input_shape)
 
-        # Initialize the variational autoencoder model for diffusion
+        # Prepare TensorFlow data
+        y_real_samples_categorical = to_categorical(
+            y_real_samples,
+            num_classes=self._number_samples_per_class["number_classes"]
+        )
 
-        self._get_variational_autoencoder_tensorflow(input_shape)
+        # Train VAE
+        if verbose >= 1:
+            print("Training VAE...")
 
-        # Compile the variational algorithm for diffusion
-
-        self._latent_variational_algorithm.compile(loss=self._latent_diffusion_VAE_loss_function)
-
-        callbacks_list = self._training_callbacks.copy() if hasattr(self, '_training_callbacks') else []
-
-        if self._callback_model_monitor:
-            callbacks_list.append(self._callback_model_monitor)
-
-        if self._callback_early_stop:
-            callbacks_list.append(self._callback_early_stop)
-
-        # Fit the diffusion model with the training data
+        # Prepare callbacks for TensorFlow
+        tf_callbacks = []
+        if self._callback_early_stop is not None:
+            tf_callbacks.append(self._callback_early_stop)
+        if self._callback_model_monitor is not None:
+            tf_callbacks.append(self._callback_model_monitor)
+        if self._callback_resources_monitor is not None:
+            tf_callbacks.append(self._callback_resources_monitor)
 
         self._latent_variational_algorithm.fit(
-
-            (x_real_samples, to_categorical(y_real_samples,
-
-                                            num_classes=self._number_samples_per_class["number_classes"])),
-
             x_real_samples,
-
-            epochs=self._latent_diffusion_VAE_epochs,
-
-            batch_size=self._latent_diffusion_VAE_batch_size_training,
-
-            callbacks=callbacks_list,
-
-            verbose=verbose
-
+            x_real_samples,
+            y_real_samples_categorical,
+            batch_size=vae_batch_size,
+            epochs=vae_epochs,
+            verbose=verbose,
+            callbacks=tf_callbacks if tf_callbacks else None
         )
 
-        # Retrieve the trained encoder and decoder
-
+        # Get trained encoder and decoder
         self._encoder_latent_diffusion = self._latent_variational_algorithm.get_encoder_trained()
-
         self._decoder_latent_diffusion = self._latent_variational_algorithm.get_decoder_trained()
 
-        # Initialize the final diffusion algorithm
+        # Create embeddings for diffusion training
+        if verbose >= 1:
+            print("Creating embeddings for diffusion training...")
 
-        self._latent_diffusion_algorithm = LatentDiffusionAlgorithm(
-
-            first_unet_model=self._latent_first_unet_model,
-
-            second_unet_model=self._latent_second_unet_model,
-
-            encoder_model_image=self._encoder_latent_diffusion,
-
-            decoder_model_image=self._decoder_latent_diffusion,
-
-            gdf_util=self._latent_gaussian_diffusion_util,
-
-            optimizer_autoencoder=Adam(learning_rate=0.0001),
-
-            optimizer_diffusion=Adam(learning_rate=0.0001),
-
-            time_steps=self._latent_diffusion_gaussian_time_steps,
-
-            ema=self._latent_diffusion_ema,
-
-            margin=self._latent_diffusion_margin,
-
-            embedding_dimension=self._latent_diffusion_latent_dimension
-
-        )
-
-        # Compile the diffusion model
-
-        self._latent_diffusion_algorithm.compile(
-
-            loss=MeanSquaredError(),
-
-            optimizer=Adam(learning_rate=0.0001)
-
-        )
-
-        # Prepare the data embedding and train the diffusion model
-
-        data_embedding = self._latent_variational_algorithm.create_embedding([
-
+        data_embedding = self._latent_variational_algorithm.create_embedding(
             x_real_samples,
+            batch_size=self._latent_diffusion_VAE_batch_size_create_embedding
+        )
 
-            to_categorical(y_real_samples,
+        # Initialize and train diffusion algorithm
+        self._latent_diffusion_algorithm = LatentDiffusionAlgorithm(
+            first_unet_model=self._latent_first_unet_model,
+            second_unet_model=self._latent_second_unet_model,
+            encoder_model_image=self._encoder_latent_diffusion,
+            decoder_model_image=self._decoder_latent_diffusion,
+            gdf_util=self._latent_gaussian_diffusion_util,
+            time_steps=self._latent_diffusion_gaussian_time_steps,
+            ema=self._latent_diffusion_ema,
+            margin=self._latent_diffusion_margin,
+            embedding_dimension=self._latent_diffusion_latent_dimension
+        )
 
-                           num_classes=self._number_samples_per_class["number_classes"])
-
-        ])
-
-        data_embedding = numpy.array(data_embedding)
-
-        data_embedding = tensorflow.expand_dims(data_embedding, axis=-1)
-
-        callbacks_list = self._training_callbacks.copy() if hasattr(self, '_training_callbacks') else []
-
-        if self._callback_model_monitor:
-            callbacks_list.append(self._callback_model_monitor)
-
-        if self._callback_early_stop:
-            callbacks_list.append(self._callback_early_stop)
+        if verbose >= 1:
+            print("Training diffusion model...")
 
         self._latent_diffusion_algorithm.fit(
-
             data_embedding,
-
-            to_categorical(y_real_samples,
-
-                           num_classes=self._number_samples_per_class["number_classes"]),
-
-            epochs=self._latent_diffusion_unet_epochs,
-
-            batch_size=self._latent_diffusion_unet_batch_size,
-
-            callbacks=callbacks_list,
-
-            verbose=verbose
-
+            y_real_samples_categorical,
+            epochs=unet_epochs,
+            batch_size=unet_batch_size,
+            verbose=verbose,
+            callbacks=tf_callbacks if tf_callbacks else None
         )
 
-    def _detect_embedding_shape_pytorch(self, x_real_samples):
-
-        """PyTorch-specific helper to detect embedding shape."""
-
-        if len(x_real_samples) > 32:
-
-            sample = x_real_samples[:32]
-
-
-        else:
-
-            sample = x_real_samples
-
-        test_embedding = self._latent_variational_algorithm.create_embedding(
-
-            sample,
-
-            batch_size=min(16, len(sample))
-
-        )
-
-        test_embedding = torch.from_numpy(test_embedding).float()
-
-        if len(test_embedding.shape) == 2:
-            test_embedding = test_embedding.unsqueeze(-1)
-
-        actual_shape = test_embedding.shape[1:]
-
-        return actual_shape
     def fit_model_pytorch(
             self,
             input_shape: Union[int, tuple],
             x_real_samples: np.ndarray,
             y_real_samples: np.ndarray,
-            verbose: int = 1
+            batch_size: Optional[int] = None,
+            epochs: Optional[int] = None,
+            verbose: int = 1,
+            callbacks: Optional[List] = None
     ) -> None:
         """
         PyTorch-specific training pipeline with proper model warm-up.
@@ -650,8 +571,28 @@ class LatentDiffusion:
             input_shape (Union[int, tuple]): Input data shape
             x_real_samples (np.ndarray): Training samples
             y_real_samples (np.ndarray): Training labels
+            batch_size (Optional[int]): Override default batch sizes if provided
+            epochs (Optional[int]): Override default epoch counts if provided
             verbose (int): Verbosity mode
+            callbacks (Optional[List]): List of callback objects for training monitoring
         """
+        # Use provided parameters or fall back to defaults
+        vae_batch_size = batch_size if batch_size is not None else self._latent_diffusion_VAE_batch_size_training
+        vae_epochs = epochs if epochs is not None else self._latent_diffusion_VAE_epochs
+        unet_batch_size = batch_size if batch_size is not None else self._latent_diffusion_unet_batch_size
+        unet_epochs = epochs if epochs is not None else self._latent_diffusion_unet_epochs
+
+        # Store callbacks
+        if callbacks is not None:
+            for callback in callbacks:
+                callback_name = type(callback).__name__.lower()
+                if 'early' in callback_name:
+                    self._callback_early_stop = callback
+                elif 'monitor' in callback_name and 'resource' not in callback_name:
+                    self._callback_model_monitor = callback
+                elif 'resource' in callback_name:
+                    self._callback_resources_monitor = callback
+
         # Initialize variation model if not provided
         if not self._has_external_variation_model:
             self._latent_variation_model_diffusion = VariationalModelDiffusion(
@@ -699,17 +640,17 @@ class LatentDiffusion:
             lr=0.0001
         )
 
-        num_batches = len(x_real_samples) // self._latent_diffusion_VAE_batch_size_training
+        num_batches = len(x_real_samples) // vae_batch_size
 
         # VAE Training Loop
         if verbose >= 1:
             print("Training VAE...")
 
-        for epoch in range(self._latent_diffusion_VAE_epochs):
+        for epoch in range(vae_epochs):
             epoch_losses = []
             for batch_idx in range(num_batches):
-                start_idx = batch_idx * self._latent_diffusion_VAE_batch_size_training
-                end_idx = start_idx + self._latent_diffusion_VAE_batch_size_training
+                start_idx = batch_idx * vae_batch_size
+                end_idx = start_idx + vae_batch_size
                 batch_x = x_real_samples[start_idx:end_idx]
                 batch_y = y_real_samples_onehot[start_idx:end_idx]
 
@@ -721,7 +662,11 @@ class LatentDiffusion:
             avg_loss = sum(epoch_losses) / len(epoch_losses)
 
             if verbose >= 1 and ((epoch + 1) % 10 == 0 or epoch == 0):
-                print(f"  VAE Epoch [{epoch + 1}/{self._latent_diffusion_VAE_epochs}], Loss: {avg_loss:.4f}")
+                print(f"  VAE Epoch [{epoch + 1}/{vae_epochs}], Loss: {avg_loss:.4f}")
+
+            # Call model monitor callback if available
+            if self._callback_model_monitor is not None:
+                self._callback_model_monitor.on_epoch_end(epoch, {'loss': avg_loss})
 
             if self._callback_early_stop and self._callback_early_stop.should_stop(avg_loss):
                 if verbose >= 1:
@@ -851,10 +796,11 @@ class LatentDiffusion:
         self._latent_diffusion_algorithm.fit(
             data_embedding,
             y_real_samples_onehot,
-            epochs=self._latent_diffusion_unet_epochs,
-            batch_size=self._latent_diffusion_unet_batch_size,
+            epochs=unet_epochs,
+            batch_size=unet_batch_size,
             verbose=verbose
         )
+
     def _detect_embedding_shape_pytorch(self, x_real_samples):
         """PyTorch-specific helper to detect embedding shape."""
         if len(x_real_samples) > 32:
@@ -875,9 +821,13 @@ class LatentDiffusion:
 
         return actual_shape
 
-
-
-    def fit_model(self, input_shape, x_real_samples, y_real_samples, batch_size=32, epochs=1000, verbose=1, callbacks=None):
+    def fit_model(self, input_shape,
+                  x_real_samples,
+                  y_real_samples,
+                  batch_size: Optional[int] = None,
+                  epochs: Optional[int] = None,
+                  verbose: int = 1,
+                  callbacks: Optional[List] = None):
         """
         Executes the complete training pipeline for latent diffusion with automatic data flattening.
 
@@ -890,6 +840,10 @@ class LatentDiffusion:
             input_shape (tuple): Input data shape (e.g., (784,) for 1D, (28, 28, 1) for 2D, (16, 16, 16) for 3D)
             x_real_samples (ndarray): Training samples (can be N-dimensional)
             y_real_samples (ndarray): Corresponding labels (1D array of class indices)
+            batch_size (Optional[int]): Override default batch sizes for training
+            epochs (Optional[int]): Override default epoch counts for training
+            verbose (int): Verbosity level (0=silent, 1=progress)
+            callbacks (Optional[List]): List of callback objects for training monitoring
         """
         # Store original input shape for later reconstruction
         self._original_input_shape = input_shape
@@ -912,44 +866,11 @@ class LatentDiffusion:
 
         # Route to appropriate training method with flattened dimension
         if self._framework == 'tensorflow':
-            self.fit_model_tensorflow(flattened_dim, x_real_samples_flat, y_real_samples)
+            self.fit_model_tensorflow(flattened_dim, x_real_samples_flat, y_real_samples,
+                                      batch_size, epochs, verbose, callbacks)
         else:  # pytorch
-            self.fit_model_pytorch(flattened_dim, x_real_samples_flat, y_real_samples)
-
-    def train(
-            self,
-            input_shape: tuple,
-            x_real_samples: np.ndarray,
-            y_real_samples: np.ndarray,
-            batch_size: Optional[int] = None,
-            epochs: Optional[int] = None,
-            verbose: int = 1,
-            callbacks: Optional[List] = None
-    ) -> None:
-        """
-        Public method to train the latent diffusion model.
-        This is an alias to fit_model for convenience.
-
-        Args:
-            input_shape (tuple): Shape of input data
-            x_real_samples (np.ndarray): Training samples
-            y_real_samples (np.ndarray): Training labels
-            batch_size (Optional[int]): Override default batch sizes for training
-            epochs (Optional[int]): Override default epoch counts for training
-            verbose (int): Verbosity mode (0 = silent, 1 = progress bar, 2 = one line per epoch)
-            callbacks (Optional[List]): List of callback instances to apply during training
-        """
-        self.fit_model(
-            input_shape,
-            x_real_samples,
-            y_real_samples,
-            batch_size=batch_size,
-            epochs=epochs,
-            verbose=verbose,
-            callbacks=callbacks
-        )    # ========================================================================
-    # PROPERTIES (Framework-agnostic)
-    # ========================================================================
+            self.fit_model_pytorch(flattened_dim, x_real_samples_flat, y_real_samples,
+                                   batch_size, epochs, verbose, callbacks)
 
     @property
     def framework(self):

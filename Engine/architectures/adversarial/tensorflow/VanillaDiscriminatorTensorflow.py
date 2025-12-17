@@ -169,34 +169,6 @@ class VanillaDiscriminator(Activations):
                 If `number_samples_per_class` is provided but does not contain the key "number_classes".
         """
 
-        if not isinstance(latent_dimension, int) or latent_dimension <= 0:
-            raise ValueError("latent_dimension must be a positive integer.")
-
-        if not isinstance(output_shape, int) or output_shape <= 0:
-            raise ValueError("output_shape must be a positive integer.")
-
-        if not isinstance(activation_function, str):
-            raise ValueError("activation_function must be a string.")
-
-        if not isinstance(initializer_mean, (float, int)):
-            raise ValueError("initializer_mean must be a float or an integer.")
-
-        if not isinstance(initializer_deviation, (float, int)) or initializer_deviation <= 0:
-            raise ValueError("initializer_deviation must be a positive float or integer.")
-
-        if not isinstance(dropout_decay_rate_d, (float, int)) or not (0 <= dropout_decay_rate_d <= 1):
-            raise ValueError("dropout_decay_rate_d must be a float between 0 and 1.")
-
-        if not isinstance(last_layer_activation, str):
-            raise ValueError("last_layer_activation must be a string.")
-
-        if not isinstance(dense_layer_sizes_d, list) or not all(isinstance(n, int) and n > 0 for n in dense_layer_sizes_d):
-            raise ValueError("dense_layer_sizes_d must be a list of positive integers.")
-
-        if number_samples_per_class is not None and not isinstance(number_samples_per_class, dict):
-            raise ValueError("number_samples_per_class must be a dictionary if provided.")
-
-
         self._discriminator_number_samples_per_class = number_samples_per_class
         self._discriminator_latent_dimension = latent_dimension
         self._discriminator_output_shape = output_shape
@@ -253,6 +225,9 @@ class VanillaDiscriminator(Activations):
         validity = discriminator_model(model_input)
 
         return Model(inputs=[discriminator_shape_input, label_input], outputs=validity, name='Discriminator')
+
+    def set_model(self, model):
+        self._discriminator_model_dense = model
 
     def get_dense_discriminator_model(self) -> Optional[Model]:
         """
