@@ -50,7 +50,7 @@ class DenoisingDiffusion:
     Framework-agnostic Denoising Diffusion Probabilistic Model (DDPM) implementation.
 
     NOW SUPPORTS MULTI-DIMENSIONAL DATA: Automatically handles 1D, 2D, 3D, and N-D inputs
-    by flattening them during training and reshaping them during generation.
+    with OPTIONAL flattening during training and reshaping during generation.
 
     This class contains BOTH TensorFlow and PyTorch implementations in a single class.
     The framework is selected based on the ML_FRAMEWORK environment variable.
@@ -64,6 +64,7 @@ class DenoisingDiffusion:
 
     Attributes:
         _original_input_shape (tuple): Stores the original shape of input data for reconstruction
+        _data_was_flattened (bool): Flag indicating if data was flattened during training
     """
 
     def __init__(
@@ -204,6 +205,8 @@ class DenoisingDiffusion:
 
         # Storage for original input shape (for multi-dimensional data)
         self._original_input_shape = None
+        # Flag to indicate if data was flattened during training
+        self._data_was_flattened: bool = False
 
     def _get_denoising_diffusion_pytorch(self, input_shape: tuple[int, ...]) -> None:
         """
@@ -579,14 +582,16 @@ class DenoisingDiffusion:
             batch_size: int = None,
             epochs: int = None,
             verbose: int = 1,
-            callbacks: list = None
+            callbacks: list = None,
+            flatten: bool = True
     ) -> None:
         """
-        Train the denoising diffusion model using the appropriate framework with automatic data flattening.
+        Train the denoising diffusion model using the appropriate framework with optional data flattening.
 
-        NOW SUPPORTS MULTI-DIMENSIONAL DATA:
-        - Automatically flattens N-D input data (1D, 2D, 3D, etc.)
-        - Stores original shape for reconstruction during generation
+        NOW SUPPORTS OPTIONAL FLATTENING:
+        - flatten=True (default): Automatically flattens N-D input data (1D, 2D, 3D, etc.)
+        - flatten=False: Uses data as-is, without flattening
+        - Stores original shape and flatten flag for reconstruction during generation
         - Routes to framework-specific implementation
 
         Args:
@@ -598,6 +603,7 @@ class DenoisingDiffusion:
             verbose: Verbosity mode (0 = silent, 1 = progress bar, 2 = one line per epoch) (default: 1)
             callbacks: List of callbacks to apply during training (default: uses callbacks from __init__)
                       Can be a single callback or a list of callbacks. Invalid callbacks will be filtered out with warnings.
+            flatten: If True, flattens multi-dimensional input data. If False, uses data as-is (default: True)
 
         Raises:
             TypeError: If callbacks parameter has invalid type
@@ -638,9 +644,25 @@ class DenoisingDiffusion:
 
         # Store original input shape for later reconstruction
         self._original_input_shape = input_shape
+        self._data_was_flattened = flatten
 
-        # Calculate total flattened dimension
-        flattened_dim = int(np.prod(input_shape))
+        # Determine the dimension to use for model initialization
+        if flatten:
+            # Calculate total flattened dimension
+            flattened_dim = int(np.prod(input_shape))
+
+            # Flatten the input data if it has more than 2 dimensions
+            # (batch_size, ...) -> (batch_size, flattened_features)
+            if len(x_real_samples.shape) > 2:
+                x_real_samples_processed = x_real_samples.reshape(x_real_samples.shape[0], -1)
+            else:
+                x_real_samples_processed = x_real_samples
+
+            model_input_dim = flattened_dim
+        else:
+            # Use data as-is without flattening
+            x_real_samples_processed = x_real_samples
+            model_input_dim = input_shape
 
         # CRITICAL: Set up number_samples_per_class from training labels
         # This must be done before building the models
@@ -649,22 +671,15 @@ class DenoisingDiffusion:
             "number_classes": num_classes
         }
 
-        # Flatten the input data if it has more than 2 dimensions
-        # (batch_size, ...) -> (batch_size, flattened_features)
-        if len(x_real_samples.shape) > 2:
-            x_real_samples_flat = x_real_samples.reshape(x_real_samples.shape[0], -1)
-        else:
-            x_real_samples_flat = x_real_samples
-
-        # Route to appropriate training method with flattened dimension
+        # Route to appropriate training method with appropriate dimension
         if self._framework == 'pytorch':
             self._training_denoising_diffusion_model_pytorch(
-                flattened_dim, x_real_samples_flat, y_real_samples,
+                model_input_dim, x_real_samples_processed, y_real_samples,
                 batch_size, epochs, verbose, validated_callbacks
             )
         elif self._framework == 'tensorflow':
             self._training_denoising_diffusion_model_tensorflow(
-                flattened_dim, x_real_samples_flat, y_real_samples,
+                model_input_dim, x_real_samples_processed, y_real_samples,
                 batch_size, epochs, verbose, validated_callbacks
             )
 
@@ -676,7 +691,8 @@ class DenoisingDiffusion:
             batch_size: int = None,
             epochs: int = None,
             verbose: int = 1,
-            callbacks: list = None
+            callbacks: list = None,
+            flatten: bool = True
     ) -> None:
         """
         Public method to train the denoising diffusion model.
@@ -690,18 +706,20 @@ class DenoisingDiffusion:
             epochs: Number of training epochs (default: uses value from __init__)
             verbose: Verbosity mode (0 = silent, 1 = progress bar, 2 = one line per epoch)
             callbacks: List of callbacks to apply during training
+            flatten: If True, flattens multi-dimensional input data. If False, uses data as-is (default: True)
         """
         self.fit_model(
             input_shape, x_real_samples, y_real_samples,
-            batch_size, epochs, verbose, callbacks
+            batch_size, epochs, verbose, callbacks, flatten
         )
 
     def get_samples(self, number_samples_per_class):
         """
-        Generate samples using the trained model and reshape them to original input shape.
+        Generate samples using the trained model and optionally reshape them to original input shape.
 
-        NOW SUPPORTS MULTI-DIMENSIONAL OUTPUT:
-        - Automatically reshapes generated samples to original input dimensions
+        NOW SUPPORTS OPTIONAL RESHAPING:
+        - If data was flattened during training: Automatically reshapes to original dimensions
+        - If data was not flattened: Returns data as-is from model
         - Works with 1D, 2D, 3D, and N-D data
 
         Args:
@@ -710,8 +728,9 @@ class DenoisingDiffusion:
                 Format 2 (simplified): {"number_classes": N, 0: n0, 1: n1, ...}
 
         Returns:
-            np.ndarray: Generated samples reshaped to original input dimensions
-                - Shape: (total_samples, *original_input_shape)
+            np.ndarray: Generated samples in appropriate shape
+                - If flattened during training: (total_samples, *original_input_shape)
+                - If not flattened: (total_samples, *model_output_shape)
                 - Example: For 3D input (16, 16, 16) with 100 total samples -> (100, 16, 16, 16)
 
         Raises:
@@ -723,12 +742,23 @@ class DenoisingDiffusion:
                 "Please train the model first using fit_model() or train()."
             )
 
-        # Generate flattened samples from algorithm
+        # Generate samples from algorithm
         generated_data = self._denoising_diffusion_algorithm.get_samples(number_samples_per_class)
 
+        # If data was not flattened during training, return as-is
+        if not self._data_was_flattened:
+            # Convert dict to array if needed
+            if isinstance(generated_data, dict):
+                all_samples = []
+                for label in sorted(generated_data.keys()):
+                    all_samples.append(generated_data[label])
+                return np.concatenate(all_samples, axis=0)
+            return generated_data
+
+        # Data was flattened - need to reshape back to original shape
         # Check if we have stored original input shape
         if not hasattr(self, '_original_input_shape') or self._original_input_shape is None:
-            # If no original shape stored, return flattened data
+            # If no original shape stored, return as generated
             # Convert dict to array if needed
             if isinstance(generated_data, dict):
                 all_samples = []
@@ -773,6 +803,11 @@ class DenoisingDiffusion:
     def original_input_shape(self) -> tuple:
         """Get the original input shape (before flattening)."""
         return self._original_input_shape
+
+    @property
+    def data_was_flattened(self) -> bool:
+        """Get flag indicating if data was flattened during training."""
+        return self._data_was_flattened
 
     @property
     def denoising_first_unet_model(self):

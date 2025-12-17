@@ -78,12 +78,13 @@ class QuantizedVAE:
     for quantized latent space learning tasks within the Synthetic Ocean ecosystem.
 
     NOW SUPPORTS MULTI-DIMENSIONAL DATA: Automatically handles 1D, 2D, 3D, and N-D inputs
-    by flattening them during training and reshaping them during generation.
+    with OPTIONAL flattening during training and reshaping during generation.
 
     Attributes:
         _quantizedVAE_algorithm (QuantizedVAEAlgorithm): Manages the VQ-VAE training process
         _quantizedVAE_model (QuantizedVAEModel): Contains encoder, decoder and quantization components
         _original_input_shape (tuple): Stores the original shape of input data for reconstruction
+        _data_was_flattened (bool): Flag indicating if data was flattened during training
 
     Configuration Parameters (with getters/setters):
         _quantized_vae_number_epochs (int): Number of training epochs
@@ -190,6 +191,8 @@ class QuantizedVAE:
 
         # Storage for original input shape (for multi-dimensional data)
         self._original_input_shape = None
+        # Flag to indicate if data was flattened during training
+        self._data_was_flattened: bool = False
 
     def _get_quantized_vae(self, input_shape: tuple[int, ...]) -> None:
         """
@@ -282,16 +285,18 @@ class QuantizedVAE:
             batch_size: int = None,
             epochs: int = None,
             verbose: int = 1,
-            callbacks: list = None
+            callbacks: list = None,
+            flatten: bool = True
     ) -> None:
         """
-        Executes the complete quantized VAE training process with automatic data flattening.
+        Executes the complete quantized VAE training process with optional data flattening.
 
-        NOW SUPPORTS MULTI-DIMENSIONAL DATA:
-        - Automatically flattens N-D input data (1D, 2D, 3D, etc.)
+        NOW SUPPORTS OPTIONAL FLATTENING:
+        - flatten=True (default): Automatically flattens N-D input data (1D, 2D, 3D, etc.)
+        - flatten=False: Uses data as-is, without flattening
         - Converts labels to one-hot format
         - Passes data and labels as separate inputs (model concatenates internally)
-        - Stores original shape for reconstruction during generation
+        - Stores original shape and flatten flag for reconstruction during generation
 
         Args:
             input_shape: Shape of input data samples (e.g., (784,) for 1D, (28, 28, 1) for 2D, (16, 16, 16) for 3D)
@@ -302,12 +307,13 @@ class QuantizedVAE:
             verbose: Verbosity mode (0 = silent, 1 = progress bar, 2 = one line per epoch)
             callbacks: List of callback instances to apply during training.
                        These will be merged with internally defined callbacks.
+            flatten: If True, flattens multi-dimensional input data. If False, uses data as-is (default: True)
 
         Process:
             1. Stores original input shape for later reconstruction
-            2. Flattens multi-dimensional input data
+            2. Optionally flattens multi-dimensional input data (if flatten=True)
             3. Converts labels to one-hot encoding format
-            4. Initializes model architecture with flattened dimension
+            4. Initializes model architecture with appropriate dimension
             5. Compiles model with optimizer
             6. Executes quantized VAE training
             7. Manages model saving and monitoring
@@ -318,24 +324,33 @@ class QuantizedVAE:
 
         # Store original input shape for later reconstruction
         self._original_input_shape = input_shape
+        self._data_was_flattened = flatten
 
-        # Calculate total flattened dimension
-        flattened_dim = int(np.prod(input_shape))
+        # Determine the dimension to use for model initialization
+        if flatten:
+            # Calculate total flattened dimension
+            flattened_dim = int(np.prod(input_shape))
 
-        # Flatten the input data if it has more than 2 dimensions
-        # (batch_size, ...) -> (batch_size, flattened_features)
-        if len(x_real_samples.shape) > 2:
-            x_real_samples_flat = x_real_samples.reshape(x_real_samples.shape[0], -1)
+            # Flatten the input data if it has more than 2 dimensions
+            # (batch_size, ...) -> (batch_size, flattened_features)
+            if len(x_real_samples.shape) > 2:
+                x_real_samples_processed = x_real_samples.reshape(x_real_samples.shape[0], -1)
+            else:
+                x_real_samples_processed = x_real_samples
+
+            model_input_dim = flattened_dim
         else:
-            x_real_samples_flat = x_real_samples
+            # Use data as-is without flattening
+            x_real_samples_processed = x_real_samples
+            model_input_dim = input_shape
 
         # Convert labels to one-hot encoding
         num_classes = self._number_samples_per_class["number_classes"]
         y_one_hot = np.zeros((len(y_real_samples), num_classes))
         y_one_hot[np.arange(len(y_real_samples)), y_real_samples.astype(int)] = 1
 
-        # Initialize the quantized VAE model with flattened dimension
-        self._get_quantized_vae(flattened_dim)
+        # Initialize the quantized VAE model with appropriate dimension
+        self._get_quantized_vae(model_input_dim)
 
         # Ensure we have an algorithm
         if self._quantized_vae_algorithm is None:
@@ -377,17 +392,78 @@ class QuantizedVAE:
 
         # Fit the quantized VAE model
         # IMPORTANT: Pass as tuple (data, labels) - model concatenates internally!
-        # Input: [flattened_data, labels] as separate inputs
-        # Target: flattened data only (reconstruction target)
+        # Input: [processed_data, labels] as separate inputs
+        # Target: processed data only (reconstruction target)
         self._quantized_vae_algorithm.fit(
-            (x_real_samples_flat, y_one_hot),  # Input: tuple of (data, labels)
-            x_real_samples_flat,  # Target: only the data (no labels)
+            (x_real_samples_processed, y_one_hot),  # Input: tuple of (data, labels)
+            x_real_samples_processed,  # Target: only the data (no labels)
             epochs=effective_epochs,
             batch_size=effective_batch_size,
             callbacks=callbacks_list if callbacks_list else None,
             verbose=verbose
         )
 
+    def get_samples(self, number_samples_per_class):
+        """
+        Generate synthetic samples and optionally reshape them to original input shape.
+
+        NOW SUPPORTS OPTIONAL RESHAPING:
+        - If data was flattened during training: Automatically reshapes to original dimensions
+        - If data was not flattened: Returns data as-is from algorithm
+        - Works with 1D, 2D, 3D, and N-D data
+
+        Args:
+            number_samples_per_class: Dictionary specifying number of samples per class
+                Format 1: {"number_classes": N, "classes": {0: n0, 1: n1, ...}}
+                Format 2 (simplified): {"number_classes": N, 0: n0, 1: n1, ...}
+
+        Returns:
+            np.ndarray: Generated samples in appropriate shape
+                - If flattened during training: (total_samples, *original_input_shape)
+                - If not flattened: (total_samples, *model_output_shape)
+                - Example: For 3D input (16, 16, 16) with 100 total samples -> (100, 16, 16, 16)
+        """
+        # Generate samples from algorithm
+        generated_data = self._quantized_vae_algorithm.get_samples(number_samples_per_class)
+
+        # If data was not flattened during training, return as-is
+        if not self._data_was_flattened:
+            # Convert dict to array if needed
+            if isinstance(generated_data, dict):
+                all_samples = []
+                for label in sorted(generated_data.keys()):
+                    all_samples.append(generated_data[label])
+                return np.concatenate(all_samples, axis=0)
+            return generated_data
+
+        # Data was flattened - need to reshape back to original shape
+        # Check if we have stored original input shape
+        if not hasattr(self, '_original_input_shape') or self._original_input_shape is None:
+            # If no original shape stored, return as generated
+            # Convert dict to array if needed
+            if isinstance(generated_data, dict):
+                all_samples = []
+                for label in sorted(generated_data.keys()):
+                    all_samples.append(generated_data[label])
+                return np.concatenate(all_samples, axis=0)
+            return generated_data
+
+        # Reshape generated samples to original input shape
+        reshaped_samples = []
+
+        if isinstance(generated_data, dict):
+            # If returned as dict, reshape each class
+            for label in sorted(generated_data.keys()):
+                samples = generated_data[label]
+                # Reshape from (n_samples, flattened_features) to (n_samples, *original_shape)
+                reshaped = samples.reshape(-1, *self._original_input_shape)
+                reshaped_samples.append(reshaped)
+
+            # Concatenate all classes
+            return np.concatenate(reshaped_samples, axis=0)
+        else:
+            # If returned as array, reshape directly
+            return generated_data.reshape(-1, *self._original_input_shape)
 
     # Additional getters for the algorithm and model
     @property
@@ -399,6 +475,11 @@ class QuantizedVAE:
     def quantized_vae_model(self) -> QuantizedVAEModel | None:
         """Get the quantized VAE model instance."""
         return self._quantized_vae_model
+
+    @property
+    def data_was_flattened(self) -> bool:
+        """Get flag indicating if data was flattened during training."""
+        return self._data_was_flattened
 
     # Property getters and setters
     @property
@@ -565,52 +646,3 @@ class QuantizedVAE:
     def original_input_shape(self) -> tuple:
         """Get the original input shape (before flattening)."""
         return self._original_input_shape
-
-    def get_samples(self, number_samples_per_class):
-        """
-        Generate synthetic samples and reshape them to original input shape.
-
-        NOW SUPPORTS MULTI-DIMENSIONAL OUTPUT:
-        - Automatically reshapes generated samples to original input dimensions
-        - Works with 1D, 2D, 3D, and N-D data
-
-        Args:
-            number_samples_per_class: Dictionary specifying number of samples per class
-                Format 1: {"number_classes": N, "classes": {0: n0, 1: n1, ...}}
-                Format 2 (simplified): {"number_classes": N, 0: n0, 1: n1, ...}
-
-        Returns:
-            np.ndarray: Generated samples reshaped to original input dimensions
-                - Shape: (total_samples, *original_input_shape)
-                - Example: For 3D input (16, 16, 16) with 100 total samples -> (100, 16, 16, 16)
-        """
-        # Generate flattened samples from algorithm
-        generated_data = self._quantized_vae_algorithm.get_samples(number_samples_per_class)
-
-        # Check if we have stored original input shape
-        if not hasattr(self, '_original_input_shape') or self._original_input_shape is None:
-            # If no original shape stored, return flattened data
-            # Convert dict to array if needed
-            if isinstance(generated_data, dict):
-                all_samples = []
-                for label in sorted(generated_data.keys()):
-                    all_samples.append(generated_data[label])
-                return np.concatenate(all_samples, axis=0)
-            return generated_data
-
-        # Reshape generated samples to original input shape
-        reshaped_samples = []
-
-        if isinstance(generated_data, dict):
-            # If returned as dict, reshape each class
-            for label in sorted(generated_data.keys()):
-                samples = generated_data[label]
-                # Reshape from (n_samples, flattened_features) to (n_samples, *original_shape)
-                reshaped = samples.reshape(-1, *self._original_input_shape)
-                reshaped_samples.append(reshaped)
-
-            # Concatenate all classes
-            return np.concatenate(reshaped_samples, axis=0)
-        else:
-            # If returned as array, reshape directly
-            return generated_data.reshape(-1, *self._original_input_shape)

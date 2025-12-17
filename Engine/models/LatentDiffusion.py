@@ -116,7 +116,7 @@ class LatentDiffusion:
     Framework-agnostic Latent Denoising Probabilistic Diffusion (LDPD) model.
 
     NOW SUPPORTS MULTI-DIMENSIONAL DATA: Automatically handles 1D, 2D, 3D, and N-D inputs
-    by flattening them during training and reshaping them during generation.
+    with OPTIONAL flattening during training and reshaping during generation.
 
     This unified class implements a latent diffusion model that works with both
     TensorFlow and PyTorch backends, automatically selecting the appropriate
@@ -136,6 +136,7 @@ class LatentDiffusion:
         _framework: Current framework being used ('tensorflow' or 'pytorch')
         _device: Device for PyTorch ('cuda' or 'cpu')
         _original_input_shape: Stores the original shape of input data for reconstruction
+        _data_was_flattened: Flag indicating if data was flattened during training
         _latent_variational_algorithm: VAE training orchestrator
         _latent_variation_model_diffusion: VAE encoder/decoder models
         _latent_autoencoder_diffusion: Core autoencoder for latent space
@@ -326,8 +327,11 @@ class LatentDiffusion:
         self._callback_early_stop = None
         self._callback_resources_monitor = None
         self._latent_diffusion_algorithm = None
+
         # Storage for original input shape (for multi-dimensional data)
         self._original_input_shape = None
+        # Flag to indicate if data was flattened during training
+        self._data_was_flattened: bool = False
 
     # ========================================================================
     # TENSORFLOW IMPLEMENTATION
@@ -821,19 +825,22 @@ class LatentDiffusion:
 
         return actual_shape
 
-    def fit_model(self, input_shape,
+    def fit_model(self,
+                  input_shape,
                   x_real_samples,
                   y_real_samples,
                   batch_size: Optional[int] = None,
                   epochs: Optional[int] = None,
                   verbose: int = 1,
-                  callbacks: Optional[List] = None):
+                  callbacks: Optional[List] = None,
+                  flatten: bool = True):
         """
-        Executes the complete training pipeline for latent diffusion with automatic data flattening.
+        Executes the complete training pipeline for latent diffusion with optional data flattening.
 
-        NOW SUPPORTS MULTI-DIMENSIONAL DATA:
-        - Automatically flattens N-D input data (1D, 2D, 3D, etc.)
-        - Stores original shape for reconstruction during generation
+        NOW SUPPORTS OPTIONAL FLATTENING:
+        - flatten=True (default): Automatically flattens N-D input data (1D, 2D, 3D, etc.)
+        - flatten=False: Uses data as-is, without flattening
+        - Stores original shape and flatten flag for reconstruction during generation
         - Routes to framework-specific implementation
 
         Args:
@@ -844,12 +851,29 @@ class LatentDiffusion:
             epochs (Optional[int]): Override default epoch counts for training
             verbose (int): Verbosity level (0=silent, 1=progress)
             callbacks (Optional[List]): List of callback objects for training monitoring
+            flatten (bool): If True, flattens multi-dimensional input data. If False, uses data as-is (default: True)
         """
         # Store original input shape for later reconstruction
         self._original_input_shape = input_shape
+        self._data_was_flattened = flatten
 
-        # Calculate total flattened dimension
-        flattened_dim = int(np.prod(input_shape))
+        # Determine the dimension to use for model initialization
+        if flatten:
+            # Calculate total flattened dimension
+            flattened_dim = int(np.prod(input_shape))
+
+            # Flatten the input data if it has more than 2 dimensions
+            # (batch_size, ...) -> (batch_size, flattened_features)
+            if len(x_real_samples.shape) > 2:
+                x_real_samples_processed = x_real_samples.reshape(x_real_samples.shape[0], -1)
+            else:
+                x_real_samples_processed = x_real_samples
+
+            model_input_dim = flattened_dim
+        else:
+            # Use data as-is without flattening
+            x_real_samples_processed = x_real_samples
+            model_input_dim = input_shape
 
         # CRITICAL: Set up number_samples_per_class from training labels
         # This must be done before building the models
@@ -857,25 +881,29 @@ class LatentDiffusion:
         self._number_samples_per_class = {
             "number_classes": num_classes
         }
-        # Flatten the input data if it has more than 2 dimensions
-        # (batch_size, ...) -> (batch_size, flattened_features)
-        if len(x_real_samples.shape) > 2:
-            x_real_samples_flat = x_real_samples.reshape(x_real_samples.shape[0], -1)
-        else:
-            x_real_samples_flat = x_real_samples
 
-        # Route to appropriate training method with flattened dimension
+        # Route to appropriate training method with appropriate dimension
         if self._framework == 'tensorflow':
-            self.fit_model_tensorflow(flattened_dim, x_real_samples_flat, y_real_samples,
+            self.fit_model_tensorflow(model_input_dim, x_real_samples_processed, y_real_samples,
                                       batch_size, epochs, verbose, callbacks)
         else:  # pytorch
-            self.fit_model_pytorch(flattened_dim, x_real_samples_flat, y_real_samples,
+            self.fit_model_pytorch(model_input_dim, x_real_samples_processed, y_real_samples,
                                    batch_size, epochs, verbose, callbacks)
 
     @property
     def framework(self):
         """Get the current framework being used."""
         return self._framework
+
+    @property
+    def original_input_shape(self) -> tuple:
+        """Get the original input shape (before flattening)."""
+        return self._original_input_shape
+
+    @property
+    def data_was_flattened(self) -> bool:
+        """Get flag indicating if data was flattened during training."""
+        return self._data_was_flattened
 
     @property
     def device(self):
@@ -1212,10 +1240,11 @@ class LatentDiffusion:
 
     def get_samples(self, number_samples_per_class):
         """
-        Generate samples using the trained model and reshape them to original input shape.
+        Generate samples using the trained model and optionally reshape them to original input shape.
 
-        NOW SUPPORTS MULTI-DIMENSIONAL OUTPUT:
-        - Automatically reshapes generated samples to original input dimensions
+        NOW SUPPORTS OPTIONAL RESHAPING:
+        - If data was flattened during training: Automatically reshapes to original dimensions
+        - If data was not flattened: Returns data as-is from model
         - Works with 1D, 2D, 3D, and N-D data
 
         Args:
@@ -1224,8 +1253,9 @@ class LatentDiffusion:
                 Format 2 (simplified): {"number_classes": N, 0: n0, 1: n1, ...}
 
         Returns:
-            np.ndarray: Generated samples reshaped to original input dimensions
-                - Shape: (total_samples, *original_input_shape)
+            np.ndarray: Generated samples in appropriate shape
+                - If flattened during training: (total_samples, *original_input_shape)
+                - If not flattened: (total_samples, *model_output_shape)
                 - Example: For 3D input (16, 16, 16) with 100 total samples -> (100, 16, 16, 16)
 
         Raises:
@@ -1237,12 +1267,23 @@ class LatentDiffusion:
                 "Please train the model first using fit_model() or train()."
             )
 
-        # Generate flattened samples from algorithm
+        # Generate samples from algorithm
         generated_data = self._latent_diffusion_algorithm.get_samples(number_samples_per_class)
 
+        # If data was not flattened during training, return as-is
+        if not self._data_was_flattened:
+            # Convert dict to array if needed
+            if isinstance(generated_data, dict):
+                all_samples = []
+                for label in sorted(generated_data.keys()):
+                    all_samples.append(generated_data[label])
+                return np.concatenate(all_samples, axis=0)
+            return generated_data
+
+        # Data was flattened - need to reshape back to original shape
         # Check if we have stored original input shape
         if not hasattr(self, '_original_input_shape') or self._original_input_shape is None:
-            # If no original shape stored, return flattened data
+            # If no original shape stored, return as generated
             # Convert dict to array if needed
             if isinstance(generated_data, dict):
                 all_samples = []

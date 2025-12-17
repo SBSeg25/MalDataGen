@@ -74,12 +74,13 @@ class VariationalAutoencoder:
     for variational autoencoder-based learning tasks within the Synthetic Ocean ecosystem.
 
     NOW SUPPORTS MULTI-DIMENSIONAL DATA: Automatically handles 1D, 2D, 3D, and N-D inputs
-    by flattening them during training and reshaping them during generation.
+    with OPTIONAL flattening during training and reshaping during generation.
 
     Attributes:
         _variational_algorithm (VariationalAutoencoderAlgorithm): Manages the VAE training process
         _variational_model (VariationalAutoencoderModel): Contains encoder and decoder components
         _original_input_shape (tuple): Stores the original shape of input data for reconstruction
+        _data_was_flattened (bool): Flag indicating if data was flattened during training
 
     Configuration Parameters (with getters/setters):
         _variational_latent_dimension (int): Size of the latent space
@@ -226,6 +227,8 @@ class VariationalAutoencoder:
 
         # Storage for original input shape (for multi-dimensional data)
         self._original_input_shape = None
+        # Flag to indicate if data was flattened during training
+        self._data_was_flattened: bool = False
 
     def _get_variational(self, input_shape: tuple[int, ...]) -> None:
         """
@@ -317,15 +320,17 @@ class VariationalAutoencoder:
             batch_size: int = None,
             epochs: int = None,
             verbose: int = 1,
-            callbacks: list = None
+            callbacks: list = None,
+            flatten: bool = True
     ) -> None:
         """
-        Executes the complete variational autoencoder training process with automatic data flattening.
+        Executes the complete variational autoencoder training process with optional data flattening.
 
-        NOW SUPPORTS MULTI-DIMENSIONAL DATA:
-        - Automatically flattens N-D input data (1D, 2D, 3D, etc.)
-        - Stores original shape for reconstruction during generation
+        NOW SUPPORTS OPTIONAL FLATTENING:
+        - flatten=True (default): Automatically flattens N-D input data (1D, 2D, 3D, etc.)
+        - flatten=False: Uses data as-is, without flattening
         - Converts labels to one-hot format
+        - Stores original shape and flatten flag for reconstruction during generation
 
         Args:
             input_shape: Shape of input data samples (e.g., (784,) for 1D, (28, 28, 1) for 2D, (16, 16, 16) for 3D)
@@ -336,15 +341,17 @@ class VariationalAutoencoder:
             verbose: Verbosity mode (0 = silent, 1 = progress bar, 2 = one line per epoch)
             callbacks: List of callback instances to apply during training.
                        These will be merged with internally defined callbacks.
+            flatten: If True, flattens multi-dimensional input data. If False, uses data as-is (default: True)
 
         Process:
-            1. Flattens multi-dimensional input data
-            2. Initializes model architecture (or uses provided)
-            3. Configures optimizer with specified parameters
-            4. Sets up training callbacks
-            5. Prepares one-hot encoded labels
-            6. Executes VAE training with reconstruction target
-            7. Manages model saving and monitoring
+            1. Stores original input shape for later reconstruction
+            2. Optionally flattens multi-dimensional input data (if flatten=True)
+            3. Initializes model architecture (or uses provided)
+            4. Configures optimizer with specified parameters
+            5. Sets up training callbacks
+            6. Prepares one-hot encoded labels
+            7. Executes VAE training with reconstruction target
+            8. Manages model saving and monitoring
         """
         # Use provided parameters or fall back to instance defaults
         effective_batch_size = batch_size if batch_size is not None else self._variational_batch_size
@@ -352,19 +359,28 @@ class VariationalAutoencoder:
 
         # Store original input shape for later reconstruction
         self._original_input_shape = input_shape
+        self._data_was_flattened = flatten
 
-        # Calculate total flattened dimension
-        flattened_dim = int(np.prod(input_shape))
+        # Determine the dimension to use for model initialization
+        if flatten:
+            # Calculate total flattened dimension
+            flattened_dim = int(np.prod(input_shape))
 
-        # Flatten the input data if it has more than 2 dimensions
-        # (batch_size, ...) -> (batch_size, flattened_features)
-        if len(x_real_samples.shape) > 2:
-            x_real_samples_flat = x_real_samples.reshape(x_real_samples.shape[0], -1)
+            # Flatten the input data if it has more than 2 dimensions
+            # (batch_size, ...) -> (batch_size, flattened_features)
+            if len(x_real_samples.shape) > 2:
+                x_real_samples_processed = x_real_samples.reshape(x_real_samples.shape[0], -1)
+            else:
+                x_real_samples_processed = x_real_samples
+
+            model_input_dim = flattened_dim
         else:
-            x_real_samples_flat = x_real_samples
+            # Use data as-is without flattening
+            x_real_samples_processed = x_real_samples
+            model_input_dim = input_shape
 
-        # Initialize the variational autoencoder model (or use provided) with flattened dimension
-        self._get_variational(flattened_dim)
+        # Initialize the variational autoencoder model (or use provided) with appropriate dimension
+        self._get_variational(model_input_dim)
 
         # Ensure we have an algorithm
         if self._variational_algorithm is None:
@@ -401,19 +417,18 @@ class VariationalAutoencoder:
             self._number_samples_per_class["number_classes"]
         )
 
-        # The target (y_data) should be x_real_samples_flat for reconstruction
-        y_data = x_real_samples_flat
+        # The target (y_data) should be x_real_samples_processed for reconstruction
+        y_data = x_real_samples_processed
 
-        # Fit the variational autoencoder model with flattened samples
+        # Fit the variational autoencoder model with processed samples
         self._variational_algorithm.fit(
-            (x_real_samples_flat, y_labels_one_hot),  # x and labels
+            (x_real_samples_processed, y_labels_one_hot),  # x and labels
             y_data,  # y (target for reconstruction)
             epochs=effective_epochs,
             batch_size=effective_batch_size,
             callbacks=callbacks_list if callbacks_list else None,
             verbose=verbose
         )
-
 
     @staticmethod
     def _one_hot_encode(labels: np.ndarray | torch.Tensor, num_classes: int) -> torch.Tensor:
@@ -456,10 +471,11 @@ class VariationalAutoencoder:
 
     def get_samples(self, number_samples_per_class):
         """
-        Generate synthetic samples and reshape them to original input shape.
+        Generate synthetic samples and optionally reshape them to original input shape.
 
-        NOW SUPPORTS MULTI-DIMENSIONAL OUTPUT:
-        - Automatically reshapes generated samples to original input dimensions
+        NOW SUPPORTS OPTIONAL RESHAPING:
+        - If data was flattened during training: Automatically reshapes to original dimensions
+        - If data was not flattened: Returns data as-is from algorithm
         - Works with 1D, 2D, 3D, and N-D data
 
         Args:
@@ -468,16 +484,28 @@ class VariationalAutoencoder:
                 Format 2 (simplified): {"number_classes": N, 0: n0, 1: n1, ...}
 
         Returns:
-            np.ndarray: Generated samples reshaped to original input dimensions
-                - Shape: (total_samples, *original_input_shape)
+            np.ndarray: Generated samples in appropriate shape
+                - If flattened during training: (total_samples, *original_input_shape)
+                - If not flattened: (total_samples, *model_output_shape)
                 - Example: For 3D input (16, 16, 16) with 100 total samples -> (100, 16, 16, 16)
         """
-        # Generate flattened samples from algorithm
+        # Generate samples from algorithm
         generated_data = self._variational_algorithm.get_samples(number_samples_per_class)
 
+        # If data was not flattened during training, return as-is
+        if not self._data_was_flattened:
+            # Convert dict to array if needed
+            if isinstance(generated_data, dict):
+                all_samples = []
+                for label in sorted(generated_data.keys()):
+                    all_samples.append(generated_data[label])
+                return np.concatenate(all_samples, axis=0)
+            return generated_data
+
+        # Data was flattened - need to reshape back to original shape
         # Check if we have stored original input shape
         if not hasattr(self, '_original_input_shape') or self._original_input_shape is None:
-            # If no original shape stored, return flattened data
+            # If no original shape stored, return as generated
             # Convert dict to array if needed
             if isinstance(generated_data, dict):
                 all_samples = []
@@ -513,6 +541,11 @@ class VariationalAutoencoder:
     def variational_model(self) -> VariationalAutoencoderModel | None:
         """Get the variational autoencoder model instance."""
         return self._variational_model
+
+    @property
+    def data_was_flattened(self) -> bool:
+        """Get flag indicating if data was flattened during training."""
+        return self._data_was_flattened
 
     @property
     def original_input_shape(self) -> tuple:

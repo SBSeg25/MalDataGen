@@ -24,7 +24,7 @@ IMAGE_SIZE = (64, 64)
 INPUT_SHAPE = (64, 64, 1)
 
 N_CLASSES = 10
-BATCH_LIMIT = 2600
+BATCH_LIMIT = 3000
 LATENT_DIMENSION = 128
 
 OUTPUT_DIR = "./output_mnist"
@@ -104,10 +104,7 @@ class MyClass(AdversarialModel):
         Input format: image_shape (64x64x3)
         """
 
-        from tensorflow.keras.layers import (
-            Input, Dense, Flatten, Dropout,
-            Concatenate, Conv2D, Reshape
-        )
+        from tensorflow.keras.layers import (Input, Dense, Flatten, Dropout, Concatenate, Conv2D, Reshape)
         from tensorflow.keras.models import Model
         from tensorflow.keras.initializers import RandomNormal
         from tensorflow.keras.layers import LeakyReLU
@@ -116,45 +113,25 @@ class MyClass(AdversarialModel):
             import numpy as np
             dataset_type = np.float32
 
-        initialization = RandomNormal(
-            mean=initializer_mean,
-            stddev=initializer_deviation
-        )
-
-        # ------------------------------------------------------------------
-        # Inputs
-        # ------------------------------------------------------------------
-        image_input = Input(
-            shape=image_shape,
-            dtype=dataset_type,
-            name="image_input"
-        )
-
-        label_input = Input(
-            shape=(number_classes,),
-            dtype=dataset_type,
-            name="label_input"
-        )
-
-        # ------------------------------------------------------------------
-        # Label conditioning (spatial embedding)
-        # ------------------------------------------------------------------
-        label_embedding = Dense(
-            image_shape[0] * image_shape[1],
-            kernel_initializer=initialization
-        )(label_input)
-
+        initialization = RandomNormal(mean=initializer_mean, stddev=initializer_deviation)
+        image_input = Input(shape=image_shape, dtype=dataset_type, name="image_input")
+        label_input = Input(shape=(number_classes,), dtype=dataset_type, name="label_input")
+        label_embedding = Dense(image_shape[0] * image_shape[1], kernel_initializer=initialization)(label_input)
         label_embedding = LeakyReLU(alpha=0.2)(label_embedding)
-        label_embedding = Reshape(
-            (image_shape[0], image_shape[1], 1)
-        )(label_embedding)
+        label_embedding = Reshape((image_shape[0], image_shape[1], 1))(label_embedding)
 
-        # Concatenate image and label map
         x = Concatenate(axis=-1)([image_input, label_embedding])
 
-        # ------------------------------------------------------------------
-        # Convolutional blocks: 64 → 32 → 16 → 8
-        # ------------------------------------------------------------------
+        x = Conv2D(
+            32,
+            kernel_size=4,
+            strides=2,
+            padding="same",
+            kernel_initializer=initialization
+        )(x)
+        x = LeakyReLU(alpha=0.2)(x)
+        x = Dropout(dropout_rate)(x)
+
         x = Conv2D(
             64,
             kernel_size=4,
@@ -177,16 +154,6 @@ class MyClass(AdversarialModel):
 
         x = Conv2D(
             256,
-            kernel_size=4,
-            strides=2,
-            padding="same",
-            kernel_initializer=initialization
-        )(x)
-        x = LeakyReLU(alpha=0.2)(x)
-        x = Dropout(dropout_rate)(x)
-
-        x = Conv2D(
-            512,
             kernel_size=4,
             strides=2,
             padding="same",
@@ -277,7 +244,7 @@ class MyClass(AdversarialModel):
         x = Concatenate()([latent_input, label_input])
 
         x = Dense(
-            4 * 4 * 512,
+            4 * 4 * 256,
             kernel_initializer=initialization
         )(x)
 
@@ -286,18 +253,11 @@ class MyClass(AdversarialModel):
         else:
             x = ReLU()(x)
 
-        x = Reshape((4, 4, 512))(x)
+        x = Reshape((4, 4, 256))(x)
 
         # ------------------------------------------------------------------
         # Upsampling blocks: 4 → 8 → 16 → 32 → 64
         # ------------------------------------------------------------------
-        x = Conv2DTranspose(
-            256, kernel_size=4, strides=2, padding="same",
-            kernel_initializer=initialization
-        )(x)
-        x = BatchNormalization()(x)
-        x = ReLU()(x)
-
         x = Conv2DTranspose(
             128, kernel_size=4, strides=2, padding="same",
             kernel_initializer=initialization
@@ -314,6 +274,13 @@ class MyClass(AdversarialModel):
 
         x = Conv2DTranspose(
             32, kernel_size=4, strides=2, padding="same",
+            kernel_initializer=initialization
+        )(x)
+        x = BatchNormalization()(x)
+        x = ReLU()(x)
+
+        x = Conv2DTranspose(
+            16, kernel_size=4, strides=2, padding="same",
             kernel_initializer=initialization
         )(x)
         x = BatchNormalization()(x)
