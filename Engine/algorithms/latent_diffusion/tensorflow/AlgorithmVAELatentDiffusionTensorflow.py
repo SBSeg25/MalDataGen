@@ -3,9 +3,9 @@
 
 __author__ = 'Kayuã Oleques Paim'
 __email__ = 'kayuaolequesp@gmail.com'
-__version__ = '{1}.{0}.{1}'
+__version__ = '{1}.{1}.{1}'
 __initial_data__ = '2022/06/01'
-__last_update__ = '2025/03/29'
+__last_update__ = '2025/12/17'
 __credits__ = ['Kayuã Oleques']
 
 # MIT License
@@ -62,8 +62,8 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
     it from a learned latent space. During training, it computes both the reconstruction loss
     and the KL divergence loss. The trained decoder can be used to generate synthetic data.
 
-    This class supports customizable latent space parameters and loss functions, making it
-    adaptable for different generative tasks.
+    This class supports customizable latent space parameters, loss functions, and automatic
+    adaptation to different input shapes: (x), (x, y), (x, y, z), etc.
 
     Attributes:
         @_encoder (Model):
@@ -92,6 +92,12 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
             File name for saving the decoder model.
         @_models_saved_path (str):
             Directory path where the encoder and decoder models are saved.
+        @_input_shape (tuple):
+            Expected input shape (without batch dimension).
+        @_auto_adapt_shape (bool):
+            If True, automatically adapts to input data shape.
+        @_inferred_shape (tuple):
+            Inferred shape from actual data during training.
 
     Raises:
         ValueError:
@@ -106,13 +112,16 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
         ...     decoder_model=decoder,
         ...     loss_function=custom_loss_function,
         ...     latent_dimension=128,
+        ...     decoder_latent_dimension=128,
         ...     latent_mean_distribution=0.0,
         ...     latent_standard_deviation=1.0,
         ...     file_name_encoder="encoder_model.h5",
         ...     file_name_decoder="decoder_model.h5",
-        ...     models_saved_path="models/"
+        ...     models_saved_path="models/",
+        ...     input_shape=(100,),
+        ...     auto_adapt_shape=True
         ... )
-        >>> vae_model.train_step(data)
+        >>> vae_model.fit(data, epochs=10)
     """
 
     def __init__(self,
@@ -126,15 +135,18 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
                  file_name_encoder,
                  file_name_decoder,
                  models_saved_path,
+                 input_shape=None,
+                 auto_adapt_shape=True,
                  *args,
                  **kwargs):
 
         super().__init__(*args, **kwargs)
         """
         Initializes the VariationalAlgorithm model with provided encoder and decoder models, 
-        loss function, and latent space parameters.
+        loss function, latent space parameters, and automatic shape adaptation.
 
-        This constructor sets up the architecture, metrics, and paths for saving the models.
+        This constructor sets up the architecture, metrics, paths for saving models, and
+        shape adaptation capabilities for handling various input formats.
 
         Args:
             @encoder_model (Model):
@@ -145,6 +157,8 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
                 The loss function used to compute the training loss.
             @latent_dimension (int):
                 The dimensionality of the latent space.
+            @decoder_latent_dimension (int):
+                The dimensionality of the latent space used by the decoder.
             @latent_mean_distribution (float):
                 The mean of the latent distribution (usually 0).
             @latent_standard_deviation (float):
@@ -155,6 +169,10 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
                 The filename for saving the decoder model.
             @models_saved_path (str):
                 The directory where the models will be saved.
+            @input_shape (tuple, optional):
+                Expected input shape (without batch dimension). If None, will be inferred from data.
+            @auto_adapt_shape (bool, optional):
+                If True, automatically adapts to input data shape. Default: True
             @*args:
                 Additional arguments for the parent class.
             @**kwargs:
@@ -179,6 +197,7 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
         self._latent_standard_deviation = latent_standard_deviation
         self._latent_dimension = latent_dimension
         self._decoder_latent_dimension = decoder_latent_dimension
+
         # File names for saving models
         self._file_name_encoder = file_name_encoder
         self._file_name_decoder = file_name_decoder
@@ -186,19 +205,118 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
         # Path for saving models
         self._models_saved_path = models_saved_path
 
+        # Shape adaptation
+        self._input_shape = input_shape
+        self._auto_adapt_shape = auto_adapt_shape
+        self._inferred_shape = None
+
+    @staticmethod
+    def _infer_data_shape(data):
+        """
+        Infer the shape of input data, excluding the batch dimension.
+
+        Args:
+            data: Input data (tensor, array, or tuple/list).
+
+        Returns:
+            tuple: Shape of the data excluding batch dimension.
+        """
+        if isinstance(data, (tuple, list)):
+            # If data is a tuple/list, infer from first element
+            data = data[0]
+
+        if isinstance(data, tensorflow.Tensor):
+            shape = tuple(data.shape.as_list()[1:])
+        elif isinstance(data, numpy.ndarray):
+            shape = data.shape[1:] if len(data.shape) > 1 else data.shape
+        else:
+            # Try to convert to tensor and get shape
+            try:
+                tensor_data = tensorflow.convert_to_tensor(data)
+                shape = tuple(tensor_data.shape.as_list()[1:])
+            except:
+                raise ValueError(f"Cannot infer shape from data of type {type(data)}")
+
+        return shape
+
+    def _validate_and_adapt_shape(self, data):
+        """
+        Validate input data shape and adapt if necessary.
+
+        Args:
+            data: Input data.
+
+        Returns:
+            bool: True if shape is valid or successfully adapted.
+        """
+        current_shape = self._infer_data_shape(data)
+
+        if self._inferred_shape is None:
+            self._inferred_shape = current_shape
+            if self._input_shape is not None and self._input_shape != current_shape:
+                print(f"Warning: Specified input_shape {self._input_shape} differs from inferred shape {current_shape}")
+                if self._auto_adapt_shape:
+                    print(f"Auto-adapting to shape: {current_shape}")
+                    self._input_shape = current_shape
+            elif self._input_shape is None:
+                self._input_shape = current_shape
+                print(f"Inferred input shape: {current_shape}")
+        else:
+            if current_shape != self._inferred_shape:
+                if self._auto_adapt_shape:
+                    print(f"Warning: Input shape changed from {self._inferred_shape} to {current_shape}")
+                    self._inferred_shape = current_shape
+                else:
+                    raise ValueError(
+                        f"Input shape mismatch: expected {self._inferred_shape}, got {current_shape}. "
+                        f"Set auto_adapt_shape=True to allow dynamic shape changes."
+                    )
+
+        return True
+
+    @staticmethod
+    def _prepare_batch(batch):
+        """
+        Prepare batch data, handling different input formats.
+
+        Args:
+            batch: Input batch (can be single tensor, tuple, or list).
+
+        Returns:
+            tuple: (batch_x, batch_y) where batch_y is the reconstruction target.
+        """
+        if isinstance(batch, (tuple, list)):
+            if len(batch) == 1:
+                # Single input, use as both input and target
+                batch_x = batch[0]
+                batch_y = batch[0]
+            elif len(batch) == 2:
+                # Input and target provided
+                batch_x, batch_y = batch
+            else:
+                # Multiple inputs, use first as input and last as target
+                batch_x = batch[0]
+                batch_y = batch[-1]
+        else:
+            # Single tensor, use as both input and target
+            batch_x = batch
+            batch_y = batch
+
+        return batch_x, batch_y
+
     @tensorflow.function
     def train_step(self, batch):
         """
-        Perform a training step for the Variational AutoEncoder (VAE).
+        Perform a training step for the Variational AutoEncoder (VAE) with automatic shape handling.
 
         Args:
-            batch: Input data batch.
+            batch: Input data batch (can be single tensor, tuple, or list).
 
         Returns:
             dict: Dictionary containing the loss values (total loss, reconstruction loss, KL divergence loss).
         """
-        # Use tf.function decorator for improved TensorFlow performance
-        batch_x, batch_y = batch
+        # Prepare batch data
+        batch_x, batch_y = self._prepare_batch(batch)
 
         with tensorflow.GradientTape() as tape:
             # Forward pass: Encode input data and sample from the latent space
@@ -239,11 +357,11 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
             initial_epoch=0, steps_per_epoch=None, validation_steps=None,
             validation_freq=1, optimizer=None, learning_rate=0.001, **kwargs):
         """
-        Train the model with a simplified progress bar.
+        Train the model with automatic shape adaptation and simplified progress bar.
 
         Args:
-            x: Input data.
-            y: Target data.
+            x: Input data (any shape).
+            y: Target data (if None, x is used as target).
             batch_size: Number of samples per gradient update.
             epochs: Number of epochs to train.
             verbose: 0 = silent, 1 = progress bar, 2 = one line per epoch.
@@ -271,20 +389,31 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
         # Prepare the dataset
         if isinstance(x, tensorflow.data.Dataset):
             train_dataset = x
+            # Try to infer shape from dataset
+            for batch in train_dataset.take(1):
+                self._validate_and_adapt_shape(batch)
         else:
+            # Validate and adapt shape
+            self._validate_and_adapt_shape(x)
+
             if y is None:
                 y = x
+
             train_dataset = tensorflow.data.Dataset.from_tensor_slices((x, y))
             if shuffle:
-                train_dataset = train_dataset.shuffle(buffer_size=len(x))
+                buffer_size = len(x) if hasattr(x, '__len__') else 1000
+                train_dataset = train_dataset.shuffle(buffer_size=buffer_size)
             train_dataset = train_dataset.batch(batch_size)
 
         # Calculate steps per epoch if not provided
         if steps_per_epoch is None:
-            steps_per_epoch = len(train_dataset)
+            try:
+                steps_per_epoch = len(train_dataset)
+            except:
+                steps_per_epoch = 100  # Default fallback
 
         # History to store metrics
-        history = {'loss': [], 'Diffusion_loss': []}
+        history = {'loss': [], 'reconstruction_loss': [], 'kl_loss': []}
 
         # Initialize callbacks properly
         if callbacks is not None:
@@ -304,6 +433,8 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
         # Training loop
         for epoch in range(initial_epoch, epochs):
             self._total_loss_tracker.reset_state()
+            self._reconstruction_loss_tracker.reset_state()
+            self._kl_loss_tracker.reset_state()
 
             # Call on_epoch_begin for all callbacks
             if callbacks is not None:
@@ -316,6 +447,8 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
             # Progress tracking
             step = 0
             epoch_losses = []
+            epoch_recon_losses = []
+            epoch_kl_losses = []
 
             for batch_data in train_dataset:
                 step += 1
@@ -328,36 +461,53 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
                 # Perform training step
                 metrics = self.train_step(batch_data)
                 current_loss = float(metrics.get('loss', 0))
+                current_recon = float(metrics.get('reconstruction_loss', 0))
+                current_kl = float(metrics.get('kl_loss', 0))
+
                 epoch_losses.append(current_loss)
+                epoch_recon_losses.append(current_recon)
+                epoch_kl_losses.append(current_kl)
 
                 # Call on_batch_end for all callbacks
                 if callbacks is not None:
-                    logs = {'loss': current_loss, 'Diffusion_loss': current_loss}
+                    logs = {
+                        'loss': current_loss,
+                        'reconstruction_loss': current_recon,
+                        'kl_loss': current_kl
+                    }
                     for callback in callbacks:
                         callback.on_batch_end(step - 1, logs)
 
                 # Simple progress bar
                 if verbose == 1:
-                    progress = int(50 * step / steps_per_epoch)
-                    bar = '=' * progress + '>' + '.' * (50 - progress - 1)
+                    progress = min(int(50 * step / steps_per_epoch), 50)
+                    remaining = max(50 - progress, 0)
+                    if progress > 0:
+                        bar = '=' * (progress - 1) + '>' + '.' * remaining
+                    else:
+                        bar = '.' * 50
                     print(f'\r[{bar}] {step}/{steps_per_epoch} - loss: {current_loss:.4f}',
                           end='', flush=True)
 
                 if step >= steps_per_epoch:
                     break
 
-            # Store epoch loss
-            epoch_loss = float(self._total_loss_tracker.result())
-            if len(epoch_losses) > 0:
-                epoch_loss = numpy.mean(epoch_losses)
+            # Store epoch losses
+            epoch_loss = numpy.mean(epoch_losses) if len(epoch_losses) > 0 else float(self._total_loss_tracker.result())
+            epoch_recon = numpy.mean(epoch_recon_losses) if len(epoch_recon_losses) > 0 else float(
+                self._reconstruction_loss_tracker.result())
+            epoch_kl = numpy.mean(epoch_kl_losses) if len(epoch_kl_losses) > 0 else float(
+                self._kl_loss_tracker.result())
 
             history['loss'].append(epoch_loss)
-            history['Diffusion_loss'].append(epoch_loss)
+            history['reconstruction_loss'].append(epoch_recon)
+            history['kl_loss'].append(epoch_kl)
 
             if verbose == 1:
-                print(f' - loss: {epoch_loss:.4f}')
+                print(f' - loss: {epoch_loss:.4f} - recon_loss: {epoch_recon:.4f} - kl_loss: {epoch_kl:.4f}')
             elif verbose == 2:
-                print(f'Epoch {epoch + 1}/{epochs} - loss: {epoch_loss:.4f}')
+                print(
+                    f'Epoch {epoch + 1}/{epochs} - loss: {epoch_loss:.4f} - recon_loss: {epoch_recon:.4f} - kl_loss: {epoch_kl:.4f}')
 
             # Validation
             if validation_data is not None and (epoch + 1) % validation_freq == 0:
@@ -371,7 +521,11 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
 
             # Call on_epoch_end for all callbacks with proper logs
             if callbacks is not None:
-                logs = {'loss': epoch_loss, 'Diffusion_loss': epoch_loss}
+                logs = {
+                    'loss': epoch_loss,
+                    'reconstruction_loss': epoch_recon,
+                    'kl_loss': epoch_kl
+                }
                 if 'val_loss' in history and len(history['val_loss']) > 0:
                     logs['val_loss'] = history['val_loss'][-1]
                 for callback in callbacks:
@@ -391,7 +545,7 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
 
     def _evaluate_validation(self, validation_data, validation_steps=None):
         """
-        Evaluate the model on validation data.
+        Evaluate the model on validation data with automatic shape handling.
 
         Args:
             validation_data: Validation dataset.
@@ -404,9 +558,14 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
         step = 0
 
         for batch_data in validation_data:
-            batch_x, batch_y = batch_data
-            reconstructed = self._encoder_decoder_model(batch_x, training=False)
-            loss = tensorflow.reduce_mean(tensorflow.square(batch_y - reconstructed))
+            batch_x, batch_y = self._prepare_batch(batch_data)
+
+            # Perform forward pass
+            latent_mean, latent_log_variation, latent, label = self._encoder(batch_x, training=False)
+            reconstruction_data = self._decoder([latent, label], training=False)
+
+            # Calculate loss
+            loss = tensorflow.reduce_mean(tensorflow.square(batch_y - reconstruction_data))
             val_losses.append(float(loss))
 
             step += 1
@@ -415,15 +574,13 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
 
         return numpy.mean(val_losses) if val_losses else 0.0
 
-
     def get_decoder_trained(self):
-
+        """Get the trained decoder model."""
         return self._decoder
 
     def get_encoder_trained(self):
-
+        """Get the trained encoder model."""
         return self._encoder
-
 
     def create_embedding(self, data):
         """
@@ -436,7 +593,6 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
             ndarray: Latent space representations.
         """
         return self._encoder.predict(data, batch_size=32, verbose=0)[0]
-
 
     def get_samples(self, number_samples_per_class):
         """
@@ -490,7 +646,6 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
         # Return the dictionary with all generated samples, organized by class
         return generated_data
 
-
     def generate_synthetic_data(self, number_samples_generate, labels, latent_dimension):
         """
         Generate synthetic data using the Variational AutoEncoder (VAE).
@@ -505,18 +660,51 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
         """
 
         # Generate random noise samples in the latent space
-        random_noise_generate = tensorflow.random.normal(shape=(number_samples_generate, latent_dimension),
-                                                 mean=self.latent_mean_distribution, stddev=self.latent_deviation,
-                                                 dtype=tensorflow.float32)
+        random_noise_generate = tensorflow.random.normal(
+            shape=(number_samples_generate, latent_dimension),
+            mean=self._latent_mean_distribution,
+            stddev=self._latent_standard_deviation,
+            dtype=tensorflow.float32
+        )
 
         # Create label vectors for the generated data
-        label_list = tensorflow.cast(tensorflow.fill((number_samples_generate, 1), labels), dtype=tensorflow.float32)
+        label_list = tensorflow.cast(
+            tensorflow.fill((number_samples_generate, 1), labels),
+            dtype=tensorflow.float32
+        )
 
         # Generate synthetic data by passing random noise and labels through the decoder
         synthetic_data = self._decoder.predict(numpy.array([random_noise_generate, label_list]))
 
         # Return the generated synthetic data as a TensorFlow tensor
         return synthetic_data
+
+    def get_input_shape(self):
+        """
+        Get the current input shape.
+
+        Returns:
+            tuple: Current input shape (excluding batch dimension).
+        """
+        return self._inferred_shape if self._inferred_shape is not None else self._input_shape
+
+    @staticmethod
+    def reshape_data(data, target_shape):
+        """
+        Reshape data to target shape if needed.
+
+        Args:
+            data: Input data.
+            target_shape: Desired shape (excluding batch dimension).
+
+        Returns:
+            Reshaped data.
+        """
+        if isinstance(data, numpy.ndarray):
+            if data.shape[1:] != target_shape:
+                batch_size = data.shape[0]
+                return data.reshape((batch_size,) + target_shape)
+        return data
 
     @property
     def metrics(self):
@@ -528,7 +716,7 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
 
     def save_model(self, directory, file_name):
         """
-        Save the encoder and decoder models in both JSON and H5 formats.
+        Save the encoder and decoder models in both JSON and H5 formats, including shape information.
 
         Args:
             directory (str): Directory where models will be saved.
@@ -549,6 +737,17 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
         self._save_model_to_json(self._decoder, f"{decoder_file_name}.json")
         self._decoder.save_weights(f"{decoder_file_name}.weights.h5")
 
+        # Save shape information
+        shape_info = {
+            'input_shape': self._input_shape,
+            'inferred_shape': self._inferred_shape,
+            'latent_dimension': self._latent_dimension,
+            'decoder_latent_dimension': self._decoder_latent_dimension
+        }
+        shape_file = os.path.join(directory, f"fold_{file_name}_shape_info.json")
+        with open(shape_file, 'w') as f:
+            json.dump(shape_info, f)
+        print(f"Shape information saved to {shape_file}")
 
     @staticmethod
     def _save_model_to_json(model, file_path):
@@ -559,13 +758,19 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
             model (tf.keras.Model): Model to save.
             file_path (str): Path to the JSON file.
         """
-        with open(file_path, "w") as json_file:
-            json.dump(model.to_json(), json_file)
-
+        try:
+            with open(file_path, "w") as json_file:
+                json.dump(model.to_json(), json_file)
+            print(f"Model architecture saved to {file_path}")
+        except Exception as e:
+            error_message = f"Error saving model: {str(e)}"
+            with open(file_path, "w") as error_file:
+                error_file.write(error_message)
+            print(f"Error: {error_message}")
 
     def load_models(self, directory, file_name):
         """
-        Load the encoder and decoder models from a directory.
+        Load the encoder and decoder models from a directory, including shape information.
 
         Args:
             directory (str): Directory where models are stored.
@@ -580,18 +785,78 @@ class VAELatentDiffusionAlgorithmTensorflow(Model):
         self._encoder = self._save_neural_network_model(encoder_file_name, directory)
         self._decoder = self._save_neural_network_model(decoder_file_name, directory)
 
+        # Load shape information if available
+        shape_file = os.path.join(directory, f"{file_name}_shape_info.json")
+        if os.path.exists(shape_file):
+            with open(shape_file, 'r') as f:
+                shape_info = json.load(f)
+                self._input_shape = tuple(shape_info.get('input_shape', ())) if shape_info.get('input_shape') else None
+                self._inferred_shape = tuple(shape_info.get('inferred_shape', ())) if shape_info.get(
+                    'inferred_shape') else None
+                self._latent_dimension = shape_info.get('latent_dimension', self._latent_dimension)
+                self._decoder_latent_dimension = shape_info.get('decoder_latent_dimension',
+                                                                self._decoder_latent_dimension)
+            print(f"Shape information loaded from {shape_file}")
+
+    # ==================================================
+    # PROPERTIES WITH GETTERS AND SETTERS
+    # ==================================================
+
     @property
     def decoder(self):
+        """Get the decoder model."""
         return self._decoder
 
     @property
     def encoder(self):
+        """Get the encoder model."""
         return self._encoder
+
+    @property
+    def input_shape(self):
+        """Get the current input shape."""
+        return self.get_input_shape()
+
+    @property
+    def auto_adapt_shape(self):
+        """Get the auto-adapt shape flag."""
+        return self._auto_adapt_shape
+
+    @property
+    def latent_dimension(self):
+        """Get the latent dimension."""
+        return self._latent_dimension
+
+    @property
+    def decoder_latent_dimension(self):
+        """Get the decoder latent dimension."""
+        return self._decoder_latent_dimension
 
     @decoder.setter
     def decoder(self, decoder):
+        """Set the decoder model."""
         self._decoder = decoder
 
     @encoder.setter
     def encoder(self, encoder):
+        """Set the encoder model."""
         self._encoder = encoder
+
+    @auto_adapt_shape.setter
+    def auto_adapt_shape(self, value):
+        """Set the auto-adapt shape flag."""
+        self._auto_adapt_shape = value
+
+    @latent_dimension.setter
+    def latent_dimension(self, value):
+        """Set the latent dimension."""
+        if value <= 0:
+            raise ValueError("Latent dimension must be positive")
+        self._latent_dimension = value
+
+    @decoder_latent_dimension.setter
+    def decoder_latent_dimension(self, value):
+        """Set the decoder latent dimension."""
+        if value <= 0:
+            raise ValueError("Decoder latent dimension must be positive")
+        self._decoder_latent_dimension = value

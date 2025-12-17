@@ -27,8 +27,8 @@ D(x|y) → [0,1]
 
 __author__ = 'Synthetic Ocean AI - Team'
 __email__ = 'syntheticoceanai@gmail.com'
-__version__ = '{1}.{0}.{1}'
-__last_update__ = '2025/12/07'
+__version__ = '{1}.{0}.{2}'
+__last_update__ = '2025/12/17'
 
 # MIT License
 #
@@ -64,6 +64,7 @@ try:
     from tensorflow.keras.utils import to_categorical
     from tensorflow.keras.models import model_from_json
     from tensorflow.keras.losses import BinaryCrossentropy
+    from tensorflow.keras.optimizers import Adam
 except ImportError as error:
     logging.error(error)
     sys.exit(-1)
@@ -79,6 +80,7 @@ class AdversarialAlgorithmTensorflow(Model):
     - Custom training loop with TensorFlow graph execution
     - Model persistence and loading capabilities
     - Synthetic data generation utilities
+    - Flexible optimizer configuration
 
     Mathematical Components:
     -----------------------
@@ -112,6 +114,10 @@ class AdversarialAlgorithmTensorflow(Model):
         Mean of the latent noise distribution (μ)
     _latent_standard_deviation : float
         Standard deviation of latent noise (σ)
+    _learning_rate_generator : float
+        Learning rate for generator optimizer
+    _learning_rate_discriminator : float
+        Learning rate for discriminator optimizer
     _loss_d_tracker : tf.keras.metrics.Mean
         Tracks discriminator loss over training
     _loss_g_tracker : tf.keras.metrics.Mean
@@ -131,6 +137,10 @@ class AdversarialAlgorithmTensorflow(Model):
                  latent_mean_distribution,
                  latent_standard_deviation,
                  smoothing_rate,
+                 optimizer_generator=None,
+                 optimizer_discriminator=None,
+                 learning_rate_generator=0.0002,
+                 learning_rate_discriminator=0.0002,
                  *args,
                  **kwargs):
         """
@@ -161,33 +171,52 @@ class AdversarialAlgorithmTensorflow(Model):
         smoothing_rate : float
             Label smoothing factor ∈ [0, 1]
             0 = no smoothing, 1 = maximum smoothing
+        optimizer_generator : tf.keras.optimizers.Optimizer, optional
+            Optimizer for generator (default: Adam with learning_rate_generator)
+        optimizer_discriminator : tf.keras.optimizers.Optimizer, optional
+            Optimizer for discriminator (default: Adam with learning_rate_discriminator)
+        learning_rate_generator : float, optional
+            Learning rate for default generator optimizer (default: 0.0002)
+        learning_rate_discriminator : float, optional
+            Learning rate for default discriminator optimizer (default: 0.0002)
         """
         super().__init__(*args, **kwargs)
 
         # Mathematical validation of parameters
         if latent_dimension <= 0:
             raise ValueError("Latent dimension must be greater than 0.")
+
         if not isinstance(file_name_discriminator, str) or not file_name_discriminator:
             raise ValueError("Discriminator file name must be a non-empty string.")
+
         if not isinstance(file_name_generator, str) or not file_name_generator:
             raise ValueError("Generator file name must be a non-empty string.")
+
         if not isinstance(models_saved_path, str) or not models_saved_path:
             raise ValueError("models saved path must be a non-empty string.")
+
         if not isinstance(latent_mean_distribution, (int, float)):
             raise TypeError("Latent mean distribution must be a number.")
+
         if not isinstance(latent_standard_deviation, (int, float)):
             raise TypeError("Latent standard deviation must be a number.")
+
         if latent_standard_deviation <= 0:
             raise ValueError("Latent standard deviation must be greater than 0.")
+
         if not (0.0 <= smoothing_rate <= 1.0):
             raise ValueError("Smoothing rate must be between 0 and 1.")
+
+        if not isinstance(learning_rate_generator, (int, float)) or learning_rate_generator <= 0:
+            raise ValueError("Learning rate for generator must be a positive number.")
+
+        if not isinstance(learning_rate_discriminator, (int, float)) or learning_rate_discriminator <= 0:
+            raise ValueError("Learning rate for discriminator must be a positive number.")
 
         # Core GAN components
         self._generator = generator_model
         self._discriminator = discriminator_model
         self._latent_dimension = latent_dimension
-        self._optimizer_generator = None
-        self._optimizer_discriminator = None
         self._loss_generator = loss_generator
         self._loss_discriminator = loss_discriminator
         self._smoothing_rate = smoothing_rate
@@ -197,34 +226,86 @@ class AdversarialAlgorithmTensorflow(Model):
         self._file_name_generator = file_name_generator
         self._models_saved_path = models_saved_path
 
+        # Learning rates
+        self._learning_rate_generator = learning_rate_generator
+        self._learning_rate_discriminator = learning_rate_discriminator
+
+        # Initialize optimizers (use provided or create default)
+        self._optimizer_generator = optimizer_generator if optimizer_generator is not None else Adam(
+            learning_rate=self._learning_rate_generator,
+            beta_1=0.5  # Common practice for GANs
+        )
+        self._optimizer_discriminator = optimizer_discriminator if optimizer_discriminator is not None else Adam(
+            learning_rate=self._learning_rate_discriminator,
+            beta_1=0.5  # Common practice for GANs
+        )
+
         # Loss tracking metrics - initialized to track training statistics
         self._loss_d_tracker = Mean(name="loss_d")
         self._loss_g_tracker = Mean(name="loss_g")
         self._total_loss_tracker = Mean(name="loss")
 
-    def compile(self, optimizer_generator, optimizer_discriminator, loss_generator, loss_discriminator, *args,
-                **kwargs):
+    def compile(self, optimizer_generator=None, optimizer_discriminator=None,
+                loss_generator=None, loss_discriminator=None,
+                learning_rate_generator=None, learning_rate_discriminator=None,
+                *args, **kwargs):
         """
         Configure the training algorithm with optimizers and loss functions.
 
         This method follows the Keras Model.compile() pattern but extends it for GANs.
+        It allows updating optimizers and loss functions after initialization.
 
         Parameters:
         -----------
-        optimizer_generator : tf.keras.optimizers.Optimizer
+        optimizer_generator : tf.keras.optimizers.Optimizer, optional
             Optimizer for generator network (e.g., Adam, RMSprop)
-        optimizer_discriminator : tf.keras.optimizers.Optimizer
+            If None, keeps current optimizer
+        optimizer_discriminator : tf.keras.optimizers.Optimizer, optional
             Optimizer for discriminator network
-        loss_generator : callable
+            If None, keeps current optimizer
+        loss_generator : callable, optional
             Loss function for generator: L_G = f(y_true, D(G(z)))
-        loss_discriminator : callable
+            If None, keeps current loss function
+        loss_discriminator : callable, optional
             Loss function for discriminator: L_D = f(y_true, D(x))
+            If None, keeps current loss function
+        learning_rate_generator : float, optional
+            Learning rate for generator (only used if optimizer_generator is None)
+        learning_rate_discriminator : float, optional
+            Learning rate for discriminator (only used if optimizer_discriminator is None)
         """
         super().compile(*args, **kwargs)
-        self._optimizer_generator = optimizer_generator
-        self._optimizer_discriminator = optimizer_discriminator
-        self._loss_generator = loss_generator
-        self._loss_discriminator = loss_discriminator
+
+        # Update generator optimizer if provided
+        if optimizer_generator is not None:
+            self._optimizer_generator = optimizer_generator
+
+        elif learning_rate_generator is not None:
+            # Update learning rate of existing optimizer if possible
+            self._learning_rate_generator = learning_rate_generator
+            self._optimizer_generator = Adam(
+                learning_rate=self._learning_rate_generator,
+                beta_1=0.5
+            )
+
+        # Update discriminator optimizer if provided
+        if optimizer_discriminator is not None:
+            self._optimizer_discriminator = optimizer_discriminator
+
+        elif learning_rate_discriminator is not None:
+            # Update learning rate of existing optimizer if possible
+            self._learning_rate_discriminator = learning_rate_discriminator
+            self._optimizer_discriminator = Adam(
+                learning_rate=self._learning_rate_discriminator,
+                beta_1=0.5
+            )
+
+        # Update loss functions if provided
+        if loss_generator is not None:
+            self._loss_generator = loss_generator
+
+        if loss_discriminator is not None:
+            self._loss_discriminator = loss_discriminator
 
     def call(self, inputs, training=False):
         """
@@ -439,7 +520,7 @@ class AdversarialAlgorithmTensorflow(Model):
     def fit(self, x=None, y=None, batch_size=32, epochs=1, verbose=1,
             callbacks=None, validation_data=None, shuffle=True,
             initial_epoch=0, steps_per_epoch=None, validation_steps=None,
-            validation_freq=1, optimizer=None, learning_rate=0.001, **kwargs):
+            validation_freq=1, **kwargs):
         """
         Train the model with a simplified progress bar and custom training loop.
 
@@ -475,22 +556,12 @@ class AdversarialAlgorithmTensorflow(Model):
             Number of validation steps
         validation_freq : int
             Frequency (in epochs) of validation
-        optimizer : tf.keras.optimizers.Optimizer
-            Optimizer to use (defaults to Adam)
-        learning_rate : float
-            Learning rate if using default Adam optimizer
 
         Returns:
         --------
         history : object
             Training history with loss metrics
         """
-        # Set optimizer if provided
-        if optimizer is not None:
-            self.optimizer = optimizer
-        elif not hasattr(self, 'optimizer') or self.optimizer is None:
-            self.optimizer = tensorflow.keras.optimizers.Adam(learning_rate=learning_rate)
-
         # Prepare the dataset
         if isinstance(x, tensorflow.data.Dataset):
             train_dataset = x
@@ -836,3 +907,47 @@ class AdversarialAlgorithmTensorflow(Model):
     def set_loss_discriminator(self, loss_discriminator):
         """Update the discriminator loss function."""
         self._loss_discriminator = loss_discriminator
+
+    def set_learning_rate_generator(self, learning_rate):
+        """Update the learning rate for generator optimizer."""
+        self._learning_rate_generator = learning_rate
+        self._optimizer_generator = Adam(
+            learning_rate=self._learning_rate_generator,
+            beta_1=0.5
+        )
+
+    def set_learning_rate_discriminator(self, learning_rate):
+        """Update the learning rate for discriminator optimizer."""
+        self._learning_rate_discriminator = learning_rate
+        self._optimizer_discriminator = Adam(
+            learning_rate=self._learning_rate_discriminator,
+            beta_1=0.5
+        )
+
+    # ==================================================
+    # GETTER METHODS FOR ACCESSING CONFIGURATION
+    # ==================================================
+
+    def get_generator(self):
+        """Get the generator model."""
+        return self._generator
+
+    def get_discriminator(self):
+        """Get the discriminator model."""
+        return self._discriminator
+
+    def get_optimizer_generator(self):
+        """Get the generator optimizer."""
+        return self._optimizer_generator
+
+    def get_optimizer_discriminator(self):
+        """Get the discriminator optimizer."""
+        return self._optimizer_discriminator
+
+    def get_learning_rate_generator(self):
+        """Get the current learning rate for generator."""
+        return self._learning_rate_generator
+
+    def get_learning_rate_discriminator(self):
+        """Get the current learning rate for discriminator."""
+        return self._learning_rate_discriminator

@@ -34,9 +34,9 @@ References:
 
 __author__ = 'Synthetic Ocean AI - Team'
 __email__ = 'syntheticoceanai@gmail.com'
-__version__ = '{1}.{0}.{1}'
+__version__ = '{1}.{0}.{2}'
 __initial_data__ = '2022/06/01'
-__last_update__ = '2025/12/07'
+__last_update__ = '2025/12/17'
 __credits__ = ['Synthetic Ocean AI']
 
 # MIT License
@@ -94,6 +94,7 @@ class AdversarialAlgorithmTorch(nn.Module):
     - Dynamic computation graph with automatic differentiation
     - Model persistence and loading capabilities
     - Synthetic data generation utilities
+    - Flexible optimizer configuration
     - Cross-framework compatibility (converts TensorFlow losses to PyTorch)
 
     Mathematical Components:
@@ -135,6 +136,10 @@ class AdversarialAlgorithmTorch(nn.Module):
         Mean of the latent noise distribution (μ)
     _latent_standard_deviation : float
         Standard deviation of latent noise (σ)
+    _learning_rate_generator : float
+        Learning rate for generator optimizer
+    _learning_rate_discriminator : float
+        Learning rate for discriminator optimizer
     device : torch.device
         Computational device (CPU or CUDA GPU)
 
@@ -171,7 +176,11 @@ class AdversarialAlgorithmTorch(nn.Module):
                  models_saved_path: str,
                  latent_mean_distribution: float,
                  latent_standard_deviation: float,
-                 smoothing_rate: float):
+                 smoothing_rate: float,
+                 optimizer_generator: Optional[torch.optim.Optimizer] = None,
+                 optimizer_discriminator: Optional[torch.optim.Optimizer] = None,
+                 learning_rate_generator: float = 0.0002,
+                 learning_rate_discriminator: float = 0.0002):
         """
         Initialize the adversarial training algorithm with PyTorch components.
 
@@ -203,6 +212,14 @@ class AdversarialAlgorithmTorch(nn.Module):
         smoothing_rate : float
             Label smoothing factor ∈ [0, 1]
             0 = no smoothing, 1 = maximum smoothing
+        optimizer_generator : torch.optim.Optimizer, optional
+            Optimizer for generator (default: Adam with learning_rate_generator)
+        optimizer_discriminator : torch.optim.Optimizer, optional
+            Optimizer for discriminator (default: Adam with learning_rate_discriminator)
+        learning_rate_generator : float, optional
+            Learning rate for default generator optimizer (default: 0.0002)
+        learning_rate_discriminator : float, optional
+            Learning rate for default discriminator optimizer (default: 0.0002)
 
         Raises:
         -------
@@ -230,13 +247,15 @@ class AdversarialAlgorithmTorch(nn.Module):
             raise ValueError("Latent standard deviation must be greater than 0.")
         if not (0.0 <= smoothing_rate <= 1.0):
             raise ValueError("Smoothing rate must be between 0 and 1.")
+        if not isinstance(learning_rate_generator, (int, float)) or learning_rate_generator <= 0:
+            raise ValueError("Learning rate for generator must be a positive number.")
+        if not isinstance(learning_rate_discriminator, (int, float)) or learning_rate_discriminator <= 0:
+            raise ValueError("Learning rate for discriminator must be a positive number.")
 
         # Core GAN components
         self._generator = generator_model
         self._discriminator = discriminator_model
         self._latent_dimension = latent_dimension
-        self._optimizer_generator = None
-        self._optimizer_discriminator = None
 
         # Convert loss functions to PyTorch format (handles TensorFlow/Keras compatibility)
         self._loss_generator = self._convert_loss_to_pytorch(loss_generator)
@@ -249,10 +268,33 @@ class AdversarialAlgorithmTorch(nn.Module):
         self._file_name_generator = file_name_generator
         self._models_saved_path = models_saved_path
 
+        # Learning rates
+        self._learning_rate_generator = learning_rate_generator
+        self._learning_rate_discriminator = learning_rate_discriminator
+
         # Device configuration: auto-detect CUDA availability
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self._generator.to(self.device)
         self._discriminator.to(self.device)
+
+        # Initialize optimizers (use provided or create default)
+        if optimizer_generator is not None:
+            self._optimizer_generator = optimizer_generator
+        else:
+            self._optimizer_generator = torch.optim.Adam(
+                self._generator.parameters(),
+                lr=self._learning_rate_generator,
+                betas=(0.5, 0.999)  # GAN-recommended beta parameters
+            )
+
+        if optimizer_discriminator is not None:
+            self._optimizer_discriminator = optimizer_discriminator
+        else:
+            self._optimizer_discriminator = torch.optim.Adam(
+                self._discriminator.parameters(),
+                lr=self._learning_rate_discriminator,
+                betas=(0.5, 0.999)  # GAN-recommended beta parameters
+            )
 
     def _convert_loss_to_pytorch(self, loss: Union[nn.Module, str, object]) -> nn.Module:
         """
@@ -301,10 +343,12 @@ class AdversarialAlgorithmTorch(nn.Module):
         # This provides compatibility with TensorFlow-style code
         return nn.BCELoss()
 
-    def compile(self, optimizer_generator: Union[torch.optim.Optimizer, float],
-                optimizer_discriminator: Union[torch.optim.Optimizer, float],
+    def compile(self, optimizer_generator: Optional[Union[torch.optim.Optimizer, float]] = None,
+                optimizer_discriminator: Optional[Union[torch.optim.Optimizer, float]] = None,
                 loss_generator: Optional[Union[nn.Module, str]] = None,
-                loss_discriminator: Optional[Union[nn.Module, str]] = None):
+                loss_discriminator: Optional[Union[nn.Module, str]] = None,
+                learning_rate_generator: Optional[float] = None,
+                learning_rate_discriminator: Optional[float] = None):
         """
         Configure the training algorithm with optimizers and loss functions.
 
@@ -315,47 +359,73 @@ class AdversarialAlgorithmTorch(nn.Module):
 
         Parameters:
         -----------
-        optimizer_generator : torch.optim.Optimizer or float
+        optimizer_generator : torch.optim.Optimizer or float, optional
             Optimizer for generator network. If float, creates Adam with that learning rate.
-        optimizer_discriminator : torch.optim.Optimizer or float
+            If None, keeps current optimizer
+        optimizer_discriminator : torch.optim.Optimizer or float, optional
             Optimizer for discriminator network. If float, creates Adam with that learning rate.
+            If None, keeps current optimizer
         loss_generator : nn.Module or str, optional
             Loss function for generator (overrides __init__ if provided)
         loss_discriminator : nn.Module or str, optional
             Loss function for discriminator (overrides __init__ if provided)
+        learning_rate_generator : float, optional
+            Learning rate for generator (only used if optimizer_generator is None)
+        learning_rate_discriminator : float, optional
+            Learning rate for discriminator (only used if optimizer_discriminator is None)
         """
         # Handle optimizer_generator with flexible input types
-        if isinstance(optimizer_generator, (int, float)):
-            # If a learning rate is passed, create Adam optimizer with GAN defaults
+        if optimizer_generator is not None:
+            if isinstance(optimizer_generator, (int, float)):
+                # If a learning rate is passed, create Adam optimizer with GAN defaults
+                self._learning_rate_generator = optimizer_generator
+                self._optimizer_generator = torch.optim.Adam(
+                    self._generator.parameters(),
+                    lr=self._learning_rate_generator,
+                    betas=(0.5, 0.999)  # GAN-recommended beta parameters
+                )
+            elif hasattr(optimizer_generator, 'zero_grad'):
+                # It's a PyTorch optimizer (has zero_grad method)
+                self._optimizer_generator = optimizer_generator
+            else:
+                # It's likely a TensorFlow/Keras optimizer, create PyTorch Adam with GAN defaults
+                self._optimizer_generator = torch.optim.Adam(
+                    self._generator.parameters(),
+                    lr=self._learning_rate_generator,
+                    betas=(0.5, 0.999)
+                )
+        elif learning_rate_generator is not None:
+            # Update learning rate and create new optimizer
+            self._learning_rate_generator = learning_rate_generator
             self._optimizer_generator = torch.optim.Adam(
                 self._generator.parameters(),
-                lr=optimizer_generator,
-                betas=(0.5, 0.999)  # GAN-recommended beta parameters
-            )
-        elif hasattr(optimizer_generator, 'zero_grad'):
-            # It's a PyTorch optimizer (has zero_grad method)
-            self._optimizer_generator = optimizer_generator
-        else:
-            # It's likely a TensorFlow/Keras optimizer, create PyTorch Adam with GAN defaults
-            self._optimizer_generator = torch.optim.Adam(
-                self._generator.parameters(),
-                lr=0.0002,  # Default GAN learning rate
-                betas=(0.5, 0.999)  # β1=0.5, β2=0.999 (GAN standard)
+                lr=self._learning_rate_generator,
+                betas=(0.5, 0.999)
             )
 
         # Handle optimizer_discriminator similarly
-        if isinstance(optimizer_discriminator, (int, float)):
+        if optimizer_discriminator is not None:
+            if isinstance(optimizer_discriminator, (int, float)):
+                self._learning_rate_discriminator = optimizer_discriminator
+                self._optimizer_discriminator = torch.optim.Adam(
+                    self._discriminator.parameters(),
+                    lr=self._learning_rate_discriminator,
+                    betas=(0.5, 0.999)
+                )
+            elif hasattr(optimizer_discriminator, 'zero_grad'):
+                self._optimizer_discriminator = optimizer_discriminator
+            else:
+                self._optimizer_discriminator = torch.optim.Adam(
+                    self._discriminator.parameters(),
+                    lr=self._learning_rate_discriminator,
+                    betas=(0.5, 0.999)
+                )
+        elif learning_rate_discriminator is not None:
+            # Update learning rate and create new optimizer
+            self._learning_rate_discriminator = learning_rate_discriminator
             self._optimizer_discriminator = torch.optim.Adam(
                 self._discriminator.parameters(),
-                lr=optimizer_discriminator,
-                betas=(0.5, 0.999)
-            )
-        elif hasattr(optimizer_discriminator, 'zero_grad'):
-            self._optimizer_discriminator = optimizer_discriminator
-        else:
-            self._optimizer_discriminator = torch.optim.Adam(
-                self._discriminator.parameters(),
-                lr=0.0002,
+                lr=self._learning_rate_discriminator,
                 betas=(0.5, 0.999)
             )
 
@@ -368,7 +438,7 @@ class AdversarialAlgorithmTorch(nn.Module):
     def fit(self, x=None, y=None, batch_size=32, epochs=1, verbose=1,
             callbacks=None, validation_data=None, shuffle=True,
             initial_epoch=0, steps_per_epoch=None, validation_steps=None,
-            validation_freq=1, optimizer=None, learning_rate=0.001, **kwargs):
+            validation_freq=1, **kwargs):
         """
         Train the model with a TensorFlow/Keras-compatible interface.
 
@@ -414,10 +484,6 @@ class AdversarialAlgorithmTorch(nn.Module):
             Number of validation steps
         validation_freq : int
             Frequency (in epochs) of validation
-        optimizer : torch.optim.Optimizer
-            PyTorch optimizer (overrides learning_rate)
-        learning_rate : float
-            Learning rate if optimizer not provided
 
         Returns:
         --------
@@ -429,23 +495,6 @@ class AdversarialAlgorithmTorch(nn.Module):
         ValueError
             If data format is unsupported or parameters invalid
         """
-        # Set optimizer if provided (applies to both generator and discriminator)
-        if optimizer is not None:
-            self._optimizer_generator = optimizer
-            self._optimizer_discriminator = optimizer
-        elif self._optimizer_generator is None or self._optimizer_discriminator is None:
-            # Create default Adam optimizers with GAN parameters
-            self._optimizer_generator = torch.optim.Adam(
-                self._generator.parameters(),
-                lr=learning_rate,
-                betas=(0.5, 0.999)
-            )
-            self._optimizer_discriminator = torch.optim.Adam(
-                self._discriminator.parameters(),
-                lr=learning_rate,
-                betas=(0.5, 0.999)
-            )
-
         # Prepare the dataset - flexible input handling
         if isinstance(x, DataLoader):
             train_dataset = x
@@ -1017,7 +1066,7 @@ class AdversarialAlgorithmTorch(nn.Module):
             raise ValueError("Latent dimension must be greater than 0.")
         self._latent_dimension = latent_dimension
 
-    def set_optimizer_generator(self, optimizer_generator):
+    def set_optimizer_generator(self, optimizer_generator: torch.optim.Optimizer):
         """
         Update the generator optimizer.
 
@@ -1028,7 +1077,7 @@ class AdversarialAlgorithmTorch(nn.Module):
         """
         self._optimizer_generator = optimizer_generator
 
-    def set_optimizer_discriminator(self, optimizer_discriminator):
+    def set_optimizer_discriminator(self, optimizer_discriminator: torch.optim.Optimizer):
         """
         Update the discriminator optimizer.
 
@@ -1039,7 +1088,7 @@ class AdversarialAlgorithmTorch(nn.Module):
         """
         self._optimizer_discriminator = optimizer_discriminator
 
-    def set_loss_generator(self, loss_generator):
+    def set_loss_generator(self, loss_generator: Union[nn.Module, str]):
         """
         Update the generator loss function.
 
@@ -1055,7 +1104,7 @@ class AdversarialAlgorithmTorch(nn.Module):
         """
         self._loss_generator = self._convert_loss_to_pytorch(loss_generator)
 
-    def set_loss_discriminator(self, loss_discriminator):
+    def set_loss_discriminator(self, loss_discriminator: Union[nn.Module, str]):
         """
         Update the discriminator loss function.
 
@@ -1065,6 +1114,84 @@ class AdversarialAlgorithmTorch(nn.Module):
             New loss function for discriminator
         """
         self._loss_discriminator = self._convert_loss_to_pytorch(loss_discriminator)
+
+    def set_learning_rate_generator(self, learning_rate: float):
+        """
+        Update the learning rate for generator optimizer.
+
+        Creates a new Adam optimizer with the updated learning rate.
+
+        Parameters:
+        -----------
+        learning_rate : float
+            New learning rate for generator (must be > 0)
+
+        Raises:
+        -------
+        ValueError
+            If learning_rate <= 0
+        """
+        if learning_rate <= 0:
+            raise ValueError("Learning rate must be greater than 0.")
+        self._learning_rate_generator = learning_rate
+        self._optimizer_generator = torch.optim.Adam(
+            self._generator.parameters(),
+            lr=self._learning_rate_generator,
+            betas=(0.5, 0.999)
+        )
+
+    def set_learning_rate_discriminator(self, learning_rate: float):
+        """
+        Update the learning rate for discriminator optimizer.
+
+        Creates a new Adam optimizer with the updated learning rate.
+
+        Parameters:
+        -----------
+        learning_rate : float
+            New learning rate for discriminator (must be > 0)
+
+        Raises:
+        -------
+        ValueError
+            If learning_rate <= 0
+        """
+        if learning_rate <= 0:
+            raise ValueError("Learning rate must be greater than 0.")
+        self._learning_rate_discriminator = learning_rate
+        self._optimizer_discriminator = torch.optim.Adam(
+            self._discriminator.parameters(),
+            lr=self._learning_rate_discriminator,
+            betas=(0.5, 0.999)
+        )
+
+    # ==================================================
+    # GETTER METHODS FOR ACCESSING CONFIGURATION
+    # ==================================================
+
+    def get_generator(self) -> nn.Module:
+        """Get the generator model."""
+        return self._generator
+
+    def get_discriminator(self) -> nn.Module:
+        """Get the discriminator model."""
+        return self._discriminator
+
+    def get_optimizer_generator(self) -> torch.optim.Optimizer:
+        """Get the generator optimizer."""
+        return self._optimizer_generator
+
+    def get_optimizer_discriminator(self) -> torch.optim.Optimizer:
+        """Get the discriminator optimizer."""
+        return self._optimizer_discriminator
+
+    def get_learning_rate_generator(self) -> float:
+        """Get the current learning rate for generator."""
+        return self._learning_rate_generator
+
+    def get_learning_rate_discriminator(self) -> float:
+        """Get the current learning rate for discriminator."""
+        return self._learning_rate_discriminator
 
     # ==================================================
     # PROPERTIES FOR ACCESS TO INTERNAL COMPONENTS

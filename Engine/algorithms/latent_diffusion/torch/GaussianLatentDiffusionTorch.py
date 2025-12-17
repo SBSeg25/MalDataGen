@@ -256,6 +256,8 @@ class GaussianLatentDiffusionTorch:
         Extracts values from a tensor based on the time index and reshapes them
         to match the input batch dimensions.
 
+        FIXED: Now handles device mismatches between tensor 'a' and indices 't'.
+
         Parameters:
         -----------
             a : torch.Tensor
@@ -271,6 +273,11 @@ class GaussianLatentDiffusionTorch:
                 Extracted and reshaped values with appropriate dimensions.
         """
         batch_size = x_shape[0]
+
+        # FIX: Move 'a' to same device as 't' before indexing
+        if isinstance(t, torch.Tensor):
+            a = a.to(t.device)
+
         out = a[t]
 
         # Dynamically determine the number of dimensions to add
@@ -279,8 +286,6 @@ class GaussianLatentDiffusionTorch:
         ndim = len(x_shape)
         reshape_dims = [batch_size] + [1] * (ndim - 1)
 
-        ndim = len(x_shape)
-        reshape_dims = [batch_size] + [1] * (ndim - 1)
         return out.reshape(*reshape_dims)
 
     def q_mean_variance(self, x_start, t):

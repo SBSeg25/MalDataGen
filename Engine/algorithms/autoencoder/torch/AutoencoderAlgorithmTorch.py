@@ -5,7 +5,7 @@ __author__ = 'Kayuã Oleques Paim'
 __email__ = 'kayuaolequesp@gmail.com'
 __version__ = '{1}.{1}.{0}'
 __initial_data__ = '2022/06/01'
-__last_update__ = '2025/12/07'
+__last_update__ = '2025/12/17'
 __credits__ = ['Kayuã Oleques']
 
 # MIT License
@@ -39,7 +39,7 @@ try:
     import torch
     import torch.nn as nn
     import torch.nn.functional as F
-    from torch.optim import Optimizer
+    from torch.optim import Optimizer, Adam
     from torch.utils.data import DataLoader, TensorDataset
 
 except ImportError as error:
@@ -83,9 +83,13 @@ class AutoencoderAlgorithmTorch(nn.Module):
             Expected input shape. If None, will be inferred from data.
         @auto_adapt_shape (bool, optional):
             If True, automatically adapts to input data shape. Default: True
+        @optimizer (torch.optim.Optimizer, optional):
+            Optimizer for training. If None, uses Adam with learning_rate.
+        @learning_rate (float, optional):
+            Learning rate for default optimizer. Default: 0.001
 
     Example:
-        >>> # Example with 1D data
+        >>> # Example with 1D data and default optimizer
         >>> encoder_1d = build_encoder(input_dim=100, latent_dim=64)
         >>> decoder_1d = build_decoder(latent_dim=64, output_dim=100)
         >>> autoencoder_1d = AutoencoderAlgorithmTorch(
@@ -94,22 +98,11 @@ class AutoencoderAlgorithmTorch(nn.Module):
         ...     input_shape=(100,)
         ... )
 
-        >>> # Example with 2D data
-        >>> encoder_2d = build_encoder(input_shape=(28, 28), latent_dim=64)
-        >>> decoder_2d = build_decoder(latent_dim=64, output_shape=(28, 28))
-        >>> autoencoder_2d = AutoencoderAlgorithmTorch(
+        >>> # Example with custom optimizer
+        >>> autoencoder_custom = AutoencoderAlgorithmTorch(
         ...     encoder_model=encoder_2d,
         ...     decoder_model=decoder_2d,
-        ...     input_shape=(28, 28)
-        ... )
-
-        >>> # Example with 3D data (images)
-        >>> encoder_3d = build_encoder(input_shape=(3, 128, 128), latent_dim=64)
-        >>> decoder_3d = build_decoder(latent_dim=64, output_shape=(3, 128, 128))
-        >>> autoencoder_3d = AutoencoderAlgorithmTorch(
-        ...     encoder_model=encoder_3d,
-        ...     decoder_model=decoder_3d,
-        ...     input_shape=(3, 128, 128)
+        ...     optimizer=torch.optim.RMSprop(learning_rate=0.0001)
         ... )
     """
 
@@ -124,7 +117,9 @@ class AutoencoderAlgorithmTorch(nn.Module):
                  latent_standard_deviation=DEFAULT_latent_standard_deviation,
                  latent_dimension=DEFAULT_LATENT_DIMENSION,
                  input_shape=None,
-                 auto_adapt_shape=True):
+                 auto_adapt_shape=True,
+                 optimizer=None,
+                 learning_rate=0.001):
 
         super().__init__()
 
@@ -155,6 +150,9 @@ class AutoencoderAlgorithmTorch(nn.Module):
         if not isinstance(latent_dimension, int) or latent_dimension <= 0:
             raise ValueError("latent_dimension must be a positive integer.")
 
+        if not isinstance(learning_rate, (int, float)) or learning_rate <= 0:
+            raise ValueError("Learning rate must be a positive number.")
+
         # Initialize the encoder and decoder models
         self._encoder = encoder_model
         self._decoder = decoder_model
@@ -178,10 +176,22 @@ class AutoencoderAlgorithmTorch(nn.Module):
         self._auto_adapt_shape = auto_adapt_shape
         self._inferred_shape = None
 
+        # Learning rate
+        self._learning_rate = learning_rate
+
         # Device configuration
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self._encoder.to(self.device)
         self._decoder.to(self.device)
+
+        # Initialize optimizer (use provided or create default)
+        # Note: optimizer needs model parameters, so we create it after moving models to device
+        if optimizer is not None:
+            self._optimizer = optimizer
+        else:
+            # Create default Adam optimizer with all model parameters
+            all_params = list(self._encoder.parameters()) + list(self._decoder.parameters())
+            self._optimizer = Adam(all_params, lr=self._learning_rate)
 
     def _infer_data_shape(self, data):
         """
@@ -284,18 +294,21 @@ class AutoencoderAlgorithmTorch(nn.Module):
 
         return batch_x, batch_y
 
-    def compile(self, loss=None, optimizer=None, metrics=None, **kwargs):
+    def compile(self, loss=None, optimizer=None, metrics=None, learning_rate=None, **kwargs):
         """
         Compile the autoencoder model (PyTorch-compatible version).
 
-        This method mimics Keras' compile() for compatibility with existing code,
-        but PyTorch doesn't require compilation. It just stores the loss function.
+        This method mimics Keras' compile() for compatibility with existing code.
 
         Args:
             loss: loss function (can be string name or nn.Module instance)
-            optimizer: Optimizer (not used in PyTorch compile, pass to fit instead)
+            optimizer: Optimizer (torch.optim.Optimizer instance)
             metrics: metrics to track (not implemented yet)
+            learning_rate: Learning rate (only used if optimizer is None)
             **kwargs: Additional arguments (ignored)
+
+        Returns:
+            self: Returns self for method chaining
         """
         if loss is not None:
             if isinstance(loss, str):
@@ -319,6 +332,15 @@ class AutoencoderAlgorithmTorch(nn.Module):
                 self._loss_function = loss
             else:
                 raise TypeError("loss must be a string or nn.Module instance")
+
+        # Update optimizer if provided
+        if optimizer is not None:
+            self._optimizer = optimizer
+        elif learning_rate is not None:
+            # Update learning rate and create new optimizer
+            self._learning_rate = learning_rate
+            all_params = list(self._encoder.parameters()) + list(self._decoder.parameters())
+            self._optimizer = Adam(all_params, lr=self._learning_rate)
 
         return self
 
@@ -356,18 +378,22 @@ class AutoencoderAlgorithmTorch(nn.Module):
 
         return reconstructed
 
-    def train_step(self, batch, optimizer):
+    def train_step(self, batch, optimizer=None):
         """
         Perform a training step for the AutoEncoder.
         Automatically adapts to different batch formats.
 
         Args:
             batch: Input data batch (tuple of batch_x, batch_y or single tensor).
-            optimizer: PyTorch optimizer.
+            optimizer: PyTorch optimizer (if None, uses self._optimizer).
 
         Returns:
             dict: Dictionary containing the loss value.
         """
+        # Use provided optimizer or default to instance optimizer
+        if optimizer is None:
+            optimizer = self._optimizer
+
         # Prepare batch data
         batch_x, batch_y = self._prepare_batch(batch)
 
@@ -441,7 +467,7 @@ class AutoencoderAlgorithmTorch(nn.Module):
     def fit(self, x=None, y=None, batch_size=32, epochs=1, verbose=1,
             callbacks=None, validation_data=None, shuffle=True,
             initial_epoch=0, steps_per_epoch=None, validation_steps=None,
-            validation_freq=1, optimizer=None, learning_rate=0.001, **kwargs):
+            validation_freq=1, optimizer=None, learning_rate=None, **kwargs):
         """
         Train the model with automatic shape adaptation.
 
@@ -458,16 +484,21 @@ class AutoencoderAlgorithmTorch(nn.Module):
             steps_per_epoch: Number of steps per epoch.
             validation_steps: Number of validation steps.
             validation_freq: Validation frequency.
-            optimizer: PyTorch optimizer (if None, Adam is used).
-            learning_rate: Learning rate for optimizer.
+            optimizer: PyTorch optimizer (if provided, overrides current optimizer).
+            learning_rate: Learning rate (only used if optimizer is None).
 
         Returns:
             A History object with training metrics.
         """
 
-        # Create default optimizer if none provided
-        if optimizer is None:
-            optimizer = torch.optim.Adam(self.parameters(), lr=learning_rate)
+        # Update optimizer if provided
+        if optimizer is not None:
+            self._optimizer = optimizer
+        elif learning_rate is not None:
+            # Update learning rate and create new optimizer
+            self._learning_rate = learning_rate
+            all_params = list(self._encoder.parameters()) + list(self._decoder.parameters())
+            self._optimizer = Adam(all_params, lr=self._learning_rate)
 
         # Handle different input formats
         if isinstance(x, DataLoader):
@@ -525,8 +556,8 @@ class AutoencoderAlgorithmTorch(nn.Module):
             for batch_data in dataloader:
                 step += 1
 
-                # Perform training step
-                metrics = self.train_step(batch_data, optimizer)
+                # Perform training step with the instance optimizer
+                metrics = self.train_step(batch_data)
                 current_loss = metrics['loss']
                 epoch_loss += current_loss
 
@@ -798,6 +829,32 @@ class AutoencoderAlgorithmTorch(nn.Module):
                 return data.reshape((batch_size,) + target_shape)
         return data
 
+    # ==================================================
+    # SETTER METHODS FOR DYNAMIC CONFIGURATION
+    # ==================================================
+
+    def set_optimizer(self, optimizer):
+        """Set or replace the optimizer."""
+        self._optimizer = optimizer
+
+    def set_learning_rate(self, learning_rate):
+        """Update the learning rate for optimizer."""
+        self._learning_rate = learning_rate
+        all_params = list(self._encoder.parameters()) + list(self._decoder.parameters())
+        self._optimizer = Adam(all_params, lr=self._learning_rate)
+
+    # ==================================================
+    # GETTER METHODS FOR ACCESSING CONFIGURATION
+    # ==================================================
+
+    def get_optimizer(self):
+        """Get the optimizer."""
+        return self._optimizer
+
+    def get_learning_rate(self):
+        """Get the current learning rate."""
+        return self._learning_rate
+
     @property
     def decoder(self):
         return self._decoder
@@ -810,6 +867,10 @@ class AutoencoderAlgorithmTorch(nn.Module):
     def input_shape(self):
         return self.get_input_shape()
 
+    @property
+    def optimizer(self):
+        return self._optimizer
+
     @decoder.setter
     def decoder(self, decoder):
         self._decoder = decoder
@@ -819,6 +880,10 @@ class AutoencoderAlgorithmTorch(nn.Module):
     def encoder(self, encoder):
         self._encoder = encoder
         self._encoder.to(self.device)
+
+    @optimizer.setter
+    def optimizer(self, optimizer):
+        self._optimizer = optimizer
 
     class History:
         """

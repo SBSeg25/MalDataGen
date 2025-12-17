@@ -10,7 +10,7 @@ Testa todos os modelos disponíveis e salva resultados
 import os
 import numpy as np
 
-os.environ["ML_FRAMEWORK"] = "tensorflow"
+os.environ["ML_FRAMEWORK"] = "pytorch"
 
 from Engine.models.QuantizedVAE import QuantizedVAE
 from Engine.models.LatentDiffusion import LatentDiffusion
@@ -25,11 +25,11 @@ from Engine.models.DenoisingDiffusion import DenoisingDiffusion
 # Configurações MNIST
 # =====================
 
-IMAGE_SIZE = (16, 16)
-INPUT_SHAPE = (16, 16, 1)
+IMAGE_SIZE = (12, 12)
+INPUT_SHAPE = (12, 12, 1)
 
 N_CLASSES = 10
-BATCH_LIMIT = 4800
+BATCH_LIMIT = 2600
 
 OUTPUT_DIR = "./output_mnist"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -83,7 +83,7 @@ models = {
     #"quantized_vae": QuantizedVAE(number_classes=N_CLASSES),
     #"denoising_diffusion": DenoisingDiffusion(number_classes=N_CLASSES),
     #"autoencoder": Autoencoder(number_classes=N_CLASSES),
-    # "adversarial": adversarial(number_classes=N_CLASSES),
+    #"adversarial": Adversarial(number_classes=N_CLASSES),
     #"wasserstein": Wasserstein(number_classes=N_CLASSES),
     #"wasserstein_gp": WassersteinGP(number_classes=N_CLASSES),
     #"variational_autoencoder": VariationalAutoencoder(number_classes=N_CLASSES)
@@ -114,58 +114,53 @@ for model_name, model in models.items():
     print(f"\n{'=' * 60}")
     print(f"🔧 Modelo: {model_name}")
     print(f"{'=' * 60}")
+    # Treinamento
+    print(f"⏳ Treinando {model_name}...")
+    model.fit_model(
+        input_shape=INPUT_SHAPE,
+        x_real_samples=x_real_samples,
+        y_real_samples=y_real_samples
+    )
+    print(f"✓ Treinamento concluído")
 
-    try:
-        # Treinamento
-        print(f"⏳ Treinando {model_name}...")
-        model.fit_model(
-            input_shape=INPUT_SHAPE,
-            x_real_samples=x_real_samples,
-            y_real_samples=y_real_samples
-        )
-        print(f"✓ Treinamento concluído")
+    # Geração
+    print(f"🎨 Gerando amostras sintéticas...")
+    synthetic_samples = model.get_samples(number_samples_per_class)
+    print(f"✓ Geradas {synthetic_samples.shape[0]} amostras")
 
-        # Geração
-        print(f"🎨 Gerando amostras sintéticas...")
-        synthetic_samples = model.get_samples(number_samples_per_class)
-        print(f"✓ Geradas {synthetic_samples.shape[0]} amostras")
+    # Visualização e Salvamento
+    if matplotlib_available:
+        n = min(36, synthetic_samples.shape[0])
+        cols = 6
+        rows = n // cols
 
-        # Visualização e Salvamento
-        if matplotlib_available:
-            n = min(36, synthetic_samples.shape[0])
-            cols = 6
-            rows = n // cols
+        fig, axes = plt.subplots(rows, cols, figsize=(12, 12))
+        fig.suptitle(f"MNIST Sintético - {model_name}", fontsize=16, fontweight='bold')
 
-            fig, axes = plt.subplots(rows, cols, figsize=(12, 12))
-            fig.suptitle(f"MNIST Sintético - {model_name}", fontsize=16, fontweight='bold')
+        idx = 0
+        for i in range(rows):
+            for j in range(cols):
+                axes[i, j].imshow(
+                    synthetic_samples[idx].squeeze(),
+                    cmap="gray"
+                )
+                axes[i, j].axis("off")
+                idx += 1
 
-            idx = 0
-            for i in range(rows):
-                for j in range(cols):
-                    axes[i, j].imshow(
-                        synthetic_samples[idx].squeeze(),
-                        cmap="gray"
-                    )
-                    axes[i, j].axis("off")
-                    idx += 1
+        plt.tight_layout()
 
-            plt.tight_layout()
+        # Salvar imagem
+        output_path = os.path.join(OUTPUT_DIR, f"{model_name}_samples.png")
+        plt.savefig(output_path, dpi=150, bbox_inches='tight')
+        plt.close()
 
-            # Salvar imagem
-            output_path = os.path.join(OUTPUT_DIR, f"{model_name}_samples.png")
-            plt.savefig(output_path, dpi=150, bbox_inches='tight')
-            plt.close()
+        print(f"💾 Imagem salva: {output_path}")
 
-            print(f"💾 Imagem salva: {output_path}")
+    # Salvar amostras como arrays NumPy
+    samples_path = os.path.join(OUTPUT_DIR, f"{model_name}_samples.npy")
+    np.save(samples_path, synthetic_samples)
+    print(f"💾 Arrays salvos: {samples_path}")
 
-        # Salvar amostras como arrays NumPy
-        samples_path = os.path.join(OUTPUT_DIR, f"{model_name}_samples.npy")
-        np.save(samples_path, synthetic_samples)
-        print(f"💾 Arrays salvos: {samples_path}")
-
-    except Exception as e:
-        print(f"❌ Erro ao processar {model_name}: {str(e)}")
-        continue
 
 print(f"\n{'=' * 60}")
 print(f"✅ Processamento completo!")

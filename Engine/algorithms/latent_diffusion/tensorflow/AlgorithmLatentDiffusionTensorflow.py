@@ -3,9 +3,9 @@
 
 __author__ = 'Kayuã Oleques Paim'
 __email__ = 'kayuaolequesp@gmail.com'
-__version__ = '{1}.{0}.{1}'
+__version__ = '{1}.{0}.{2}'
 __initial_data__ = '2022/06/01'
-__last_update__ = '2025/12/13'
+__last_update__ = '2025/12/17'
 __credits__ = ['Kayuã Oleques']
 
 # MIT License
@@ -54,7 +54,8 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
     reconstruction and controlled generative modeling through Gaussian diffusion.
 
     This class supports exponential moving average (EMA) updates for stable training,
-    multiple training stages, and customizable hyperparameters to adapt to different tasks.
+    multiple training stages, customizable hyperparameters, and automatic adaptation
+    to different input shapes: (x), (x, y), (x, y, z), etc.
 
     Attributes:
         @ema (float):
@@ -83,6 +84,10 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
             Optimizer responsible for training the autoencoder components.
         @ensemble_encoder_decoder (Model):
             Combined encoder-decoder model for data reconstruction.
+        @input_shape (tuple):
+            Expected input shape (without batch dimension).
+        @auto_adapt_shape (bool):
+            If True, automatically adapts to input data shape.
 
     Raises:
         ValueError:
@@ -109,10 +114,12 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
         ...     ema=0.999,
         ...     margin=0.1,
         ...     embedding_dimension=128,
-        ...     train_stage='all'
+        ...     train_stage='all',
+        ...     input_shape=(100,),
+        ...     auto_adapt_shape=True
         ... )
         >>> diffusion_model.set_stage_training('diffusion')
-        >>> diffusion_model.train_step(data)
+        >>> diffusion_model.fit(data, epochs=10)
     """
 
     def __init__(self, first_unet_model,
@@ -126,14 +133,17 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
                  ema,
                  margin,
                  embedding_dimension,
-                 train_stage='all'):
+                 train_stage='all',
+                 input_shape=None,
+                 auto_adapt_shape=True):
 
         super().__init__()
         """
         Initializes the DiffusionModel with provided sub-models, optimizers, and hyperparameters.
 
         This constructor sets up the network structure, including the autoencoder, diffusion
-        models, and EMA components, ensuring flexibility for different training strategies.
+        models, and EMA components, ensuring flexibility for different training strategies and
+        automatic adaptation to various input shapes.
 
         Args:
             @first_unet_model (Model):
@@ -159,7 +169,11 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
             @embedding_dimension (int):
                 Dimensionality of the embedding space.
             @train_stage (str, optional):
-             Current training stage ('all', 'diffusion', etc.), defaulting to 'all'.
+                Current training stage ('all', 'diffusion', etc.), defaulting to 'all'.
+            @input_shape (tuple, optional):
+                Expected input shape (without batch dimension). If None, will be inferred from data.
+            @auto_adapt_shape (bool, optional):
+                If True, automatically adapts to input data shape. Default: True
 
         Raises:
             ValueError:
@@ -183,6 +197,105 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
 
         self._total_loss_tracker = Mean(name="loss")
 
+        # Shape adaptation
+        self._input_shape = input_shape
+        self._auto_adapt_shape = auto_adapt_shape
+        self._inferred_shape = None
+
+    @staticmethod
+    def _infer_data_shape(data):
+        """
+        Infer the shape of input data, excluding the batch dimension.
+
+        Args:
+            data: Input data (tensor, array, or tuple/list).
+
+        Returns:
+            tuple: Shape of the data excluding batch dimension.
+        """
+        if isinstance(data, (tuple, list)):
+            # If data is a tuple/list, infer from first element
+            data = data[0]
+
+        if isinstance(data, tensorflow.Tensor):
+            shape = tuple(data.shape.as_list()[1:])
+        elif isinstance(data, numpy.ndarray):
+            shape = data.shape[1:] if len(data.shape) > 1 else data.shape
+        else:
+            # Try to convert to tensor and get shape
+            try:
+                tensor_data = tensorflow.convert_to_tensor(data)
+                shape = tuple(tensor_data.shape.as_list()[1:])
+            except:
+                raise ValueError(f"Cannot infer shape from data of type {type(data)}")
+
+        return shape
+
+    def _validate_and_adapt_shape(self, data):
+        """
+        Validate input data shape and adapt if necessary.
+
+        Args:
+            data: Input data.
+
+        Returns:
+            bool: True if shape is valid or successfully adapted.
+        """
+        current_shape = self._infer_data_shape(data)
+
+        if self._inferred_shape is None:
+            self._inferred_shape = current_shape
+            if self._input_shape is not None and self._input_shape != current_shape:
+                print(f"Warning: Specified input_shape {self._input_shape} differs from inferred shape {current_shape}")
+                if self._auto_adapt_shape:
+                    print(f"Auto-adapting to shape: {current_shape}")
+                    self._input_shape = current_shape
+            elif self._input_shape is None:
+                self._input_shape = current_shape
+                print(f"Inferred input shape: {current_shape}")
+        else:
+            if current_shape != self._inferred_shape:
+                if self._auto_adapt_shape:
+                    print(f"Warning: Input shape changed from {self._inferred_shape} to {current_shape}")
+                    self._inferred_shape = current_shape
+                else:
+                    raise ValueError(
+                        f"Input shape mismatch: expected {self._inferred_shape}, got {current_shape}. "
+                        f"Set auto_adapt_shape=True to allow dynamic shape changes."
+                    )
+
+        return True
+
+    @staticmethod
+    def _prepare_batch(batch):
+        """
+        Prepare batch data, handling different input formats.
+
+        Args:
+            batch: Input batch (can be single tensor, tuple, or list).
+
+        Returns:
+            tuple: (batch_x, batch_y) where batch_y is the label/conditioning.
+        """
+        if isinstance(batch, (tuple, list)):
+            if len(batch) == 1:
+                # Single input, use zeros as labels (unconditional)
+                batch_x = batch[0]
+                batch_y = tensorflow.zeros((tensorflow.shape(batch_x)[0], 1))
+            elif len(batch) == 2:
+                # Input and label provided
+                batch_x, batch_y = batch
+            else:
+                # Multiple inputs, use first as input and second as label
+                batch_x = batch[0]
+                batch_y = batch[1]
+        else:
+            # Single tensor, use zeros as labels
+            batch_x = batch
+            batch_y = tensorflow.zeros((tensorflow.shape(batch_x)[0], 1))
+
+        return batch_x, batch_y
+
     def set_stage_training(self, training_stage):
         """
         Sets the current training stage.
@@ -194,15 +307,16 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
 
     def train_step(self, data):
         """
-        Performs a single training step.
+        Performs a single training step with automatic shape handling.
 
         Args:
-            data (tuple): A tuple containing input data and labels.
+            data (tuple): A tuple containing input data and labels, or just data.
 
         Returns:
             dict: A dictionary with the computed loss for diffusion.
         """
-        raw_data, label = data
+        # Prepare batch data
+        raw_data, label = self._prepare_batch(data)
 
         loss_diffusion = self.train_diffusion_model(raw_data, label)
         self.update_ema_weights()
@@ -275,22 +389,46 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
             initial_epoch=0, steps_per_epoch=None, validation_steps=None,
             validation_freq=1, optimizer=None, learning_rate=0.001, **kwargs):
         """
-        Train the model with a simplified progress bar.
+        Train the model with automatic shape adaptation and simplified progress bar.
+
+        Args:
+            x: Input data (any shape).
+            y: Target data/labels (if None, unconditional generation is assumed).
+            batch_size: Number of samples per gradient update.
+            epochs: Number of epochs to train.
+            verbose: 0 = silent, 1 = progress bar, 2 = one line per epoch.
+            callbacks: List of callbacks to apply during training.
+            validation_data: Data for validation.
+            shuffle: Whether to shuffle data before each epoch.
+            initial_epoch: Epoch at which to start training.
+            steps_per_epoch: Number of steps per epoch.
+            validation_steps: Number of validation steps.
+            validation_freq: Validation frequency.
+            optimizer: TensorFlow optimizer (if provided, overrides diffusion optimizer).
+            learning_rate: Learning rate for optimizer.
         """
         import sys
 
         # Set optimizer if provided
         if optimizer is not None:
-            self.optimizer = optimizer
-        elif not hasattr(self, 'optimizer') or self.optimizer is None:
-            self.optimizer = tensorflow.keras.optimizers.Adam(learning_rate=learning_rate)
+            self._optimizer_diffusion = optimizer
+        elif learning_rate != 0.001:
+            self._optimizer_diffusion = tensorflow.keras.optimizers.Adam(learning_rate=learning_rate)
 
         # Prepare the dataset
         if isinstance(x, tensorflow.data.Dataset):
             train_dataset = x
+            # Try to infer shape from dataset
+            for batch in train_dataset.take(1):
+                self._validate_and_adapt_shape(batch)
         else:
+            # Validate and adapt shape
+            self._validate_and_adapt_shape(x)
+
             if y is None:
-                y = x
+                # Create dummy labels for unconditional generation
+                y = tensorflow.zeros((len(x), 1))
+
             train_dataset = tensorflow.data.Dataset.from_tensor_slices((x, y))
             if shuffle:
                 train_dataset = train_dataset.shuffle(buffer_size=len(x))
@@ -396,7 +534,7 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
 
     def _evaluate_validation(self, validation_data, validation_steps=None):
         """
-        Evaluate the model on validation data.
+        Evaluate the model on validation data with automatic shape handling.
 
         Args:
             validation_data: Validation dataset.
@@ -409,7 +547,7 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
         step = 0
 
         for batch_data in validation_data:
-            batch_x, batch_y = batch_data
+            batch_x, batch_y = self._prepare_batch(batch_data)
 
             # Use the diffusion model for validation
             batch_size = tensorflow.shape(batch_x)[0]
@@ -463,8 +601,6 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
         Returns:
             numpy.ndarray: Generated synthetic data
         """
-        print(f"\n[DEBUG] generate_data: self._embedding_dimension = {self._embedding_dimension}")
-        print(f"[DEBUG] labels.shape = {labels.shape}")
 
         # Start with random noise in TensorFlow
         embedding_diffusion = tensorflow.random.normal(
@@ -472,12 +608,8 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
             dtype=tensorflow.float32
         )
 
-        print(f"[DEBUG] Created embedding_diffusion.shape = {embedding_diffusion.shape}")
-
         # Labels are already in correct shape (batch_size, number_classes)
         labels_vector = labels
-
-        print(f"[DEBUG] labels_vector.shape = {labels_vector.shape}")
 
         # Verify shape
         if len(labels_vector.shape) != 2:
@@ -486,8 +618,6 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
             )
 
         # Reverse diffusion process
-        print(f"[DEBUG] Starting reverse diffusion for {self._time_steps} steps...")
-
         for time_step in reversed(range(0, self._time_steps)):
             # Create time step array for the batch
             array_time = tensorflow.fill(
@@ -497,19 +627,10 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
             array_time = tensorflow.cast(array_time, tensorflow.int32)
 
             # Predict noise using the network
-            if time_step == self._time_steps - 1:  # First iteration
-                print(f"[DEBUG] First iteration - calling _network with:")
-                print(f"  embedding_diffusion.shape = {embedding_diffusion.shape}")
-                print(f"  array_time.shape = {array_time.shape}")
-                print(f"  labels_vector.shape = {labels_vector.shape}")
-
             predicted_noise = self._network(
                 [embedding_diffusion, array_time, labels_vector],
                 training=False
             )
-
-            if time_step == self._time_steps - 1:
-                print(f"[DEBUG] predicted_noise.shape = {predicted_noise.shape}")
 
             # Apply reverse diffusion step
             embedding_diffusion = self._gdf_util.p_sample(
@@ -518,13 +639,6 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
                 array_time,
                 clip_denoised=True
             )
-
-        print(f"[DEBUG] Final embedding_diffusion.shape = {embedding_diffusion.shape}")
-
-        # Decode embeddings to data
-        print(f"[DEBUG] Calling decoder with:")
-        print(f"  embedding_diffusion.shape = {embedding_diffusion.shape}")
-        print(f"  labels_vector.shape = {labels_vector.shape}")
 
         generated_data = self._decoder_model_data(
             [embedding_diffusion, labels_vector],
@@ -642,13 +756,7 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
         """
         generated_data = {}
 
-        print(f"\n[DEBUG] get_samples called")
-        print(f"[DEBUG] Number of classes: {number_samples_per_class['number_classes']}")
-        print(f"[DEBUG] Classes to generate: {number_samples_per_class['classes']}")
-        print(f"[DEBUG] Algorithm embedding_dimension: {self._embedding_dimension}")
-
         for label_class, number_instances in number_samples_per_class["classes"].items():
-            print(f"[DEBUG] Generating {number_instances} samples for class {label_class}")
 
             # Create one-hot encoded labels - shape: (number_instances, number_classes)
             labels = tensorflow.zeros((number_instances, number_samples_per_class["number_classes"]))
@@ -659,21 +767,43 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
             )
             labels = tensorflow.cast(labels, tensorflow.float32)
 
-            print(f"[DEBUG] Labels shape: {labels.shape}")
-            print(f"[DEBUG] Calling generate_data with batch_size=64")
-
             # Generate samples
             generated_samples = self.generate_data(labels, batch_size=64)
             generated_samples = numpy.rint(generated_samples)
 
             generated_data[label_class] = generated_samples
-            print(f"[DEBUG] Generated samples shape: {generated_samples.shape}")
-
         return generated_data
+
+    def get_input_shape(self):
+        """
+        Get the current input shape.
+
+        Returns:
+            tuple: Current input shape (excluding batch dimension).
+        """
+        return self._inferred_shape if self._inferred_shape is not None else self._input_shape
+
+    @staticmethod
+    def reshape_data(data, target_shape):
+        """
+        Reshape data to target shape if needed.
+
+        Args:
+            data: Input data.
+            target_shape: Desired shape (excluding batch dimension).
+
+        Returns:
+            Reshaped data.
+        """
+        if isinstance(data, numpy.ndarray):
+            if data.shape[1:] != target_shape:
+                batch_size = data.shape[0]
+                return data.reshape((batch_size,) + target_shape)
+        return data
 
     def save_model(self, directory, file_name):
         """
-        Save the encoder and decoder models in Keras native format.
+        Save the encoder and decoder models in Keras native format, including shape information.
 
         Args:
             directory (str): Directory where models will be saved.
@@ -737,6 +867,17 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
             self._save_model_to_json(self._second_unet_model, f"{second_unet_file_name}.json")
             self._second_unet_model.save_weights(f"{second_unet_file_name}.weights.h5")
 
+        # Save shape information
+        shape_info = {
+            'input_shape': self._input_shape,
+            'inferred_shape': self._inferred_shape,
+            'embedding_dimension': self._embedding_dimension
+        }
+        shape_file = os.path.join(directory, f"{file_name}_shape_info.json")
+        with open(shape_file, 'w') as f:
+            json.dump(shape_info, f)
+        print(f"Shape information saved to {shape_file}")
+
     @staticmethod
     def _save_model_to_json(model, file_path):
         """
@@ -761,224 +902,147 @@ class AlgorithmLatentDiffusionTensorflow(tensorflow.keras.Model):
                 error_file.write(error_message)
             print(f"An error occurred and was saved to {file_path}: {error_message}")
 
+    # ==================================================
+    # PROPERTIES WITH GETTERS AND SETTERS
+    # ==================================================
+
     @property
     def ema(self) -> Any:
-        """Get the Exponential Moving Average (EMA) model.
-
-        Returns:
-            The EMA model instance.
-        """
+        """Get the Exponential Moving Average (EMA) model."""
         return self._ema
 
     @ema.setter
     def ema(self, value: Any) -> None:
-        """Set the Exponential Moving Average (EMA) model.
-
-        Args:
-            value: The EMA model instance to set.
-        """
+        """Set the Exponential Moving Average (EMA) model."""
         self._ema = value
 
     @property
     def margin(self) -> float:
-        """Get the margin value used in contrastive loss.
-
-        Returns:
-            The margin value.
-        """
+        """Get the margin value used in contrastive loss."""
         return self._margin
 
     @margin.setter
     def margin(self, value: float) -> None:
-        """Set the margin value for contrastive loss.
-
-        Args:
-            value: The margin value to set (must be positive).
-        """
+        """Set the margin value for contrastive loss."""
         if value <= 0:
             raise ValueError("Margin must be positive")
         self._margin = value
 
     @property
     def gdf_util(self) -> Any:
-        """Get the Gradient Descent Filter utility.
-
-        Returns:
-            The GDF utility instance.
-        """
+        """Get the Gradient Descent Filter utility."""
         return self._gdf_util
 
     @gdf_util.setter
     def gdf_util(self, value: Any) -> None:
-        """Set the Gradient Descent Filter utility.
-
-        Args:
-            value: The GDF utility instance to set.
-        """
+        """Set the Gradient Descent Filter utility."""
         self._gdf_util = value
 
     @property
     def time_steps(self) -> int:
-        """Get the number of diffusion time steps.
-
-        Returns:
-            The number of time steps.
-        """
+        """Get the number of diffusion time steps."""
         return self._time_steps
 
     @time_steps.setter
     def time_steps(self, value: int) -> None:
-        """Set the number of diffusion time steps.
-
-        Args:
-            value: The number of time steps (must be positive).
-        """
+        """Set the number of diffusion time steps."""
         if value <= 0:
             raise ValueError("Time steps must be positive")
         self._time_steps = value
 
     @property
     def train_stage(self) -> str:
-        """Get the current training stage.
-
-        Returns:
-            The current training stage identifier.
-        """
+        """Get the current training stage."""
         return self._train_stage
 
     @train_stage.setter
     def train_stage(self, value: str) -> None:
-        """Set the current training stage.
-
-        Args:
-            value: The training stage identifier to set.
-        """
+        """Set the current training stage."""
         self._train_stage = value
 
     @property
     def network(self) -> Any:
-        """Get the primary U-Net model.
-
-        Returns:
-            The first U-Net model instance.
-        """
+        """Get the primary U-Net model."""
         return self._network
 
     @network.setter
     def network(self, value: Any) -> None:
-        """Set the primary U-Net model.
-
-        Args:
-            value: The U-Net model instance to set.
-        """
+        """Set the primary U-Net model."""
         self._network = value
 
     @property
     def second_unet_model(self) -> Any:
-        """Get the secondary U-Net model.
-
-        Returns:
-            The second U-Net model instance.
-        """
+        """Get the secondary U-Net model."""
         return self._second_unet_model
 
     @second_unet_model.setter
     def second_unet_model(self, value: Any) -> None:
-        """Set the secondary U-Net model.
-
-        Args:
-            value: The second U-Net model instance to set.
-        """
+        """Set the secondary U-Net model."""
         self._second_unet_model = value
 
     @property
     def embedding_dimension(self) -> int:
-        """Get the embedding dimension size.
-
-        Returns:
-            The dimension of the embedding space.
-        """
+        """Get the embedding dimension size."""
         return self._embedding_dimension
 
     @embedding_dimension.setter
     def embedding_dimension(self, value: int) -> None:
-        """Set the embedding dimension size.
-
-        Args:
-            value: The dimension size (must be positive).
-        """
+        """Set the embedding dimension size."""
         if value <= 0:
             raise ValueError("Embedding dimension must be positive")
         self._embedding_dimension = value
 
     @property
     def encoder_model_data(self) -> Any:
-        """Get the image encoder model.
-
-        Returns:
-            The encoder model instance.
-        """
+        """Get the image encoder model."""
         return self._encoder_model_data
 
     @encoder_model_data.setter
     def encoder_model_data(self, value: Any) -> None:
-        """Set the image encoder model.
-
-        Args:
-            value: The encoder model instance to set.
-        """
+        """Set the image encoder model."""
         self._encoder_model_data = value
 
     @property
     def decoder_model_data(self) -> Any:
-        """Get the image decoder model.
-
-        Returns:
-            The decoder model instance.
-        """
+        """Get the image decoder model."""
         return self._decoder_model_data
 
     @decoder_model_data.setter
     def decoder_model_data(self, value: Any) -> None:
-        """Set the image decoder model.
-
-        Args:
-            value: The decoder model instance to set.
-        """
+        """Set the image decoder model."""
         self._decoder_model_data = value
 
     @property
     def optimizer_diffusion(self) -> Any:
-        """Get the diffusion model optimizer.
-
-        Returns:
-            The optimizer instance for the diffusion model.
-        """
+        """Get the diffusion model optimizer."""
         return self._optimizer_diffusion
 
     @optimizer_diffusion.setter
     def optimizer_diffusion(self, value: Any) -> None:
-        """Set the diffusion model optimizer.
-
-        Args:
-            value: The optimizer instance to set.
-        """
+        """Set the diffusion model optimizer."""
         self._optimizer_diffusion = value
 
     @property
     def optimizer_autoencoder(self) -> Any:
-        """Get the autoencoder optimizer.
-
-        Returns:
-            The optimizer instance for the autoencoder.
-        """
+        """Get the autoencoder optimizer."""
         return self._optimizer_autoencoder
 
     @optimizer_autoencoder.setter
     def optimizer_autoencoder(self, value: Any) -> None:
-        """Set the autoencoder optimizer.
-
-        Args:
-            value: The optimizer instance to set.
-        """
+        """Set the autoencoder optimizer."""
         self._optimizer_autoencoder = value
+
+    @property
+    def input_shape(self):
+        """Get the current input shape."""
+        return self.get_input_shape()
+
+    @property
+    def auto_adapt_shape(self) -> bool:
+        """Get the auto-adapt shape flag."""
+        return self._auto_adapt_shape
+
+    @auto_adapt_shape.setter
+    def auto_adapt_shape(self, value: bool) -> None:
+        """Set the auto-adapt shape flag."""
+        self._auto_adapt_shape = value

@@ -327,7 +327,7 @@ class LatentDiffusion:
         self._callback_model_monitor = None
         self._callback_early_stop = None
         self._callback_resources_monitor = None
-
+        self._latent_diffusion_algorithm = None
         # Storage for original input shape (for multi-dimensional data)
         self._original_input_shape = None
 
@@ -447,119 +447,6 @@ class LatentDiffusion:
             models_saved_path=self._latent_diffusion_VAE_path_output_models
         )
 
-    def fit_model_tensorflow(
-            self,
-            input_shape: Union[int, tuple],
-            x_real_samples: np.ndarray,
-            y_real_samples: np.ndarray,
-            verbose: int = 1
-    ) -> None:
-        """
-        TensorFlow-specific training pipeline.
-
-        Args:
-            input_shape (Union[int, tuple]): Input data shape
-            x_real_samples (np.ndarray): Training samples
-            y_real_samples (np.ndarray): Training labels
-            verbose (int): Verbosity mode
-        """
-        # Initialize the diffusion model
-        self._get_latent_diffusion_tensorflow(input_shape)
-
-        # Initialize the variational autoencoder model for diffusion
-        self._get_variational_autoencoder_tensorflow(input_shape)
-
-        # Compile the variational algorithm for diffusion
-        self._latent_variational_algorithm.compile(loss=self._latent_diffusion_VAE_loss_function)
-
-        callbacks_list = self._training_callbacks.copy() if hasattr(self, '_training_callbacks') else []
-        if self._callback_model_monitor:
-            callbacks_list.append(self._callback_model_monitor)
-        if self._callback_early_stop:
-            callbacks_list.append(self._callback_early_stop)
-
-        # Fit the diffusion model with the training data
-        self._latent_variational_algorithm.fit(
-            (x_real_samples, to_categorical(y_real_samples,
-                                            num_classes=self._number_samples_per_class["number_classes"])),
-            x_real_samples,
-            epochs=self._latent_diffusion_VAE_epochs,
-            batch_size=self._latent_diffusion_VAE_batch_size_training,
-            callbacks=callbacks_list,
-            verbose=verbose
-        )
-
-        # Retrieve the trained encoder and decoder
-        self._encoder_latent_diffusion = self._latent_variational_algorithm.get_encoder_trained()
-        self._decoder_latent_diffusion = self._latent_variational_algorithm.get_decoder_trained()
-
-        # Initialize the final diffusion algorithm
-        self._latent_diffusion_algorithm = LatentDiffusionAlgorithm(
-            first_unet_model=self._latent_first_unet_model,
-            second_unet_model=self._latent_second_unet_model,
-            encoder_model_image=self._encoder_latent_diffusion,
-            decoder_model_image=self._decoder_latent_diffusion,
-            gdf_util=self._latent_gaussian_diffusion_util,
-            optimizer_autoencoder=Adam(learning_rate=0.0001),
-            optimizer_diffusion=Adam(learning_rate=0.0001),
-            time_steps=self._latent_diffusion_gaussian_time_steps,
-            ema=self._latent_diffusion_ema,
-            margin=self._latent_diffusion_margin,
-            embedding_dimension=self._latent_diffusion_latent_dimension
-        )
-
-        # Compile the diffusion model
-        self._latent_diffusion_algorithm.compile(
-            loss=MeanSquaredError(),
-            optimizer=Adam(learning_rate=0.0001)
-        )
-
-        # Prepare the data embedding and train the diffusion model
-        data_embedding = self._latent_variational_algorithm.create_embedding([
-            x_real_samples,
-            to_categorical(y_real_samples,
-                           num_classes=self._number_samples_per_class["number_classes"])
-        ])
-
-        data_embedding = numpy.array(data_embedding)
-        data_embedding = tensorflow.expand_dims(data_embedding, axis=-1)
-
-        callbacks_list = self._training_callbacks.copy() if hasattr(self, '_training_callbacks') else []
-        if self._callback_model_monitor:
-            callbacks_list.append(self._callback_model_monitor)
-        if self._callback_early_stop:
-            callbacks_list.append(self._callback_early_stop)
-
-        self._latent_diffusion_algorithm.fit(
-            data_embedding,
-            to_categorical(y_real_samples,
-                           num_classes=self._number_samples_per_class["number_classes"]),
-            epochs=self._latent_diffusion_unet_epochs,
-            batch_size=self._latent_diffusion_unet_batch_size,
-            callbacks=callbacks_list,
-            verbose=verbose
-        )
-
-    def _detect_embedding_shape_pytorch(self, x_real_samples):
-        """PyTorch-specific helper to detect embedding shape."""
-        if len(x_real_samples) > 32:
-            sample = x_real_samples[:32]
-        else:
-            sample = x_real_samples
-
-        test_embedding = self._latent_variational_algorithm.create_embedding(
-            sample,
-            batch_size=min(16, len(sample))
-        )
-
-        test_embedding = torch.from_numpy(test_embedding).float()
-        if len(test_embedding.shape) == 2:
-            test_embedding = test_embedding.unsqueeze(-1)
-
-        actual_shape = test_embedding.shape[1:]
-
-        return actual_shape
-
     def fit_model_pytorch(
             self,
             input_shape: Union[int, tuple],
@@ -576,6 +463,7 @@ class LatentDiffusion:
             y_real_samples (np.ndarray): Training labels
             verbose (int): Verbosity mode
         """
+        # Initialize variation model if not provided
         if not self._has_external_variation_model:
             self._latent_variation_model_diffusion = VariationalModelDiffusion(
                 latent_dimension=self._latent_diffusion_latent_dimension,
@@ -592,6 +480,7 @@ class LatentDiffusion:
                 number_samples_per_class=self._number_samples_per_class
             ).to(self._device)
 
+        # Initialize variational algorithm if not provided
         if not self._has_external_variational_algorithm:
             self._latent_variational_algorithm = AlgorithmVAELatentDiffusion(
                 encoder_model=self._latent_variation_model_diffusion.get_encoder(),
@@ -606,6 +495,7 @@ class LatentDiffusion:
                 models_saved_path=self._latent_diffusion_VAE_path_output_models
             ).to(self._device)
 
+        # Convert data to PyTorch tensors
         x_real_samples = torch.from_numpy(x_real_samples).float().to(self._device)
         y_real_samples = torch.from_numpy(y_real_samples).long().to(self._device)
         y_real_samples_onehot = F.one_hot(
@@ -613,6 +503,7 @@ class LatentDiffusion:
             num_classes=self._number_samples_per_class["number_classes"]
         ).float()
 
+        # Create optimizer for VAE
         vae_optimizer = Adam(
             list(self._latent_variation_model_diffusion.get_encoder().parameters()) +
             list(self._latent_variation_model_diffusion.get_decoder().parameters()),
@@ -622,6 +513,9 @@ class LatentDiffusion:
         num_batches = len(x_real_samples) // self._latent_diffusion_VAE_batch_size_training
 
         # VAE Training Loop
+        if verbose >= 1:
+            print("Training VAE...")
+
         for epoch in range(self._latent_diffusion_VAE_epochs):
             epoch_losses = []
             for batch_idx in range(num_batches):
@@ -644,6 +538,155 @@ class LatentDiffusion:
                 if verbose >= 1:
                     print(f"  Early stopping at epoch {epoch + 1}")
                 break
+
+        # Get trained encoder and decoder
+        self._encoder_latent_diffusion = self._latent_variational_algorithm.get_encoder_trained()
+        self._decoder_latent_diffusion = self._latent_variational_algorithm.get_decoder_trained()
+
+        # Initialize UNet models if not provided
+        if not self._has_external_first_unet:
+            self._latent_first_instance_unet = DiffusionModelUNetModel(
+                embedding_dimension=self._latent_diffusion_latent_dimension,
+                embedding_channels=self._latent_diffusion_unet_num_embedding_channels,
+                list_neurons_per_level=self._latent_diffusion_unet_channels_per_level,
+                list_attentions=self._latent_diffusion_unet_attention_mode,
+                number_residual_blocks=self._latent_diffusion_unet_num_residual_blocks,
+                normalization_groups=self._latent_diffusion_unet_group_normalization,
+                intermediary_activation_function=self._latent_diffusion_unet_intermediary_activation,
+                intermediary_activation_alpha=self._latent_diffusion_unet_intermediary_activation_alpha,
+                last_layer_activation=self._latent_diffusion_unet_last_layer_activation,
+                number_samples_per_class=self._number_samples_per_class
+            ).to(self._device)
+
+        if not self._has_external_second_unet:
+            self._latent_second_instance_unet = DiffusionModelUNetModel(
+                embedding_dimension=self._latent_diffusion_latent_dimension,
+                embedding_channels=self._latent_diffusion_unet_num_embedding_channels,
+                list_neurons_per_level=self._latent_diffusion_unet_channels_per_level,
+                list_attentions=self._latent_diffusion_unet_attention_mode,
+                number_residual_blocks=self._latent_diffusion_unet_num_residual_blocks,
+                normalization_groups=self._latent_diffusion_unet_group_normalization,
+                intermediary_activation_function=self._latent_diffusion_unet_intermediary_activation,
+                intermediary_activation_alpha=self._latent_diffusion_unet_intermediary_activation_alpha,
+                last_layer_activation=self._latent_diffusion_unet_last_layer_activation,
+                number_samples_per_class=self._number_samples_per_class
+            ).to(self._device)
+
+            # CRITICAL FIX: Warm-up forward pass to create all dynamic layers
+            if verbose >= 1:
+                print("Initializing UNet architectures...")
+
+            with torch.no_grad():
+                # Create dummy inputs matching expected shapes
+                dummy_batch_size = 2
+                dummy_embedding = torch.randn(
+                    dummy_batch_size,
+                    self._latent_diffusion_latent_dimension,
+                    self._latent_diffusion_unet_num_embedding_channels,
+                    device=self._device
+                )
+                dummy_time = torch.randint(
+                    0, self._latent_diffusion_gaussian_time_steps,
+                    (dummy_batch_size,),
+                    device=self._device
+                )
+                dummy_labels = torch.randn(
+                    dummy_batch_size,
+                    self._number_samples_per_class["number_classes"],
+                    device=self._device
+                )
+
+                # Warm-up pass through first UNet to create all layers
+                _ = self._latent_first_instance_unet(dummy_embedding, dummy_time, dummy_labels)
+
+                # Warm-up pass through second UNet to create all layers
+                _ = self._latent_second_instance_unet(dummy_embedding, dummy_time, dummy_labels)
+
+            # NOW synchronize weights after both models have created all their layers
+            self._latent_second_instance_unet.load_state_dict(
+                self._latent_first_instance_unet.state_dict()
+            )
+
+            if verbose >= 1:
+                print(
+                    f"UNet models initialized with {len(list(self._latent_first_instance_unet.parameters()))} parameters each")
+
+        # Initialize Gaussian diffusion utility if not provided
+        if not self._has_external_gaussian_diffusion_util:
+            self._latent_gaussian_diffusion_util = GaussianLatentDiffusion(
+                beta_start=self._latent_diffusion_gaussian_beta_start,
+                beta_end=self._latent_diffusion_gaussian_beta_end,
+                time_steps=self._latent_diffusion_gaussian_time_steps,
+                clip_min=self._latent_diffusion_gaussian_clip_min,
+                clip_max=self._latent_diffusion_gaussian_clip_max
+            ).to(self._device)
+
+        # Create optimizers for the diffusion algorithm
+        autoencoder_params = list(self._encoder_latent_diffusion.parameters()) + \
+                             list(self._decoder_latent_diffusion.parameters())
+        optimizer_autoencoder = Adam(autoencoder_params, lr=0.0001)
+        optimizer_diffusion = Adam(self._latent_first_instance_unet.parameters(), lr=0.0001)
+
+        # Initialize the final diffusion algorithm
+        self._latent_diffusion_algorithm = LatentDiffusionAlgorithm(
+            first_unet_model=self._latent_first_instance_unet,
+            second_unet_model=self._latent_second_instance_unet,
+            encoder_model_image=self._encoder_latent_diffusion,
+            decoder_model_image=self._decoder_latent_diffusion,
+            gdf_util=self._latent_gaussian_diffusion_util,
+            optimizer_autoencoder=optimizer_autoencoder,
+            optimizer_diffusion=optimizer_diffusion,
+            time_steps=self._latent_diffusion_gaussian_time_steps,
+            ema=self._latent_diffusion_ema,
+            margin=self._latent_diffusion_margin,
+            embedding_dimension=self._latent_diffusion_latent_dimension
+        )
+
+        # Create embeddings for diffusion training
+        if verbose >= 1:
+            print("Creating embeddings for diffusion training...")
+
+        data_embedding = self._latent_variational_algorithm.create_embedding(
+            x_real_samples.cpu().numpy(),
+            batch_size=self._latent_diffusion_VAE_batch_size_create_embedding
+        )
+
+        data_embedding = torch.from_numpy(data_embedding).float().to(self._device)
+        if len(data_embedding.shape) == 2:
+            data_embedding = data_embedding.unsqueeze(-1)
+
+        # Train diffusion model
+        if verbose >= 1:
+            print("Training diffusion model...")
+
+        self._latent_diffusion_algorithm.fit(
+            data_embedding,
+            y_real_samples_onehot,
+            epochs=self._latent_diffusion_unet_epochs,
+            batch_size=self._latent_diffusion_unet_batch_size,
+            verbose=verbose
+        )
+    def _detect_embedding_shape_pytorch(self, x_real_samples):
+        """PyTorch-specific helper to detect embedding shape."""
+        if len(x_real_samples) > 32:
+            sample = x_real_samples[:32]
+        else:
+            sample = x_real_samples
+
+        test_embedding = self._latent_variational_algorithm.create_embedding(
+            sample,
+            batch_size=min(16, len(sample))
+        )
+
+        test_embedding = torch.from_numpy(test_embedding).float()
+        if len(test_embedding.shape) == 2:
+            test_embedding = test_embedding.unsqueeze(-1)
+
+        actual_shape = test_embedding.shape[1:]
+
+        return actual_shape
+
+
 
     def fit_model(self, input_shape, x_real_samples, y_real_samples):
         """

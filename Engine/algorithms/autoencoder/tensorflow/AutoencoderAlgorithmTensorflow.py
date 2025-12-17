@@ -5,7 +5,7 @@ __author__ = 'Kayuã Oleques Paim'
 __email__ = 'kayuaolequesp@gmail.com'
 __version__ = '{1}.{1}.{0}'
 __initial_data__ = '2022/06/01'
-__last_update__ = '2025/03/29'
+__last_update__ = '2025/12/17'
 __credits__ = ['Kayuã Oleques']
 
 # MIT License
@@ -42,6 +42,7 @@ try:
     from tensorflow.keras.models import Model
 
     from tensorflow.keras.utils import to_categorical
+    from tensorflow.keras.optimizers import Adam
 
 except ImportError as error:
     print(error)
@@ -84,6 +85,10 @@ class AutoencoderAlgorithmTensorflow(Model):
             Expected input shape. If None, will be inferred from data.
         @auto_adapt_shape (bool, optional):
             If True, automatically adapts to input data shape. Default: True
+        @optimizer (tf.keras.optimizers.Optimizer, optional):
+            Optimizer for training. If None, uses Adam with learning_rate.
+        @learning_rate (float, optional):
+            Learning rate for default optimizer. Default: 0.001
 
     Example:
         >>> # Example with 1D data
@@ -97,27 +102,13 @@ class AutoencoderAlgorithmTensorflow(Model):
         >>> autoencoder_1d.compile(loss='mse')  # Compile before training!
         >>> autoencoder_1d.fit(data_1d, epochs=10)
 
-        >>> # Example with 2D data
-        >>> encoder_2d = build_encoder(input_shape=(28, 28), latent_dimension=64)
-        >>> decoder_2d = build_decoder(latent_dimension=64, output_shape=(28, 28))
-        >>> autoencoder_2d = AutoencoderAlgorithmTensorflow(
+        >>> # Example with custom optimizer
+        >>> autoencoder_custom = AutoencoderAlgorithmTensorflow(
         ...     encoder_model=encoder_2d,
         ...     decoder_model=decoder_2d,
-        ...     input_shape=(28, 28)
+        ...     optimizer=tensorflow.keras.optimizers.RMSprop(learning_rate=0.0001)
         ... )
-        >>> autoencoder_2d.compile(loss='mae')
-        >>> autoencoder_2d.fit(data_2d, epochs=10)
-
-        >>> # Example with 3D data (images) and custom loss
-        >>> encoder_3d = build_encoder(input_shape=(128, 128, 3), latent_dimension=64)
-        >>> decoder_3d = build_decoder(latent_dimension=64, output_shape=(128, 128, 3))
-        >>> autoencoder_3d = AutoencoderAlgorithmTensorflow(
-        ...     encoder_model=encoder_3d,
-        ...     decoder_model=decoder_3d,
-        ...     loss_function=tensorflow.keras.losses.MeanSquaredError(),
-        ...     input_shape=(128, 128, 3)
-        ... )
-        >>> autoencoder_3d.fit(data_3d, epochs=10)  # Loss already set in __init__
+        >>> autoencoder_custom.fit(data_2d, epochs=10)
     """
 
     def __init__(self,
@@ -131,7 +122,9 @@ class AutoencoderAlgorithmTensorflow(Model):
                  latent_standard_deviation=DEFAULT_latent_standard_deviation,
                  latent_dimension=DEFAULT_LATENT_DIMENSION,
                  input_shape=None,
-                 auto_adapt_shape=True):
+                 auto_adapt_shape=True,
+                 optimizer=None,
+                 learning_rate=0.001):
 
         super().__init__()
         """
@@ -160,6 +153,10 @@ class AutoencoderAlgorithmTensorflow(Model):
                 Expected input shape (without batch dimension).
             @auto_adapt_shape (bool):
                 Whether to automatically adapt to input data shape.
+            @optimizer (tf.keras.optimizers.Optimizer):
+                Optimizer for training (if None, uses Adam with learning_rate).
+            @learning_rate (float):
+                Learning rate for default optimizer.
         """
         if not isinstance(encoder_model, tensorflow.keras.Model):
             raise TypeError("encoder_model must be a tf.keras.Model instance.")
@@ -188,6 +185,9 @@ class AutoencoderAlgorithmTensorflow(Model):
         if not isinstance(latent_dimension, int) or latent_dimension <= 0:
             raise ValueError("latent_dimension must be a positive integer.")
 
+        if not isinstance(learning_rate, (int, float)) or learning_rate <= 0:
+            raise ValueError("Learning rate must be a positive number.")
+
         # Initialize the encoder and decoder models
         self._encoder = encoder_model
         self._decoder = decoder_model
@@ -214,10 +214,18 @@ class AutoencoderAlgorithmTensorflow(Model):
         # Combined encoder-decoder model
         self._encoder_decoder_model = Model(self._encoder.input, self._decoder(self._encoder.output))
 
+        # Learning rate
+        self._learning_rate = learning_rate
+
+        # Initialize optimizer (use provided or create default)
+        self._optimizer = optimizer if optimizer is not None else Adam(
+            learning_rate=self._learning_rate
+        )
+
         # Compiled flag
         self._is_compiled = False
 
-    def compile(self, loss=None, optimizer=None, metrics=None, **kwargs):
+    def compile(self, loss=None, optimizer=None, metrics=None, learning_rate=None, **kwargs):
         """
         Compile the autoencoder model (TensorFlow-compatible version).
 
@@ -226,8 +234,9 @@ class AutoencoderAlgorithmTensorflow(Model):
 
         Args:
             loss: Loss function (can be string name, function, or loss object)
-            optimizer: Optimizer (can be passed to fit() method instead)
+            optimizer: Optimizer (can be any tf.keras.optimizers.Optimizer instance)
             metrics: Metrics to track (stored but not implemented yet)
+            learning_rate: Learning rate (only used if optimizer is None)
             **kwargs: Additional arguments (ignored)
 
         Returns:
@@ -259,6 +268,14 @@ class AutoencoderAlgorithmTensorflow(Model):
                 self._loss_function = loss
             else:
                 raise TypeError("loss must be a string, callable function, or TensorFlow loss object")
+
+        # Update optimizer if provided
+        if optimizer is not None:
+            self._optimizer = optimizer
+        elif learning_rate is not None:
+            # Update learning rate of existing optimizer
+            self._learning_rate = learning_rate
+            self._optimizer = Adam(learning_rate=self._learning_rate)
 
         self._is_compiled = True
         return self
@@ -358,14 +375,13 @@ class AutoencoderAlgorithmTensorflow(Model):
         return batch_x, batch_y
 
     @tensorflow.function
-    def train_step(self, batch, optimizer=None):
+    def train_step(self, batch):
         """
         Perform a training step for the AutoEncoder.
         Automatically adapts to different batch formats.
 
         Args:
             batch: Input data batch (can be single tensor, tuple, or list).
-            optimizer: Optional optimizer (if None, uses self.optimizer).
 
         Returns:
             dict: Dictionary containing the loss value.
@@ -394,7 +410,7 @@ class AutoencoderAlgorithmTensorflow(Model):
         gradient_update = gradient_ae.gradient(update_gradient_loss, self._encoder_decoder_model.trainable_variables)
 
         # Apply gradients using the optimizer
-        self.optimizer.apply_gradients(zip(gradient_update, self._encoder_decoder_model.trainable_variables))
+        self._optimizer.apply_gradients(zip(gradient_update, self._encoder_decoder_model.trainable_variables))
 
         # Update the total loss metric
         self._total_loss_tracker.update_state(update_gradient_loss)
@@ -405,7 +421,7 @@ class AutoencoderAlgorithmTensorflow(Model):
     def fit(self, x=None, y=None, batch_size=32, epochs=1, verbose=1,
             callbacks=None, validation_data=None, shuffle=True,
             initial_epoch=0, steps_per_epoch=None, validation_steps=None,
-            validation_freq=1, optimizer=None, learning_rate=0.001, **kwargs):
+            validation_freq=1, optimizer=None, learning_rate=None, **kwargs):
         """
         Train the model with automatic shape adaptation.
 
@@ -422,7 +438,7 @@ class AutoencoderAlgorithmTensorflow(Model):
             steps_per_epoch: Number of steps per epoch.
             validation_steps: Number of validation steps.
             validation_freq: Validation frequency.
-            optimizer: TensorFlow optimizer (if None, uses already compiled optimizer).
+            optimizer: TensorFlow optimizer (if provided, overrides current optimizer).
             learning_rate: Learning rate for optimizer (only used if optimizer is None).
 
         Returns:
@@ -436,12 +452,13 @@ class AutoencoderAlgorithmTensorflow(Model):
                 f"Please call model.compile(loss='{self._loss_function}') before training."
             )
 
-        # Set optimizer if provided
+        # Update optimizer if provided
         if optimizer is not None:
-            self.optimizer = optimizer
-        elif not hasattr(self, 'optimizer') or self.optimizer is None:
-            # Create default optimizer if none exists
-            self.optimizer = tensorflow.keras.optimizers.Adam(learning_rate=learning_rate)
+            self._optimizer = optimizer
+        elif learning_rate is not None:
+            # Update learning rate and create new optimizer
+            self._learning_rate = learning_rate
+            self._optimizer = Adam(learning_rate=self._learning_rate)
 
         # Prepare the dataset
         if isinstance(x, tensorflow.data.Dataset):
@@ -711,6 +728,31 @@ class AutoencoderAlgorithmTensorflow(Model):
                 return data.reshape((batch_size,) + target_shape)
         return data
 
+    # ==================================================
+    # SETTER METHODS FOR DYNAMIC CONFIGURATION
+    # ==================================================
+
+    def set_optimizer(self, optimizer):
+        """Set or replace the optimizer."""
+        self._optimizer = optimizer
+
+    def set_learning_rate(self, learning_rate):
+        """Update the learning rate for optimizer."""
+        self._learning_rate = learning_rate
+        self._optimizer = Adam(learning_rate=self._learning_rate)
+
+    # ==================================================
+    # GETTER METHODS FOR ACCESSING CONFIGURATION
+    # ==================================================
+
+    def get_optimizer(self):
+        """Get the optimizer."""
+        return self._optimizer
+
+    def get_learning_rate(self):
+        """Get the current learning rate."""
+        return self._learning_rate
+
     @property
     def decoder(self):
         return self._decoder
@@ -723,6 +765,10 @@ class AutoencoderAlgorithmTensorflow(Model):
     def input_shape(self):
         return self.get_input_shape()
 
+    @property
+    def optimizer(self):
+        return self._optimizer
+
     @decoder.setter
     def decoder(self, decoder):
         self._decoder = decoder
@@ -734,3 +780,7 @@ class AutoencoderAlgorithmTensorflow(Model):
         self._encoder = encoder
         # Update combined model
         self._encoder_decoder_model = Model(self._encoder.input, self._decoder(self._encoder.output))
+
+    @optimizer.setter
+    def optimizer(self, optimizer):
+        self._optimizer = optimizer
