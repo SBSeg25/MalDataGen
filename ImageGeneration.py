@@ -10,7 +10,7 @@ Testa todos os modelos disponíveis e salva resultados
 import os
 import numpy as np
 
-os.environ["ML_FRAMEWORK"] = "pytorch"
+os.environ["ML_FRAMEWORK"] = "tensorflow"
 
 from Engine.models.QuantizedVAE import QuantizedVAE
 from Engine.models.LatentDiffusion import LatentDiffusion
@@ -25,8 +25,8 @@ from Engine.models.DenoisingDiffusion import DenoisingDiffusion
 # Configurações MNIST
 # =====================
 
-IMAGE_SIZE = (64, 64)
-INPUT_SHAPE = (64, 64, 1)
+IMAGE_SIZE = (16, 16)
+INPUT_SHAPE = (16, 16, 1)
 
 N_CLASSES = 10
 BATCH_LIMIT = 4800
@@ -80,13 +80,13 @@ print(f"✓ Dataset carregado: {x_real_samples.shape}")
 
 models = {
     #"latent_diffusion": LatentDiffusion(number_classes=N_CLASSES),
-    #"quantized_vae": quantized_vae(number_classes=N_CLASSES),
+    "quantized_vae": QuantizedVAE(number_classes=N_CLASSES),
     # "denoising_diffusion": denoising_diffusion(number_classes=N_CLASSES),
     #"autoencoder": Autoencoder(number_classes=N_CLASSES),
     # "adversarial": adversarial(number_classes=N_CLASSES),
-    #"wasserstein": wasserstein(number_classes=N_CLASSES),
+    #"wasserstein": Wasserstein(number_classes=N_CLASSES),
     #"wasserstein_gp": WassersteinGP(number_classes=N_CLASSES),
-    "variational_autoencoder": VariationalAutoencoder(number_classes=N_CLASSES)
+    #"variational_autoencoder": VariationalAutoencoder(number_classes=N_CLASSES)
 }
 
 # =====================

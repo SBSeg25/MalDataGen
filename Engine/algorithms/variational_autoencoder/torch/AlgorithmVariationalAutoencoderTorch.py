@@ -29,7 +29,36 @@ except ImportError as error:
 
 class VariationalAutoencoderAlgorithmTorch(nn.Module):
     """
-    Implements a Variational AutoEncoder (VAE) model for generating synthetic data.
+    Implements an adaptive Variational AutoEncoder (VAE) model for generating synthetic data.
+
+    The model includes an encoder and a decoder for encoding input data and reconstructing
+    it from a learned latent space. During training, it computes both the reconstruction loss
+    and the KL divergence loss. The trained decoder can be used to generate synthetic data.
+
+    This class supports customizable latent space parameters and loss functions, making it
+    adaptable for different generative tasks. It automatically adapts to any input shape:
+    (x), (x, y), (x, y, z), etc.
+
+    Example:
+        >>> # Example with 1D data
+        >>> vae_1d = VariationalAutoencoderAlgorithmTorch(
+        ...     encoder_model=encoder_1d,
+        ...     decoder_model=decoder_1d,
+        ...     loss_function='mse',
+        ...     latent_dimension=64,
+        ...     input_shape=(100,)
+        ... )
+        >>> vae_1d.fit(data_1d, epochs=50)
+
+        >>> # Example with 2D data (images)
+        >>> vae_2d = VariationalAutoencoderAlgorithmTorch(
+        ...     encoder_model=encoder_2d,
+        ...     decoder_model=decoder_2d,
+        ...     loss_function='bce',
+        ...     latent_dimension=128,
+        ...     input_shape=(28, 28)
+        ... )
+        >>> vae_2d.fit(data_2d, epochs=100)
     """
 
     def __init__(self,
@@ -37,14 +66,30 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
                  decoder_model,
                  loss_function,
                  latent_dimension,
-                 decoder_latent_dimension,
-                 latent_mean_distribution,
-                 latent_standard_deviation,  # CORRIGIDO: typo "stander" → "standard"
-                 file_name_encoder,
-                 file_name_decoder,
-                 models_saved_path):
+                 decoder_latent_dimension=None,
+                 latent_mean_distribution=0.0,
+                 latent_standard_deviation=1.0,
+                 file_name_encoder=None,
+                 file_name_decoder=None,
+                 models_saved_path=None,
+                 input_shape=None,
+                 auto_adapt_shape=True):
         """
-        Initializes the VariationalAlgorithm model.
+        Initializes the VariationalAutoencoderAlgorithmTorch model.
+
+        Args:
+            @encoder_model (nn.Module): The encoder model.
+            @decoder_model (nn.Module): The decoder model.
+            @loss_function (callable or str): The loss function (auto-compiled if string).
+            @latent_dimension (int): The dimensionality of the latent space.
+            @decoder_latent_dimension (int): The dimensionality for decoder (defaults to latent_dimension).
+            @latent_mean_distribution (float): The mean of the latent distribution.
+            @latent_standard_deviation (float): The standard deviation of the latent distribution.
+            @file_name_encoder (str): The filename for saving the encoder model.
+            @file_name_decoder (str): The filename for saving the decoder model.
+            @models_saved_path (str): The directory where models will be saved.
+            @input_shape (tuple): Expected input shape (without batch dimension).
+            @auto_adapt_shape (bool): Whether to automatically adapt to input data shape.
         """
         # Call parent __init__ first
         super(VariationalAutoencoderAlgorithmTorch, self).__init__()
@@ -53,15 +98,19 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
         self._encoder = encoder_model
         self._decoder = decoder_model
 
-        # loss function and metrics for tracking losses
-        self._loss_function = loss_function
+        # Loss function - will be auto-compiled if string
+        self._loss_function_string = loss_function if isinstance(loss_function, str) else None
+        self._loss_function = self._convert_loss_to_function(loss_function)
+
+        # Metrics for tracking losses
         self._total_loss_tracker = 0.0
         self._reconstruction_loss_tracker = 0.0
         self._kl_loss_tracker = 0.0
+
         self._latent_mean_distribution = latent_mean_distribution
-        self._latent_standard_deviation = latent_standard_deviation  # CORRIGIDO
+        self._latent_standard_deviation = latent_standard_deviation
         self._latent_dimension = latent_dimension
-        self._decoder_latent_dimension = decoder_latent_dimension
+        self._decoder_latent_dimension = decoder_latent_dimension if decoder_latent_dimension is not None else latent_dimension
 
         # File names for saving models
         self._file_name_encoder = file_name_encoder
@@ -70,66 +119,233 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
         # Path for saving models
         self._models_saved_path = models_saved_path
 
+        # Shape adaptation
+        self._input_shape = input_shape
+        self._auto_adapt_shape = auto_adapt_shape
+        self._inferred_shape = None
+
         # Optimizer will be configured later
         self.optimizer = None
+
+        # Compiled flag
+        self._is_compiled = True  # Auto-compiled
+
+    @staticmethod
+    def _convert_loss_to_function(loss):
+        """
+        Convert string loss names to PyTorch loss functions.
+
+        Args:
+            loss: Loss function (string, callable, or loss object)
+
+        Returns:
+            Loss function or callable
+        """
+        if loss is None:
+            return F.binary_cross_entropy
+
+        if isinstance(loss, str):
+            loss_map = {
+                'mse': F.mse_loss,
+                'mean_squared_error': F.mse_loss,
+                'mae': F.l1_loss,
+                'mean_absolute_error': F.l1_loss,
+                'l1': F.l1_loss,
+                'bce': F.binary_cross_entropy,
+                'binary_crossentropy': F.binary_cross_entropy,
+                'crossentropy': F.cross_entropy,
+                'cross_entropy': F.cross_entropy,
+                'nll': F.nll_loss,
+                'nll_loss': F.nll_loss,
+                'kld': F.kl_div,
+                'kl_div': F.kl_div,
+                'huber': F.smooth_l1_loss,
+                'smooth_l1': F.smooth_l1_loss,
+            }
+            loss_lower = loss.lower()
+            if loss_lower in loss_map:
+                return loss_map[loss_lower]
+            else:
+                raise ValueError(f"Unknown loss function: {loss}. Available: {list(loss_map.keys())}")
+
+        return loss
+
+    def compile(self, loss=None, optimizer=None, **kwargs):
+        """
+        Configure the model for training (PyTorch compatibility method).
+
+        Args:
+            loss: Loss function (can be string name, function, or loss object)
+            optimizer: PyTorch optimizer
+            **kwargs: Additional arguments (ignored)
+
+        Returns:
+            self: Returns self for method chaining
+        """
+        if loss is not None:
+            self._loss_function = self._convert_loss_to_function(loss)
+            self._loss_function_string = loss if isinstance(loss, str) else None
+
+        if optimizer is not None:
+            self.optimizer = optimizer
+
+        self._is_compiled = True
+        return self
+
+    @staticmethod
+    def _infer_data_shape(data):
+        """
+        Infer the shape of input data, excluding the batch dimension.
+
+        Args:
+            data: Input data (tensor, array, or tuple/list).
+
+        Returns:
+            tuple: Shape of the data excluding batch dimension.
+        """
+        if isinstance(data, (tuple, list)):
+            # If data is a tuple/list, infer from first element
+            data = data[0]
+
+        if torch.is_tensor(data):
+            shape = tuple(data.shape[1:])
+        elif isinstance(data, numpy.ndarray):
+            shape = data.shape[1:] if len(data.shape) > 1 else data.shape
+        else:
+            # Try to convert to tensor and get shape
+            try:
+                tensor_data = torch.tensor(data)
+                shape = tuple(tensor_data.shape[1:])
+            except:
+                raise ValueError(f"Cannot infer shape from data of type {type(data)}")
+
+        return shape
+
+    def _validate_and_adapt_shape(self, data):
+        """
+        Validate input data shape and adapt if necessary.
+
+        Args:
+            data: Input data.
+
+        Returns:
+            bool: True if shape is valid or successfully adapted.
+        """
+        current_shape = self._infer_data_shape(data)
+
+        if self._inferred_shape is None:
+            self._inferred_shape = current_shape
+            if self._input_shape is not None and self._input_shape != current_shape:
+                print(f"Warning: Specified input_shape {self._input_shape} differs from inferred shape {current_shape}")
+                if self._auto_adapt_shape:
+                    print(f"Auto-adapting to shape: {current_shape}")
+                    self._input_shape = current_shape
+            elif self._input_shape is None:
+                self._input_shape = current_shape
+                print(f"Inferred input shape: {current_shape}")
+        else:
+            if current_shape != self._inferred_shape:
+                if self._auto_adapt_shape:
+                    print(f"Warning: Input shape changed from {self._inferred_shape} to {current_shape}")
+                    self._inferred_shape = current_shape
+                else:
+                    raise ValueError(
+                        f"Input shape mismatch: expected {self._inferred_shape}, got {current_shape}. "
+                        f"Set auto_adapt_shape=True to allow dynamic shape changes."
+                    )
+
+        return True
+
+    @staticmethod
+    def _prepare_batch(batch):
+        """
+        Prepare batch data, handling different input formats.
+
+        Args:
+            batch: Input batch (can be single tensor, tuple, or list).
+
+        Returns:
+            tuple: (batch_x, batch_y, batch_labels) where batch_y is the reconstruction target.
+        """
+        if isinstance(batch, (tuple, list)):
+            if len(batch) == 1:
+                # Single input, use as both input and target
+                batch_x = batch[0]
+                batch_y = batch[0]
+                batch_labels = None
+            elif len(batch) == 2:
+                # Input and target provided
+                batch_x, batch_y = batch
+                # Check if batch_y is labels (different shape) or target (same shape)
+                if batch_x.shape != batch_y.shape:
+                    # batch_y are labels, use batch_x as target
+                    batch_labels = batch_y
+                    batch_y = batch_x
+                else:
+                    batch_labels = None
+            elif len(batch) == 3:
+                # Input, target, and labels provided
+                batch_x, batch_y, batch_labels = batch
+            else:
+                # Multiple inputs, use first as input, second as target
+                batch_x = batch[0]
+                batch_y = batch[1]
+                batch_labels = None
+        else:
+            # Single tensor, use as both input and target
+            batch_x = batch
+            batch_y = batch
+            batch_labels = None
+
+        return batch_x, batch_y, batch_labels
 
     def train_step(self, batch):
         """
         Perform a training step for the Variational AutoEncoder (VAE).
+        Automatically adapts to different batch formats.
+
+        Args:
+            batch: Input data batch.
+
+        Returns:
+            dict: Dictionary containing the loss values (total loss, reconstruction loss, KL divergence loss).
         """
-        # Unpack batch based on its length
-        if len(batch) == 3:
-            batch_x, batch_y, batch_y_labels = batch
-        elif len(batch) == 2:
-            batch_x, batch_y = batch
-            batch_y_labels = None
-        else:
-            raise ValueError(f"Unexpected batch length: {len(batch)}")
+        # Prepare batch data
+        batch_x, batch_y, batch_labels = self._prepare_batch(batch)
 
         # Move to device
         device = next(self.parameters()).device
         batch_x = batch_x.to(device)
         batch_y = batch_y.to(device)
-        if batch_y_labels is not None:
-            batch_y_labels = batch_y_labels.to(device)
-
-        # IMPORTANTE: Em um VAE, queremos reconstruir batch_x
-        # Se batch_y tem dimensão diferente de batch_x, então batch_y são os labels
-        # e devemos usar batch_x como alvo de reconstrução
-        if batch_x.shape != batch_y.shape:
-            # batch_y são labels, usar batch_x como target
-            reconstruction_target = batch_x
-            if batch_y_labels is None:
-                batch_y_labels = batch_y
-        else:
-            # batch_y é o target correto
-            reconstruction_target = batch_y
+        if batch_labels is not None:
+            batch_labels = batch_labels.to(device)
 
         # Zero gradients
         self.optimizer.zero_grad()
 
         try:
-            # Passar argumentos corretamente para o encoder
-            if batch_y_labels is not None:
-                encoder_output = self._encoder(batch_x, batch_y_labels)
+            # Forward pass through encoder
+            if batch_labels is not None:
+                encoder_output = self._encoder(batch_x, batch_labels)
             else:
                 encoder_output = self._encoder(batch_x)
 
-            # O encoder retorna: (z_mean, z_log_var, z, label)
+            # Extract encoder outputs
             if isinstance(encoder_output, tuple) and len(encoder_output) >= 3:
-                z_mean, z_log_var, latent, label_output = encoder_output[:4]
+                z_mean, z_log_var, latent, label_output = encoder_output[:4] if len(encoder_output) >= 4 else (
+                    *encoder_output, batch_labels)
             else:
-                # Se for apenas um tensor, usar como latent
+                # If encoder returns only latent
                 latent = encoder_output
-                label_output = batch_y_labels if batch_y_labels is not None else None
+                label_output = batch_labels
                 z_mean = z_log_var = None
 
-            # Se não temos label_output, criar um dummy
+            # Create dummy labels if needed
             if label_output is None:
                 batch_size = latent.shape[0]
                 label_output = torch.zeros((batch_size, 2)).to(device)
 
-            # Decoder
+            # Forward pass through decoder
             reconstruction_data = self._decoder(latent, label_output)
 
         except Exception as e:
@@ -138,10 +354,10 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
             traceback.print_exc()
             raise
 
-        # Calcular reconstruction loss usando o target correto
-        reconstruction_loss = F.binary_cross_entropy(reconstruction_data, reconstruction_target, reduction='mean')
+        # Calculate reconstruction loss
+        reconstruction_loss = self._loss_function(reconstruction_data, batch_y, reduction='mean')
 
-        # Calcular KL divergence se temos z_mean e z_log_var
+        # Calculate KL divergence if available
         if z_mean is not None and z_log_var is not None:
             kl_loss = -0.5 * torch.mean(torch.sum(1 + z_log_var - z_mean.pow(2) - z_log_var.exp(), dim=1))
         else:
@@ -172,11 +388,11 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
             initial_epoch=0, steps_per_epoch=None, validation_steps=None,
             validation_freq=1, optimizer=None, learning_rate=0.001, **kwargs):
         """
-        Train the model with a simplified progress bar.
+        Train the model with automatic shape adaptation.
 
         Args:
-            x: Input data (can be numpy array, tensor, tuple, or DataLoader).
-            y: Target data or labels (can be numpy array, tensor, or tuple).
+            x: Input data (any shape).
+            y: Target data (if None, x is used as target).
             batch_size: Number of samples per gradient update.
             epochs: Number of epochs to train.
             verbose: 0 = silent, 1 = progress bar, 2 = one line per epoch.
@@ -204,7 +420,14 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
         # Prepare the dataset
         if isinstance(x, DataLoader):
             train_dataloader = x
+            # Try to infer shape from dataloader
+            for batch in train_dataloader:
+                self._validate_and_adapt_shape(batch)
+                break
         else:
+            # Validate and adapt shape
+            self._validate_and_adapt_shape(x)
+
             # Handle different input formats
             if isinstance(x, tuple):
                 # x is tuple: (data, target) or (data, target, labels)
@@ -229,24 +452,12 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
                         y_data = y[0]
                         labels = None
                 else:
-                    # Se y tem dimensão diferente de x, y são os labels
-                    if isinstance(y, numpy.ndarray):
-                        y_np = y
-                    elif torch.is_tensor(y):
-                        y_np = y.cpu().numpy()
-                    else:
-                        y_np = numpy.array(y)
+                    # Check if y has different shape (labels) or same shape (target)
+                    y_shape = self._infer_data_shape(y)
+                    x_shape = self._infer_data_shape(x)
 
-                    if isinstance(x, numpy.ndarray):
-                        x_np = x
-                    elif torch.is_tensor(x):
-                        x_np = x.cpu().numpy()
-                    else:
-                        x_np = numpy.array(x)
-
-                    # Verificar se dimensões são compatíveis
-                    if y_np.shape[1:] != x_np.shape[1:]:
-                        # y são labels, x é tanto input quanto target
+                    if y_shape != x_shape:
+                        # y are labels, x is both input and target
                         y_data = x
                         labels = y
                     else:
@@ -278,6 +489,7 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
 
         # Training loop
         for epoch in range(initial_epoch, epochs):
+            self.train()
             self._total_loss_tracker = 0.0
             self._reconstruction_loss_tracker = 0.0
             self._kl_loss_tracker = 0.0
@@ -355,6 +567,91 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
                 self.history = history_dict
 
         return History(history)
+
+    def _evaluate_validation(self, validation_data, validation_steps=None):
+        """
+        Evaluate the model on validation data with automatic shape handling.
+
+        Args:
+            validation_data: Validation dataset (DataLoader or tuple).
+            validation_steps: Number of validation steps.
+
+        Returns:
+            Average validation loss.
+        """
+        self.eval()
+        device = next(self.parameters()).device
+
+        val_losses = []
+        val_recon_losses = []
+        val_kl_losses = []
+        step = 0
+
+        # Prepare validation dataset
+        if isinstance(validation_data, DataLoader):
+            val_dataloader = validation_data
+        else:
+            val_x, val_y = validation_data
+            if isinstance(val_x, numpy.ndarray):
+                val_x = torch.from_numpy(val_x).float()
+            if isinstance(val_y, numpy.ndarray):
+                val_y = torch.from_numpy(val_y).float()
+            val_dataset = TensorDataset(val_x, val_y)
+            val_dataloader = DataLoader(val_dataset, batch_size=32, shuffle=False)
+
+        with torch.no_grad():
+            for batch_data in val_dataloader:
+                batch_x, batch_y, batch_labels = self._prepare_batch(batch_data)
+                batch_x = batch_x.to(device)
+                batch_y = batch_y.to(device)
+                if batch_labels is not None:
+                    batch_labels = batch_labels.to(device)
+
+                # Forward pass through encoder
+                if batch_labels is not None:
+                    encoder_output = self._encoder(batch_x, batch_labels)
+                else:
+                    encoder_output = self._encoder(batch_x)
+
+                # Extract encoder outputs
+                if isinstance(encoder_output, tuple) and len(encoder_output) >= 3:
+                    latent_mean, latent_log_variation, latent, label = encoder_output[:4] if len(
+                        encoder_output) >= 4 else (*encoder_output, batch_labels)
+                else:
+                    latent = encoder_output
+                    latent_mean = latent_log_variation = None
+                    label = batch_labels if batch_labels is not None else torch.zeros((latent.shape[0], 2)).to(device)
+
+                # Forward pass through decoder
+                reconstruction_data = self._decoder(latent, label)
+
+                # Calculate reconstruction loss
+                reconstruction_loss = self._loss_function(reconstruction_data, batch_y, reduction='mean')
+
+                # Calculate KL divergence
+                if latent_mean is not None and latent_log_variation is not None:
+                    kl_loss = -0.5 * torch.sum(
+                        1 + latent_log_variation - torch.square(latent_mean) - torch.exp(latent_log_variation),
+                        dim=1
+                    )
+                    kl_divergence_loss = torch.mean(kl_loss)
+                else:
+                    kl_divergence_loss = torch.tensor(0.0).to(device)
+
+                # Total loss
+                total_loss = reconstruction_loss + kl_divergence_loss
+
+                val_losses.append(float(total_loss))
+                val_recon_losses.append(float(reconstruction_loss))
+                val_kl_losses.append(float(kl_divergence_loss))
+
+                step += 1
+                if validation_steps is not None and step >= validation_steps:
+                    break
+
+        self.train()
+        return numpy.mean(val_losses) if val_losses else 0.0
+
     def configure_optimizer(self,
                             learning_rate=0.001,
                             beta_1=0.9,
@@ -395,7 +692,7 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
             if isinstance(data, numpy.ndarray):
                 data = torch.from_numpy(data).float().to(device)
 
-            # CORRIGIDO: Aceitar labels opcionais
+            # Accept optional labels
             if labels is not None:
                 if isinstance(labels, numpy.ndarray):
                     labels = torch.from_numpy(labels).float().to(device)
@@ -403,7 +700,7 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
             else:
                 encoder_output = self._encoder(data)
 
-            # Extrair z_mean
+            # Extract z_mean
             if isinstance(encoder_output, tuple) and len(encoder_output) >= 1:
                 latent_mean = encoder_output[0]
             else:
@@ -414,7 +711,21 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
     def get_samples(self, number_samples_per_class):
         """
         Generate synthetic samples for each specified class using the trained decoder.
+
+        Args:
+            number_samples_per_class (dict):
+                Dictionary specifying the number of samples to generate for each class.
+                Expected structure:
+                {
+                    "classes": {class_label: number_of_samples, ...},
+                    "number_classes": total_number_of_classes
+                }
+
+        Returns:
+            dict:
+                A dictionary where each key is a class label and the value is an array of generated samples.
         """
+        self.eval()
         device = next(self.parameters()).device
         generated_data = {}
 
@@ -425,8 +736,7 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
                 label_samples_generated[:, label_class] = 1
                 label_samples_generated = label_samples_generated.to(device)
 
-                # Sample random latent vectors from a standard normal distribution
-                # NOTA: Usando decoder_latent_dimension que pode ser diferente de latent_dimension
+                # Sample random latent vectors
                 latent_noise = torch.randn(number_instances, self._decoder_latent_dimension).to(device)
 
                 # Use the decoder to generate samples
@@ -450,7 +760,6 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
         self.eval()
         device = next(self.parameters()).device
 
-        # CORRIGIDO: Usar latent_dimension correto
         if latent_dimension is None:
             latent_dimension = self._latent_dimension
 
@@ -462,141 +771,45 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
                 device=device
             ) * self._latent_standard_deviation + self._latent_mean_distribution
 
-            # CORRIGIDO: Create one-hot encoded labels para compatibilidade com decoder
+            # Create one-hot encoded labels
             label_list = torch.zeros(number_samples_generate, num_classes, device=device)
             label_list[:, label_class] = 1.0
 
-            # Generate synthetic data by passing random noise and labels through the decoder
+            # Generate synthetic data
             synthetic_data = self._decoder(random_noise_generate, label_list)
 
         return synthetic_data
 
-    @property
-    def metrics(self):
+    def get_input_shape(self):
         """
+        Get the current input shape.
+
         Returns:
-            dict: Dictionary of metrics tracked during training.
+            tuple: Current input shape (excluding batch dimension).
         """
-        return {
-            "loss": self._total_loss_tracker,
-            "reconstruction_loss": self._reconstruction_loss_tracker,
-            "kl_loss": self._kl_loss_tracker
-        }
+        return self._inferred_shape if self._inferred_shape is not None else self._input_shape
 
-    def save_model(self, directory, file_name):
+    @staticmethod
+    def reshape_data(data, target_shape):
         """
-        Save the encoder and decoder models.
-        """
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-
-        # Construct file names for encoder and decoder models
-        encoder_file_name = os.path.join(directory, f"fold_{file_name}_encoder.pth")
-        decoder_file_name = os.path.join(directory, f"fold_{file_name}_decoder.pth")
-
-        # Save encoder model
-        torch.save(self._encoder.state_dict(), encoder_file_name)
-
-        # Save decoder model
-        torch.save(self._decoder.state_dict(), decoder_file_name)
-
-    def load_models(self, directory, file_name):
-        """
-        Load the encoder and decoder models from a directory.
-        """
-        device = next(self.parameters()).device
-
-        # Construct file names for encoder and decoder models
-        encoder_file_name = os.path.join(directory, f"fold_{file_name}_encoder.pth")
-        decoder_file_name = os.path.join(directory, f"fold_{file_name}_decoder.pth")
-
-        # Load the encoder and decoder models
-        self._encoder.load_state_dict(torch.load(encoder_file_name, map_location=device))
-        self._decoder.load_state_dict(torch.load(decoder_file_name, map_location=device))
-
-    def compile(self, loss, optimizer):
-        """
-        Configure the model for training (PyTorch compatibility method).
-        """
-        self.optimizer = optimizer
-
-
-    def _evaluate_validation(self, validation_data, validation_steps=None):
-        """
-        Evaluate the model on validation data.
+        Reshape data to target shape if needed.
 
         Args:
-            validation_data: Validation dataset (DataLoader or tuple).
-            validation_steps: Number of validation steps.
+            data: Input data.
+            target_shape: Desired shape (excluding batch dimension).
 
         Returns:
-            Average validation loss.
+            Reshaped data.
         """
-        self.eval()
-        device = next(self.parameters()).device
-
-        val_losses = []
-        val_recon_losses = []
-        val_kl_losses = []
-        step = 0
-
-        # Prepare validation dataset
-        if isinstance(validation_data, DataLoader):
-            val_dataloader = validation_data
-        else:
-            val_x, val_y = validation_data
-            if isinstance(val_x, numpy.ndarray):
-                val_x = torch.from_numpy(val_x).float()
-            if isinstance(val_y, numpy.ndarray):
-                val_y = torch.from_numpy(val_y).float()
-            val_dataset = TensorDataset(val_x, val_y)
-            val_dataloader = DataLoader(val_dataset, batch_size=32, shuffle=False)
-
-        with torch.no_grad():
-            for batch_data in val_dataloader:
-                batch_x, batch_y = batch_data
-                batch_x = batch_x.to(device)
-                batch_y = batch_y.to(device)
-
-                # Forward pass through encoder and decoder
-                encoder_output = self._encoder(batch_x)
-
-                if isinstance(encoder_output, tuple) and len(encoder_output) >= 3:
-                    latent_mean, latent_log_variation, latent, label = encoder_output[:4]
-                else:
-                    latent = encoder_output
-                    latent_mean = latent_log_variation = None
-                    label = torch.zeros((latent.shape[0], 2)).to(device)
-
-                reconstruction_data = self._decoder(latent, label)
-
-                # Calculate binary cross-entropy loss for reconstruction
-                reconstruction_loss = F.binary_cross_entropy(reconstruction_data, batch_y, reduction='mean')
-
-                # CORRIGIDO: Fórmula KL divergence correta
-                if latent_mean is not None and latent_log_variation is not None:
-                    # KL divergence: -0.5 * sum(1 + log(var) - mean^2 - var)
-                    kl_loss = -0.5 * torch.sum(
-                        1 + latent_log_variation - torch.square(latent_mean) - torch.exp(latent_log_variation),
-                        dim=1
-                    )
-                    kl_divergence_loss = torch.mean(kl_loss)
-                else:
-                    kl_divergence_loss = torch.tensor(0.0).to(device)
-
-                # Total loss
-                total_loss = reconstruction_loss + kl_divergence_loss
-
-                val_losses.append(float(total_loss))
-                val_recon_losses.append(float(reconstruction_loss))
-                val_kl_losses.append(float(kl_divergence_loss))
-
-                step += 1
-                if validation_steps is not None and step >= validation_steps:
-                    break
-
-        self.train()
-        return numpy.mean(val_losses) if val_losses else 0.0
+        if isinstance(data, numpy.ndarray):
+            if data.shape[1:] != target_shape:
+                batch_size = data.shape[0]
+                return data.reshape((batch_size,) + target_shape)
+        elif torch.is_tensor(data):
+            if tuple(data.shape[1:]) != target_shape:
+                batch_size = data.shape[0]
+                return data.reshape((batch_size,) + target_shape)
+        return data
 
     @staticmethod
     def calculate_samples_per_class(y_labels):
@@ -625,7 +838,22 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
             "number_classes": len(unique)
         }
 
-    # Properties for read-only access
+    @property
+    def metrics(self):
+        """
+        Returns:
+            dict: Dictionary of metrics tracked during training.
+        """
+        return {
+            "loss": self._total_loss_tracker,
+            "reconstruction_loss": self._reconstruction_loss_tracker,
+            "kl_loss": self._kl_loss_tracker
+        }
+
+    @property
+    def input_shape(self):
+        return self.get_input_shape()
+
     @property
     def decoder(self):
         return self._decoder
@@ -633,3 +861,64 @@ class VariationalAutoencoderAlgorithmTorch(nn.Module):
     @property
     def encoder(self):
         return self._encoder
+
+    def save_model(self, directory, file_name):
+        """
+        Save the encoder and decoder models.
+
+        Args:
+            directory (str): Directory where models will be saved.
+            file_name (str): Base file name for saving models.
+        """
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
+        # Construct file names for encoder and decoder models
+        encoder_file_name = os.path.join(directory, f"fold_{file_name}_encoder.pth")
+        decoder_file_name = os.path.join(directory, f"fold_{file_name}_decoder.pth")
+
+        # Save encoder model
+        torch.save(self._encoder.state_dict(), encoder_file_name)
+
+        # Save decoder model
+        torch.save(self._decoder.state_dict(), decoder_file_name)
+
+        # Save shape information
+        shape_info = {
+            'input_shape': self._input_shape,
+            'inferred_shape': self._inferred_shape,
+            'latent_dimension': self._latent_dimension,
+            'decoder_latent_dimension': self._decoder_latent_dimension
+        }
+        shape_file = os.path.join(directory, f"fold_{file_name}_shape_info.json")
+        with open(shape_file, 'w') as f:
+            json.dump(shape_info, f)
+
+    def load_models(self, directory, file_name):
+        """
+        Load the encoder and decoder models from a directory.
+
+        Args:
+            directory (str): Directory where models are stored.
+            file_name (str): Base file name for loading models.
+        """
+        device = next(self.parameters()).device
+
+        # Construct file names for encoder and decoder models
+        encoder_file_name = os.path.join(directory, f"fold_{file_name}_encoder.pth")
+        decoder_file_name = os.path.join(directory, f"fold_{file_name}_decoder.pth")
+
+        # Load the encoder and decoder models
+        self._encoder.load_state_dict(torch.load(encoder_file_name, map_location=device))
+        self._decoder.load_state_dict(torch.load(decoder_file_name, map_location=device))
+
+        # Load shape information if available
+        shape_file = os.path.join(directory, f"fold_{file_name}_shape_info.json")
+        if os.path.exists(shape_file):
+            with open(shape_file, 'r') as f:
+                shape_info = json.load(f)
+                self._input_shape = tuple(shape_info.get('input_shape', ()))
+                self._inferred_shape = tuple(shape_info.get('inferred_shape', ()))
+                self._latent_dimension = shape_info.get('latent_dimension', self._latent_dimension)
+                self._decoder_latent_dimension = shape_info.get('decoder_latent_dimension',
+                                                                self._decoder_latent_dimension)

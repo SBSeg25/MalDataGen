@@ -3,50 +3,28 @@
 
 __author__ = 'Kayuã Oleques Paim'
 __email__ = 'kayuaolequesp@gmail.com'
-__version__ = '{1}.{0}.{1}'
+__version__ = '{1}.{0}.{2}'
 __initial_data__ = '2022/06/01'
-__last_update__ = '2025/12/12'
+__last_update__ = '2025/12/16'
 __credits__ = ['Kayuã Oleques']
 
 # MIT License
 #
 # Copyright (c) 2025 Synthetic Ocean AI
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
 
 try:
     import os
     import sys
-
     import json
     import numpy
 
     import tensorflow
 
     from abc import ABC
-
     from typing import Any
-
     from typing import Callable
 
     from tensorflow.keras import Model
-
     from tensorflow.keras.utils import to_categorical
     from tensorflow.keras.losses import BinaryCrossentropy
 
@@ -57,13 +35,15 @@ except ImportError as error:
 
 class WassersteinAlgorithmTensorflow(Model):
     """
-    Implementation of the original wasserstein Generative adversarial Network (WGAN) algorithm.
-    This class extends the Keras Model class to create a trainable WGAN model.
+    Implementation of the original Wasserstein Generative Adversarial Network (WGAN) algorithm.
+    This class extends the Keras Model class to create a trainable WGAN model with adaptive input handling.
 
     The original WGAN (Arjovsky et al., 2017) improves upon standard GANs by:
-    - Using the wasserstein (Earth Mover's) distance as the loss metric
+    - Using the Wasserstein (Earth Mover's) distance as the loss metric
     - Providing more stable training dynamics
     - Offering meaningful loss metrics that correlate with generation quality
+
+    This implementation automatically adapts to any input shape: (x), (x, y), (x, y, z), etc.
 
     Mathematical Formulation:
     ------------------------
@@ -81,34 +61,67 @@ class WassersteinAlgorithmTensorflow(Model):
     Reference:
     ----------
     Arjovsky, M., Chintala, S., & Bottou, L. (2017).
-    "wasserstein Generative adversarial Networks."
+    "Wasserstein Generative Adversarial Networks."
     Proceedings of the 34th International Conference on Machine Learning, PMLR 70:214-223.
-    Available at: http://proceedings.mlr.press/v70/arjovsky17a.html
 
-    Key Components:
-    ---------------
-    - Generator model that creates synthetic samples
-    - Critic model (instead of discriminator) that scores sample realism
-    - Weight clipping to enforce Lipschitz constraint
-    - Custom training step with multiple critic updates per generator update
+    Example:
+        >>> # Example with 1D data
+        >>> wgan_1d = WassersteinAlgorithmTensorflow(
+        ...     generator_model=generator_1d,
+        ...     discriminator_model=discriminator_1d,
+        ...     latent_dimension=64,
+        ...     input_shape=(100,)
+        ... )
+        >>> wgan_1d.fit(data_1d, epochs=50)
+
+        >>> # Example with 2D data (images)
+        >>> wgan_2d = WassersteinAlgorithmTensorflow(
+        ...     generator_model=generator_2d,
+        ...     discriminator_model=discriminator_2d,
+        ...     latent_dimension=128,
+        ...     input_shape=(28, 28)
+        ... )
+        >>> wgan_2d.fit(data_2d, epochs=100)
     """
 
     def __init__(self,
                  generator_model,
                  discriminator_model,
                  latent_dimension,
-                 generator_loss_fn,
-                 discriminator_loss_fn,
-                 file_name_discriminator,
-                 file_name_generator,
-                 models_saved_path,
-                 latent_mean_distribution,
-                 latent_standard_deviation,
-                 smoothing_rate,
-                 discriminator_steps,
+                 generator_loss_fn=None,
+                 discriminator_loss_fn=None,
+                 file_name_discriminator=None,
+                 file_name_generator=None,
+                 models_saved_path=None,
+                 latent_mean_distribution=0.0,
+                 latent_standard_deviation=1.0,
+                 smoothing_rate=0.0,
+                 discriminator_steps=5,
                  clip_value=0.01,
+                 input_shape=None,
+                 auto_adapt_shape=True,
                  *args,
                  **kwargs):
+        """
+        Initializes the WassersteinAlgorithmTensorflow model.
+
+        Args:
+            @generator_model: The generator model.
+            @discriminator_model: The discriminator/critic model.
+            @latent_dimension (int): The dimensionality of the latent space.
+            @generator_loss_fn: Generator loss function (defaults to Wasserstein loss).
+            @discriminator_loss_fn: Discriminator loss function (defaults to Wasserstein loss).
+            @file_name_discriminator (str): Filename for saving discriminator.
+            @file_name_generator (str): Filename for saving generator.
+            @models_saved_path (str): Directory for saving models.
+            @latent_mean_distribution (float): Mean of latent distribution.
+            @latent_standard_deviation (float): Std dev of latent distribution.
+            @smoothing_rate (float): Label smoothing rate.
+            @discriminator_steps (int): Number of discriminator updates per generator update.
+            @clip_value (float): Weight clipping value for Lipschitz constraint.
+            @input_shape (tuple): Expected input shape (without batch dimension).
+            @auto_adapt_shape (bool): Whether to automatically adapt to input data shape.
+        """
         super().__init__(*args, **kwargs)
 
         self._generator = generator_model
@@ -127,39 +140,168 @@ class WassersteinAlgorithmTensorflow(Model):
         self._generator_optimizer = None
         self._discriminator_optimizer = None
 
+        # Shape adaptation
+        self._input_shape = input_shape
+        self._auto_adapt_shape = auto_adapt_shape
+        self._inferred_shape = None
+
         # Initialize loss tracker
         self._total_loss_tracker = tensorflow.keras.metrics.Mean(name="total_loss")
 
-    def compile(self, optimizer_generator, optimizer_discriminator,
-                loss_generator, loss_discriminator, *args, **kwargs):
-        super().compile()
-        self._generator_optimizer = optimizer_generator
-        self._discriminator_optimizer = optimizer_discriminator
+    @staticmethod
+    def _infer_data_shape(data):
+        """
+        Infer the shape of input data, excluding the batch dimension.
 
-        # Set default wasserstein losses if None is provided
-        if loss_generator is None:
+        Args:
+            data: Input data (tensor, array, or tuple/list).
+
+        Returns:
+            tuple: Shape of the data excluding batch dimension.
+        """
+        if isinstance(data, (tuple, list)):
+            # If data is a tuple/list, infer from first element
+            data = data[0]
+
+        if tensorflow.is_tensor(data):
+            shape = tuple(data.shape[1:])
+        elif isinstance(data, numpy.ndarray):
+            shape = data.shape[1:] if len(data.shape) > 1 else data.shape
+        else:
+            # Try to convert to tensor and get shape
+            try:
+                tensor_data = tensorflow.constant(data)
+                shape = tuple(tensor_data.shape[1:])
+            except:
+                raise ValueError(f"Cannot infer shape from data of type {type(data)}")
+
+        return shape
+
+    def _validate_and_adapt_shape(self, data):
+        """
+        Validate input data shape and adapt if necessary.
+
+        Args:
+            data: Input data.
+
+        Returns:
+            bool: True if shape is valid or successfully adapted.
+        """
+        current_shape = self._infer_data_shape(data)
+
+        if self._inferred_shape is None:
+            self._inferred_shape = current_shape
+            if self._input_shape is not None and self._input_shape != current_shape:
+                print(f"Warning: Specified input_shape {self._input_shape} differs from inferred shape {current_shape}")
+                if self._auto_adapt_shape:
+                    print(f"Auto-adapting to shape: {current_shape}")
+                    self._input_shape = current_shape
+            elif self._input_shape is None:
+                self._input_shape = current_shape
+                print(f"Inferred input shape: {current_shape}")
+        else:
+            if current_shape != self._inferred_shape:
+                if self._auto_adapt_shape:
+                    print(f"Warning: Input shape changed from {self._inferred_shape} to {current_shape}")
+                    self._inferred_shape = current_shape
+                else:
+                    raise ValueError(
+                        f"Input shape mismatch: expected {self._inferred_shape}, got {current_shape}. "
+                        f"Set auto_adapt_shape=True to allow dynamic shape changes."
+                    )
+
+        return True
+
+    @staticmethod
+    def _prepare_batch(batch):
+        """
+        Prepare batch data, handling different input formats.
+
+        Args:
+            batch: Input batch (can be single tensor, tuple, or list).
+
+        Returns:
+            tuple: (batch_x, batch_labels) where batch_x is the feature data.
+        """
+        if isinstance(batch, (tuple, list)):
+            if len(batch) == 1:
+                # Single input, no labels
+                batch_x = batch[0]
+                batch_labels = None
+            elif len(batch) == 2:
+                # Input and labels provided
+                batch_x, batch_labels = batch
+            else:
+                # Multiple inputs, use first as input, second as labels
+                batch_x = batch[0]
+                batch_labels = batch[1]
+        else:
+            # Single tensor, no labels
+            batch_x = batch
+            batch_labels = None
+
+        return batch_x, batch_labels
+
+    def compile(self, optimizer_generator=None, optimizer_discriminator=None,
+                loss_generator=None, loss_discriminator=None, *args, **kwargs):
+        """
+        Configure the model for training.
+
+        Args:
+            optimizer_generator: Optimizer for generator.
+            optimizer_discriminator: Optimizer for discriminator.
+            loss_generator: Loss function for generator.
+            loss_discriminator: Loss function for discriminator.
+        """
+        super().compile()
+
+        if optimizer_generator is not None:
+            self._generator_optimizer = optimizer_generator
+        if optimizer_discriminator is not None:
+            self._discriminator_optimizer = optimizer_discriminator
+
+        # Set default Wasserstein losses if None is provided
+        if loss_generator is None and self._generator_loss_fn is None:
             def default_generator_loss(fake_output):
-                """Default wasserstein generator loss: -mean(D(G(z)))"""
+                """Default Wasserstein generator loss: -mean(D(G(z)))"""
                 return -tensorflow.reduce_mean(fake_output)
 
             self._generator_loss_fn = default_generator_loss
-        else:
+        elif loss_generator is not None:
             self._generator_loss_fn = loss_generator
 
-        if loss_discriminator is None:
+        if loss_discriminator is None and self._discriminator_loss_fn is None:
             def default_discriminator_loss(real_output, fake_output):
-                """Default wasserstein discriminator loss: mean(D(G(z))) - mean(D(x))"""
+                """Default Wasserstein discriminator loss: mean(D(G(z))) - mean(D(x))"""
                 return tensorflow.reduce_mean(fake_output) - tensorflow.reduce_mean(real_output)
 
             self._discriminator_loss_fn = default_discriminator_loss
-        else:
+        elif loss_discriminator is not None:
             self._discriminator_loss_fn = loss_discriminator
 
     @tensorflow.function
     def train_step(self, batch):
-        real_feature, real_samples_label = batch
+        """
+        Perform a training step for the WGAN.
+        Automatically adapts to different batch formats.
+
+        Args:
+            batch: Input data batch.
+
+        Returns:
+            dict: Dictionary containing loss values.
+        """
+        # Prepare batch data
+        real_feature, real_samples_label = self._prepare_batch(batch)
         batch_size = tensorflow.shape(real_feature)[0]
-        real_samples_label = tensorflow.expand_dims(real_samples_label, axis=-1)
+
+        # Handle labels
+        if real_samples_label is not None:
+            if len(real_samples_label.shape) == 1:
+                real_samples_label = tensorflow.expand_dims(real_samples_label, axis=-1)
+        else:
+            # Create dummy labels if none provided
+            real_samples_label = tensorflow.zeros((batch_size, 1))
 
         # === Critic (Discriminator) Training ===
         for _ in range(self._discriminator_steps):
@@ -210,11 +352,11 @@ class WassersteinAlgorithmTensorflow(Model):
             initial_epoch=0, steps_per_epoch=None, validation_steps=None,
             validation_freq=1, optimizer=None, learning_rate=0.001, **kwargs):
         """
-        Train the model with a simplified progress bar.
+        Train the model with automatic shape adaptation.
 
         Args:
-            x: Input data.
-            y: Target data.
+            x: Input data (any shape) or tf.data.Dataset.
+            y: Target labels (if None, generates without labels).
             batch_size: Number of samples per gradient update.
             epochs: Number of epochs to train.
             verbose: 0 = silent, 1 = progress bar, 2 = one line per epoch.
@@ -234,25 +376,62 @@ class WassersteinAlgorithmTensorflow(Model):
 
         # Set optimizer if provided
         if optimizer is not None:
-            self.optimizer = optimizer
-        elif not hasattr(self, 'optimizer') or self.optimizer is None:
-            # Create default optimizer if none exists
-            self.optimizer = tensorflow.keras.optimizers.Adam(learning_rate=learning_rate)
+            self._generator_optimizer = optimizer
+            self._discriminator_optimizer = optimizer
+        elif self._generator_optimizer is None or self._discriminator_optimizer is None:
+            # Create default optimizers if none exists
+            default_optimizer_gen = tensorflow.keras.optimizers.Adam(learning_rate=learning_rate)
+            default_optimizer_disc = tensorflow.keras.optimizers.Adam(learning_rate=learning_rate)
+            if self._generator_optimizer is None:
+                self._generator_optimizer = default_optimizer_gen
+            if self._discriminator_optimizer is None:
+                self._discriminator_optimizer = default_optimizer_disc
 
         # Prepare the dataset
         if isinstance(x, tensorflow.data.Dataset):
             train_dataset = x
+            # Try to infer shape from dataset
+            for batch in train_dataset:
+                self._validate_and_adapt_shape(batch)
+                break
         else:
-            if y is None:
-                y = x
-            train_dataset = tensorflow.data.Dataset.from_tensor_slices((x, y))
+            # Validate and adapt shape
+            self._validate_and_adapt_shape(x)
+
+            # Handle different input formats
+            if isinstance(x, tuple):
+                # x is tuple: (data, labels)
+                if len(x) == 2:
+                    x_data, labels = x
+                else:
+                    x_data = x[0]
+                    labels = None
+            else:
+                x_data = x
+                labels = y
+
+            # Convert to tensors
+            if isinstance(x_data, numpy.ndarray):
+                x_data = tensorflow.constant(x_data, dtype=tensorflow.float32)
+            if labels is not None and isinstance(labels, numpy.ndarray):
+                labels = tensorflow.constant(labels, dtype=tensorflow.float32)
+
+            # Create dataset
+            if labels is not None:
+                train_dataset = tensorflow.data.Dataset.from_tensor_slices((x_data, labels))
+            else:
+                train_dataset = tensorflow.data.Dataset.from_tensor_slices(x_data)
+
             if shuffle:
-                train_dataset = train_dataset.shuffle(buffer_size=len(x))
+                train_dataset = train_dataset.shuffle(buffer_size=len(x_data))
             train_dataset = train_dataset.batch(batch_size)
 
         # Calculate steps per epoch if not provided
         if steps_per_epoch is None:
-            steps_per_epoch = len(train_dataset)
+            try:
+                steps_per_epoch = len(train_dataset)
+            except:
+                steps_per_epoch = 100  # Default fallback
 
         # History to store metrics
         history = {'loss': [], 'd_loss': [], 'g_loss': []}
@@ -318,14 +497,15 @@ class WassersteinAlgorithmTensorflow(Model):
                 if verbose >= 1:
                     print(f' - val_loss: {val_loss:.4f}')
 
-            # callbacks
+            # Callbacks
             if callbacks is not None:
                 for callback in callbacks:
-                    callback.on_epoch_end(epoch, {
-                        'loss': epoch_loss,
-                        'd_loss': epoch_d_loss,
-                        'g_loss': epoch_g_loss
-                    })
+                    if hasattr(callback, 'on_epoch_end'):
+                        callback.on_epoch_end(epoch, {
+                            'loss': epoch_loss,
+                            'd_loss': epoch_d_loss,
+                            'g_loss': epoch_g_loss
+                        })
 
         # Return history object
         class History:
@@ -336,7 +516,7 @@ class WassersteinAlgorithmTensorflow(Model):
 
     def _evaluate_validation(self, validation_data, validation_steps=None):
         """
-        Evaluate the model on validation data.
+        Evaluate the model on validation data with automatic shape handling.
 
         Args:
             validation_data: Validation dataset.
@@ -348,11 +528,45 @@ class WassersteinAlgorithmTensorflow(Model):
         val_losses = []
         step = 0
 
-        for batch_data in validation_data:
-            batch_x, batch_y = batch_data
-            reconstructed = self._encoder_decoder_model(batch_x, training=False)
-            loss = tensorflow.reduce_mean(tensorflow.square(batch_y - reconstructed))
-            val_losses.append(float(loss))
+        # Prepare validation dataset
+        if isinstance(validation_data, tensorflow.data.Dataset):
+            val_dataset = validation_data
+        else:
+            val_x, val_y = validation_data
+            if isinstance(val_x, numpy.ndarray):
+                val_x = tensorflow.constant(val_x, dtype=tensorflow.float32)
+            if isinstance(val_y, numpy.ndarray):
+                val_y = tensorflow.constant(val_y, dtype=tensorflow.float32)
+            val_dataset = tensorflow.data.Dataset.from_tensor_slices((val_x, val_y)).batch(32)
+
+        for batch_data in val_dataset:
+            real_feature, real_samples_label = self._prepare_batch(batch_data)
+            batch_size = tensorflow.shape(real_feature)[0]
+
+            if real_samples_label is not None:
+                if len(real_samples_label.shape) == 1:
+                    real_samples_label = tensorflow.expand_dims(real_samples_label, axis=-1)
+            else:
+                real_samples_label = tensorflow.zeros((batch_size, 1))
+
+            # Generate fake samples
+            latent_space = tensorflow.random.normal(
+                (batch_size, self._latent_dimension),
+                mean=self._latent_mean_distribution,
+                stddev=self._latent_standard_deviation
+            )
+            fake_feature = self._generator([latent_space, real_samples_label], training=False)
+
+            # Calculate discriminator outputs
+            real_output = self._discriminator([real_feature, real_samples_label], training=False)
+            fake_output = self._discriminator([fake_feature, real_samples_label], training=False)
+
+            # Calculate loss
+            d_loss = self._discriminator_loss_fn(real_output, fake_output)
+            g_loss = self._generator_loss_fn(fake_output)
+            total_loss = d_loss + g_loss
+
+            val_losses.append(float(total_loss))
 
             step += 1
             if validation_steps is not None and step >= validation_steps:
@@ -364,47 +578,95 @@ class WassersteinAlgorithmTensorflow(Model):
         """
         Generates synthetic samples for each specified class using the trained generator.
 
-        This method creates samples conditioned on class labels, using random noise vectors
-        and the generator to produce the samples.
-
         Args:
             number_samples_per_class (dict): A dictionary containing:
-                - "classes" (dict): Mapping of class labels to the number of samples to generate for each class.
-                - "number_classes" (int): Total number of classes (used for one-hot encoding).
+                - "classes" (dict): Mapping of class labels to number of samples.
+                - "number_classes" (int): Total number of classes.
 
         Returns:
-            dict: A dictionary where each key is a class label and the value is an array of generated samples.
+            dict: Dictionary with class labels as keys and generated samples as values.
         """
-
-        # Dictionary to store generated samples for each class.
         generated_data = {}
 
-        # Loop through each class and the desired number of samples for that class.
         for label_class, number_instances in number_samples_per_class["classes"].items():
-            # Create one-hot encoded labels for all samples of the current class.
+            # Create one-hot encoded labels
             label_samples_generated = to_categorical([label_class] * number_instances,
                                                      num_classes=number_samples_per_class["number_classes"])
 
-            # Sample random noise vectors from a normal distribution.
+            # Sample random noise vectors
             latent_noise = numpy.random.normal(loc=self._latent_mean_distribution,
                                                scale=self._latent_standard_deviation,
                                                size=(number_instances, self._latent_dimension))
 
-            # Generate synthetic samples using the generator.
+            # Generate synthetic samples
             generated_samples = self._generator.predict([latent_noise, label_samples_generated], verbose=0)
 
-            # Round the generated samples to integer values
-            # (if samples are intended to be binary, e.g., images with pixel values 0 or 1).
-
-            # Store generated samples for the current class.
+            # Store generated samples
             generated_data[label_class] = generated_samples
 
-        # Return the dictionary containing generated samples for all requested classes.
         return generated_data
+
+    def get_input_shape(self):
+        """
+        Get the current input shape.
+
+        Returns:
+            tuple: Current input shape (excluding batch dimension).
+        """
+        return self._inferred_shape if self._inferred_shape is not None else self._input_shape
+
+    @staticmethod
+    def reshape_data(data, target_shape):
+        """
+        Reshape data to target shape if needed.
+
+        Args:
+            data: Input data.
+            target_shape: Desired shape (excluding batch dimension).
+
+        Returns:
+            Reshaped data.
+        """
+        if isinstance(data, numpy.ndarray):
+            if data.shape[1:] != target_shape:
+                batch_size = data.shape[0]
+                return data.reshape((batch_size,) + target_shape)
+        elif tensorflow.is_tensor(data):
+            if tuple(data.shape[1:]) != target_shape:
+                batch_size = data.shape[0]
+                return tensorflow.reshape(data, (batch_size,) + target_shape)
+        return data
+
+    @staticmethod
+    def calculate_samples_per_class(y_labels):
+        """
+        Calculate the distribution of samples per class from labels.
+
+        Args:
+            y_labels (array-like): Labels array
+
+        Returns:
+            dict: Dictionary with 'classes' and 'number_classes' keys
+        """
+        # Convert to numpy if needed
+        if tensorflow.is_tensor(y_labels):
+            y_labels = y_labels.numpy()
+
+        # Handle one-hot encoded labels
+        if len(y_labels.shape) == 2 and y_labels.shape[1] > 1:
+            y_labels = numpy.argmax(y_labels, axis=1)
+
+        # Count samples per class
+        unique, counts = numpy.unique(y_labels, return_counts=True)
+
+        return {
+            "classes": dict(zip(unique.tolist(), counts.tolist())),
+            "number_classes": len(unique)
+        }
 
     def save_model(self, directory, file_name):
         """
-        Save the encoder and decoder models in both JSON and H5 formats.
+        Save the generator and discriminator models.
 
         Args:
             directory (str): Directory where models will be saved.
@@ -413,17 +675,26 @@ class WassersteinAlgorithmTensorflow(Model):
         if not os.path.exists(directory):
             os.makedirs(directory)
 
-        # Construct file names for encoder and decoder models
+        # Construct file names
         generator_file_name = os.path.join(directory, f"fold_{file_name}_generator")
         discriminator_file_name = os.path.join(directory, f"fold_{file_name}_discriminator")
 
-        # Save encoder model
+        # Save models
         self._save_model_to_json(self._generator, f"{generator_file_name}.json")
         self._generator.save_weights(f"{generator_file_name}.weights.h5")
 
-        # Save decoder model
         self._save_model_to_json(self._discriminator, f"{discriminator_file_name}.json")
         self._discriminator.save_weights(f"{discriminator_file_name}.weights.h5")
+
+        # Save shape information
+        shape_info = {
+            'input_shape': self._input_shape,
+            'inferred_shape': self._inferred_shape,
+            'latent_dimension': self._latent_dimension
+        }
+        shape_file = os.path.join(directory, f"fold_{file_name}_shape_info.json")
+        with open(shape_file, 'w') as f:
+            json.dump(shape_info, f)
 
     @staticmethod
     def _save_model_to_json(model, file_path):
@@ -445,250 +716,161 @@ class WassersteinAlgorithmTensorflow(Model):
             directory (str): Directory where models are stored.
             file_name (str): Base file name for loading models.
         """
+        # Construct file names
+        generator_file_name = os.path.join(directory, f"fold_{file_name}_generator")
+        discriminator_file_name = os.path.join(directory, f"fold_{file_name}_discriminator")
 
-        # Construct file names for generator and discriminator models
-        generator_file_name = "{}_generator".format(file_name)
-        discriminator_file_name = "{}_discriminator".format(file_name)
+        # Load weights
+        self._generator.load_weights(f"{generator_file_name}.weights.h5")
+        self._discriminator.load_weights(f"{discriminator_file_name}.weights.h5")
 
-        # Load the generator and discriminator models from the specified directory
-        self._generator = self._save_neural_network_model(generator_file_name, directory)
-        self._discriminator = self._save_neural_network_model(discriminator_file_name, directory)
+        # Load shape information if available
+        shape_file = os.path.join(directory, f"fold_{file_name}_shape_info.json")
+        if os.path.exists(shape_file):
+            with open(shape_file, 'r') as f:
+                shape_info = json.load(f)
+                self._input_shape = tuple(shape_info.get('input_shape', ()))
+                self._inferred_shape = tuple(shape_info.get('inferred_shape', ()))
+                self._latent_dimension = shape_info.get('latent_dimension', self._latent_dimension)
 
     # ========== PROPERTIES ==========
 
     @property
     def generator(self) -> Any:
-        """Get the generator model instance.
-
-        Returns:
-            The generator model used in GAN training.
-        """
+        """Get the generator model instance."""
         return self._generator
 
     @generator.setter
     def generator(self, value: Any) -> None:
-        """Set the generator model instance.
-
-        Args:
-            value: The generator model to set.
-        """
+        """Set the generator model instance."""
         self._generator = value
 
     @property
     def discriminator(self) -> Any:
-        """Get the discriminator model instance.
-
-        Returns:
-            The discriminator model used in GAN training.
-        """
+        """Get the discriminator model instance."""
         return self._discriminator
 
     @discriminator.setter
     def discriminator(self, value: Any) -> None:
-        """Set the discriminator model instance.
-
-        Args:
-            value: The discriminator model to set.
-        """
+        """Set the discriminator model instance."""
         self._discriminator = value
 
     @property
     def latent_dimension(self) -> int:
-        """Get the dimension of the latent space.
-
-        Returns:
-            The size of the latent space dimension (positive integer).
-        """
+        """Get the dimension of the latent space."""
         return self._latent_dimension
 
     @latent_dimension.setter
     def latent_dimension(self, value: int) -> None:
-        """Set the dimension of the latent space.
-
-        Args:
-            value: The latent dimension size (must be positive).
-
-        Raises:
-            ValueError: If value is not a positive integer.
-        """
+        """Set the dimension of the latent space."""
         if not isinstance(value, int) or value <= 0:
             raise ValueError("Latent dimension must be a positive integer")
         self._latent_dimension = value
 
     @property
     def discriminator_loss_fn(self) -> Callable:
-        """Get the discriminator loss function.
-
-        Returns:
-            The loss function used for discriminator training.
-        """
+        """Get the discriminator loss function."""
         return self._discriminator_loss_fn
 
     @discriminator_loss_fn.setter
     def discriminator_loss_fn(self, value: Callable) -> None:
-        """Set the discriminator loss function.
-
-        Args:
-            value: The loss function to use for discriminator training.
-        """
+        """Set the discriminator loss function."""
         self._discriminator_loss_fn = value
 
     @property
     def generator_loss_fn(self) -> Callable:
-        """Get the generator loss function.
-
-        Returns:
-            The loss function used for generator training.
-        """
+        """Get the generator loss function."""
         return self._generator_loss_fn
 
     @generator_loss_fn.setter
     def generator_loss_fn(self, value: Callable) -> None:
-        """Set the generator loss function.
-
-        Args:
-            value: The loss function to use for generator training.
-        """
+        """Set the generator loss function."""
         self._generator_loss_fn = value
-
 
     @property
     def smooth_rate(self) -> float:
-        """Get the label smoothing rate.
-
-        Returns:
-            The rate used for one-sided label smoothing.
-        """
+        """Get the label smoothing rate."""
         return self._smooth_rate
 
     @smooth_rate.setter
     def smooth_rate(self, value: float) -> None:
-        """Set the label smoothing rate.
-
-        Args:
-            value: The smoothing rate (typically between 0 and 0.3).
-
-        Raises:
-            ValueError: If value is not between 0 and 1.
-        """
+        """Set the label smoothing rate."""
         if not 0 <= value <= 1:
             raise ValueError("Smoothing rate must be between 0 and 1")
         self._smooth_rate = value
 
     @property
     def latent_mean_distribution(self) -> float:
-        """Get the mean of the latent space distribution.
-
-        Returns:
-            The mean value used for latent space sampling.
-        """
+        """Get the mean of the latent space distribution."""
         return self._latent_mean_distribution
 
     @latent_mean_distribution.setter
     def latent_mean_distribution(self, value: float) -> None:
-        """Set the mean of the latent space distribution.
-
-        Args:
-            value: The mean value for latent distribution.
-        """
+        """Set the mean of the latent space distribution."""
         self._latent_mean_distribution = value
 
     @property
     def latent_standard_deviation(self) -> float:
-        """Get the standard deviation of the latent space distribution.
-
-        Returns:
-            The standard deviation used for latent space sampling.
-        """
+        """Get the standard deviation of the latent space distribution."""
         return self._latent_standard_deviation
 
     @latent_standard_deviation.setter
     def latent_standard_deviation(self, value: float) -> None:
-        """Set the standard deviation of the latent space distribution.
-
-        Args:
-            value: The standard deviation (must be positive).
-
-        Raises:
-            ValueError: If value is not positive.
-        """
+        """Set the standard deviation of the latent space distribution."""
         if value <= 0:
             raise ValueError("Standard deviation must be positive")
         self._latent_standard_deviation = value
 
     @property
     def file_name_discriminator(self) -> str:
-        """Get the discriminator model save filename.
-
-        Returns:
-            The filename pattern for saving discriminator models.
-        """
+        """Get the discriminator model save filename."""
         return self._file_name_discriminator
 
     @file_name_discriminator.setter
     def file_name_discriminator(self, value: str) -> None:
-        """Set the discriminator model save filename.
-
-        Args:
-            value: The filename pattern to use.
-        """
+        """Set the discriminator model save filename."""
         self._file_name_discriminator = value
 
     @property
     def file_name_generator(self) -> str:
-        """Get the generator model save filename.
-
-        Returns:
-            The filename pattern for saving generator models.
-        """
+        """Get the generator model save filename."""
         return self._file_name_generator
 
     @file_name_generator.setter
     def file_name_generator(self, value: str) -> None:
-        """Set the generator model save filename.
-
-        Args:
-            value: The filename pattern to use.
-        """
+        """Set the generator model save filename."""
         self._file_name_generator = value
 
     @property
     def models_saved_path(self) -> str:
-        """Get the path for saving models.
-
-        Returns:
-            The directory path where models are saved.
-        """
+        """Get the path for saving models."""
         return self._models_saved_path
 
     @models_saved_path.setter
     def models_saved_path(self, value: str) -> None:
-        """Set the path for saving models.
-
-        Args:
-            value: The directory path to use for saving models.
-        """
+        """Set the path for saving models."""
         self._models_saved_path = value
 
     @property
     def discriminator_steps(self) -> int:
-        """Get the number of discriminator steps per iteration.
-
-        Returns:
-            The number of discriminator training steps per GAN iteration.
-        """
+        """Get the number of discriminator steps per iteration."""
         return self._discriminator_steps
 
     @discriminator_steps.setter
     def discriminator_steps(self, value: int) -> None:
-        """Set the number of discriminator steps per iteration.
-
-        Args:
-            value: The number of steps (must be positive integer).
-
-        Raises:
-            ValueError: If value is not a positive integer.
-        """
+        """Set the number of discriminator steps per iteration."""
         if not isinstance(value, int) or value <= 0:
             raise ValueError("Discriminator steps must be a positive integer")
         self._discriminator_steps = value
+
+    @property
+    def input_shape(self):
+        """Get the current input shape."""
+        return self.get_input_shape()
+
+    @property
+    def metrics(self):
+        """Returns dictionary of metrics tracked during training."""
+        return {
+            "loss": float(self._total_loss_tracker.result()),
+        }

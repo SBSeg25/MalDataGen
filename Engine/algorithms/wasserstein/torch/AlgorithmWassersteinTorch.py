@@ -3,41 +3,25 @@
 
 __author__ = 'Synthetic Ocean AI - Team'
 __email__ = 'syntheticoceanai@gmail.com'
-__version__ = '{1}.{0}.{1}'
+__version__ = '{1}.{0}.{2}'
 __initial_data__ = '2022/06/01'
-__last_update__ = '2025/12/07'
+__last_update__ = '2025/12/16'
 __credits__ = ['Synthetic Ocean AI']
 
 # MIT License
 #
 # Copyright (c) 2025 Synthetic Ocean AI
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
 
 try:
     import sys
     import os
+    import json
     import torch
     import torch.nn as nn
     import numpy as np
-    from typing import Optional, Callable, List, Any
+    from typing import Optional, Callable, List, Any, Union, Tuple
     from pathlib import Path
+    from torch.utils.data import DataLoader, TensorDataset
 
 except ImportError as error:
     print(error)
@@ -46,32 +30,34 @@ except ImportError as error:
 
 class WassersteinAlgorithmTorch:
     """
-    Training algorithm wrapper for wasserstein GAN with Gradient Penalty (WGAN-GP).
+    Training algorithm wrapper for Wasserstein GAN with Gradient Penalty (WGAN-GP).
 
-    This class manages the complete training process for a wasserstein GAN, including:
-    - Alternating critic and generator training
-    - Gradient penalty computation
-    - loss tracking and logging
-    - Model checkpointing
-    - Callback management
+    This class manages the complete training process for a Wasserstein GAN with adaptive
+    input shape handling, supporting any dimensional input: (x), (x, y), (x, y, z), etc.
 
     The algorithm implements the WGAN-GP framework as described in:
-    Gulrajani et al., "Improved Training of wasserstein GANs" (2017)
+    Gulrajani et al., "Improved Training of Wasserstein GANs" (2017)
 
-    Attributes:
-        generator_model: The generator network
-        discriminator_model: The critic/discriminator network
-        latent_dimension: Dimensionality of the latent space
-        generator_loss_fn: loss function for generator (optional, uses wasserstein loss by default)
-        discriminator_loss_fn: loss function for discriminator (optional, uses wasserstein loss by default)
-        file_name_discriminator: Filename for saving discriminator checkpoints
-        file_name_generator: Filename for saving generator checkpoints
-        models_saved_path: Directory path for saving model checkpoints
-        latent_mean_distribution: Mean of the latent distribution (default: 0.0)
-        latent_standard_deviation: Std dev of the latent distribution (default: 1.0)
-        smoothing_rate: Label smoothing rate (not used in WGAN-GP)
-        discriminator_steps: Number of critic updates per generator update
-        clip_value: Gradient clipping value (for numerical stability)
+    This implementation automatically adapts to any input shape during training.
+
+    Example:
+        >>> # Example with 1D data
+        >>> wgan_1d = WassersteinAlgorithmTorch(
+        ...     generator_model=generator_1d,
+        ...     discriminator_model=discriminator_1d,
+        ...     latent_dimension=64,
+        ...     input_shape=(100,)
+        ... )
+        >>> wgan_1d.fit(data_1d, epochs=50)
+
+        >>> # Example with 2D data (images)
+        >>> wgan_2d = WassersteinAlgorithmTorch(
+        ...     generator_model=generator_2d,
+        ...     discriminator_model=discriminator_2d,
+        ...     latent_dimension=128,
+        ...     input_shape=(28, 28)
+        ... )
+        >>> wgan_2d.fit(data_2d, labels_2d, epochs=100)
     """
 
     def __init__(self,
@@ -87,9 +73,11 @@ class WassersteinAlgorithmTorch:
                  latent_standard_deviation: float = 1.0,
                  smoothing_rate: float = 0.0,
                  discriminator_steps: int = 5,
-                 clip_value: float = 0.01):
+                 clip_value: float = 0.01,
+                 input_shape: Optional[Tuple] = None,
+                 auto_adapt_shape: bool = True):
         """
-        Initialize the wasserstein GAN training algorithm.
+        Initialize the Wasserstein GAN training algorithm.
 
         Args:
             generator_model: Generator neural network
@@ -105,12 +93,14 @@ class WassersteinAlgorithmTorch:
             smoothing_rate: Label smoothing (not used in WGAN-GP)
             discriminator_steps: Critic updates per generator update
             clip_value: Gradient clipping value
+            input_shape: Expected input shape (without batch dimension)
+            auto_adapt_shape: Whether to automatically adapt to input data shape
         """
         self.generator = generator_model
         self.discriminator = discriminator_model
         self.latent_dimension = latent_dimension
 
-        # loss functions (use wasserstein loss if not provided)
+        # Loss functions (use Wasserstein loss if not provided)
         self.generator_loss_fn = generator_loss_fn if generator_loss_fn else self._wasserstein_generator_loss
         self.discriminator_loss_fn = discriminator_loss_fn if discriminator_loss_fn else self._wasserstein_discriminator_loss
 
@@ -129,7 +119,12 @@ class WassersteinAlgorithmTorch:
         self.discriminator_steps = discriminator_steps
         self.clip_value = clip_value
 
-        # optimizers (to be set in compile)
+        # Shape adaptation
+        self._input_shape = input_shape
+        self._auto_adapt_shape = auto_adapt_shape
+        self._inferred_shape = None
+
+        # Optimizers (to be set in compile)
         self.generator_optimizer = None
         self.discriminator_optimizer = None
 
@@ -146,10 +141,104 @@ class WassersteinAlgorithmTorch:
         }
 
     @staticmethod
+    def _infer_data_shape(data):
+        """
+        Infer the shape of input data, excluding the batch dimension.
+
+        Args:
+            data: Input data (tensor, array, or tuple/list).
+
+        Returns:
+            tuple: Shape of the data excluding batch dimension.
+        """
+        if isinstance(data, (tuple, list)):
+            # If data is a tuple/list, infer from first element
+            data = data[0]
+
+        if torch.is_tensor(data):
+            shape = tuple(data.shape[1:])
+        elif isinstance(data, np.ndarray):
+            shape = data.shape[1:] if len(data.shape) > 1 else data.shape
+        else:
+            # Try to convert to tensor and get shape
+            try:
+                tensor_data = torch.tensor(data)
+                shape = tuple(tensor_data.shape[1:])
+            except:
+                raise ValueError(f"Cannot infer shape from data of type {type(data)}")
+
+        return shape
+
+    def _validate_and_adapt_shape(self, data):
+        """
+        Validate input data shape and adapt if necessary.
+
+        Args:
+            data: Input data.
+
+        Returns:
+            bool: True if shape is valid or successfully adapted.
+        """
+        current_shape = self._infer_data_shape(data)
+
+        if self._inferred_shape is None:
+            self._inferred_shape = current_shape
+            if self._input_shape is not None and self._input_shape != current_shape:
+                print(f"Warning: Specified input_shape {self._input_shape} differs from inferred shape {current_shape}")
+                if self._auto_adapt_shape:
+                    print(f"Auto-adapting to shape: {current_shape}")
+                    self._input_shape = current_shape
+            elif self._input_shape is None:
+                self._input_shape = current_shape
+                print(f"Inferred input shape: {current_shape}")
+        else:
+            if current_shape != self._inferred_shape:
+                if self._auto_adapt_shape:
+                    print(f"Warning: Input shape changed from {self._inferred_shape} to {current_shape}")
+                    self._inferred_shape = current_shape
+                else:
+                    raise ValueError(
+                        f"Input shape mismatch: expected {self._inferred_shape}, got {current_shape}. "
+                        f"Set auto_adapt_shape=True to allow dynamic shape changes."
+                    )
+
+        return True
+
+    @staticmethod
+    def _prepare_batch(batch):
+        """
+        Prepare batch data, handling different input formats.
+
+        Args:
+            batch: Input batch (can be single tensor, tuple, or list).
+
+        Returns:
+            tuple: (batch_x, batch_labels) where batch_x is the feature data.
+        """
+        if isinstance(batch, (tuple, list)):
+            if len(batch) == 1:
+                # Single input, no labels
+                batch_x = batch[0]
+                batch_labels = None
+            elif len(batch) == 2:
+                # Input and labels provided
+                batch_x, batch_labels = batch
+            else:
+                # Multiple inputs, use first as input, second as labels
+                batch_x = batch[0]
+                batch_labels = batch[1]
+        else:
+            # Single tensor, no labels
+            batch_x = batch
+            batch_labels = None
+
+        return batch_x, batch_labels
+
+    @staticmethod
     def _wasserstein_discriminator_loss(real_validity: torch.Tensor,
                                         fake_validity: torch.Tensor) -> torch.Tensor:
         """
-        wasserstein discriminator/critic loss.
+        Wasserstein discriminator/critic loss.
         Critic tries to maximize the difference between real and fake scores.
 
         Args:
@@ -164,7 +253,7 @@ class WassersteinAlgorithmTorch:
     @staticmethod
     def _wasserstein_generator_loss(fake_validity: torch.Tensor) -> torch.Tensor:
         """
-        wasserstein generator loss.
+        Wasserstein generator loss.
         Generator tries to maximize the critic score for fake samples.
 
         Args:
@@ -291,7 +380,7 @@ class WassersteinAlgorithmTorch:
             real_validity = self.discriminator(real_samples, labels)
             fake_validity = self.discriminator(fake_samples.detach(), labels)
 
-            # wasserstein loss
+            # Wasserstein loss
             critic_loss = self.discriminator_loss_fn(real_validity, fake_validity)
 
             # Gradient penalty
@@ -338,11 +427,11 @@ class WassersteinAlgorithmTorch:
             initial_epoch=0, steps_per_epoch=None, validation_steps=None,
             validation_freq=1, optimizer=None, learning_rate=0.001, lambda_gp=10.0, **kwargs):
         """
-        Train the model with a simplified progress bar.
+        Train the model with automatic shape adaptation.
 
         Args:
-            x: Input data (numpy array or torch.utils.data.DataLoader).
-            y: Target data (labels, one-hot encoded).
+            x: Input data (any shape) or torch.utils.data.DataLoader.
+            y: Target labels (if None, generates without labels).
             batch_size: Number of samples per gradient update.
             epochs: Number of epochs to train.
             verbose: 0 = silent, 1 = progress bar, 2 = one line per epoch.
@@ -376,24 +465,44 @@ class WassersteinAlgorithmTorch:
                                                             betas=(0.5, 0.999))
 
         # Prepare the dataset
-        if isinstance(x, torch.utils.data.DataLoader):
+        if isinstance(x, DataLoader):
             train_loader = x
+            # Try to infer shape from dataloader
+            for batch in train_loader:
+                self._validate_and_adapt_shape(batch)
+                break
         else:
-            if y is None:
-                y = x
+            # Validate and adapt shape
+            self._validate_and_adapt_shape(x)
 
-            # Convert to torch tensors if numpy arrays
-            if isinstance(x, np.ndarray):
-                x = torch.tensor(x, dtype=torch.float32)
-            if isinstance(y, np.ndarray):
-                y = torch.tensor(y, dtype=torch.float32)
+            # Handle different input formats
+            if isinstance(x, tuple):
+                # x is tuple: (data, labels)
+                if len(x) == 2:
+                    x_data, labels = x
+                else:
+                    x_data = x[0]
+                    labels = None
+            else:
+                x_data = x
+                labels = y
 
-            train_dataset = torch.utils.data.TensorDataset(x, y)
-            train_loader = torch.utils.data.DataLoader(
-                train_dataset,
-                batch_size=batch_size,
-                shuffle=shuffle
-            )
+            # Convert to tensors
+            if isinstance(x_data, np.ndarray):
+                x_data = torch.from_numpy(x_data).float()
+            if labels is not None and isinstance(labels, np.ndarray):
+                labels = torch.from_numpy(labels).float()
+
+            # Create TensorDataset
+            if labels is not None:
+                dataset = TensorDataset(x_data, labels)
+            else:
+                # Create dummy labels if none provided
+                num_samples = x_data.shape[0]
+                labels = torch.zeros((num_samples, 2))  # Binary default
+                dataset = TensorDataset(x_data, labels)
+
+            train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
 
         # Calculate steps per epoch if not provided
         if steps_per_epoch is None:
@@ -419,16 +528,16 @@ class WassersteinAlgorithmTorch:
             for batch_data in train_loader:
                 step += 1
 
-                # Unpack batch data
-                if isinstance(batch_data, (tuple, list)):
-                    batch_x, batch_y = batch_data
-                else:
-                    batch_x = batch_data
-                    batch_y = batch_data
+                # Prepare batch
+                batch_x, batch_y = self._prepare_batch(batch_data)
 
                 # Move to device
                 batch_x = batch_x.to(self.device)
-                batch_y = batch_y.to(self.device)
+                if batch_y is None:
+                    # Create dummy labels
+                    batch_y = torch.zeros((batch_x.size(0), 2), device=self.device)
+                else:
+                    batch_y = batch_y.to(self.device)
 
                 # Perform training step
                 metrics = self.train_step(batch_x, batch_y, lambda_gp)
@@ -475,7 +584,7 @@ class WassersteinAlgorithmTorch:
                 if verbose >= 1:
                     print(f' - val_loss: {val_loss:.4f}')
 
-            # callbacks
+            # Callbacks
             if callbacks is not None:
                 for callback in callbacks:
                     if hasattr(callback, 'on_epoch_end'):
@@ -494,7 +603,7 @@ class WassersteinAlgorithmTorch:
 
     def _evaluate_validation(self, validation_data, validation_steps=None, lambda_gp=10.0):
         """
-        Evaluate the model on validation data.
+        Evaluate the model on validation data with automatic shape handling.
 
         Args:
             validation_data: Validation dataset (tuple of (x_val, y_val) or DataLoader).
@@ -511,34 +620,33 @@ class WassersteinAlgorithmTorch:
         step = 0
 
         # Handle different validation data formats
-        if isinstance(validation_data, torch.utils.data.DataLoader):
+        if isinstance(validation_data, DataLoader):
             val_loader = validation_data
         elif isinstance(validation_data, tuple) and len(validation_data) == 2:
             val_x, val_y = validation_data
 
             # Convert to torch tensors if numpy arrays
             if isinstance(val_x, np.ndarray):
-                val_x = torch.tensor(val_x, dtype=torch.float32)
+                val_x = torch.from_numpy(val_x).float()
             if isinstance(val_y, np.ndarray):
-                val_y = torch.tensor(val_y, dtype=torch.float32)
+                val_y = torch.from_numpy(val_y).float()
 
-            val_dataset = torch.utils.data.TensorDataset(val_x, val_y)
-            val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=32, shuffle=False)
+            val_dataset = TensorDataset(val_x, val_y)
+            val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
         else:
             raise ValueError("validation_data must be a DataLoader or tuple of (x_val, y_val)")
 
         with torch.no_grad():
             for batch_data in val_loader:
-                # Unpack batch
-                if isinstance(batch_data, (tuple, list)):
-                    batch_x, batch_y = batch_data
-                else:
-                    batch_x = batch_data
-                    batch_y = batch_data
+                # Prepare batch
+                batch_x, batch_y = self._prepare_batch(batch_data)
 
                 # Move to device
                 batch_x = batch_x.to(self.device)
-                batch_y = batch_y.to(self.device)
+                if batch_y is None:
+                    batch_y = torch.zeros((batch_x.size(0), 2), device=self.device)
+                else:
+                    batch_y = batch_y.to(self.device)
 
                 # Generate fake samples
                 z = self._sample_latent(batch_x.size(0))
@@ -563,9 +671,68 @@ class WassersteinAlgorithmTorch:
         self.discriminator.train()
 
         return np.mean(val_losses) if val_losses else 0.0
+
+    def get_input_shape(self):
+        """
+        Get the current input shape.
+
+        Returns:
+            tuple: Current input shape (excluding batch dimension).
+        """
+        return self._inferred_shape if self._inferred_shape is not None else self._input_shape
+
+    @staticmethod
+    def reshape_data(data, target_shape):
+        """
+        Reshape data to target shape if needed.
+
+        Args:
+            data: Input data.
+            target_shape: Desired shape (excluding batch dimension).
+
+        Returns:
+            Reshaped data.
+        """
+        if isinstance(data, np.ndarray):
+            if data.shape[1:] != target_shape:
+                batch_size = data.shape[0]
+                return data.reshape((batch_size,) + target_shape)
+        elif torch.is_tensor(data):
+            if tuple(data.shape[1:]) != target_shape:
+                batch_size = data.shape[0]
+                return data.reshape((batch_size,) + target_shape)
+        return data
+
+    @staticmethod
+    def calculate_samples_per_class(y_labels):
+        """
+        Calculate the distribution of samples per class from labels.
+
+        Args:
+            y_labels (array-like): Labels array
+
+        Returns:
+            dict: Dictionary with 'classes' and 'number_classes' keys
+        """
+        # Convert to numpy if needed
+        if torch.is_tensor(y_labels):
+            y_labels = y_labels.cpu().numpy()
+
+        # Handle one-hot encoded labels
+        if len(y_labels.shape) == 2 and y_labels.shape[1] > 1:
+            y_labels = np.argmax(y_labels, axis=1)
+
+        # Count samples per class
+        unique, counts = np.unique(y_labels, return_counts=True)
+
+        return {
+            "classes": dict(zip(unique.tolist(), counts.tolist())),
+            "number_classes": len(unique)
+        }
+
     def save_models(self, epoch: int):
         """
-        Save generator and discriminator models.
+        Save generator and discriminator models with shape information.
 
         Args:
             epoch: Current epoch number
@@ -576,20 +743,30 @@ class WassersteinAlgorithmTorch:
         torch.save({
             'epoch': epoch,
             'model_state_dict': self.generator.state_dict(),
-            'optimizer_state_dict': self.generator_optimizer.state_dict(),
+            'optimizer_state_dict': self.generator_optimizer.state_dict() if self.generator_optimizer else None,
         }, gen_path)
 
         torch.save({
             'epoch': epoch,
             'model_state_dict': self.discriminator.state_dict(),
-            'optimizer_state_dict': self.discriminator_optimizer.state_dict(),
+            'optimizer_state_dict': self.discriminator_optimizer.state_dict() if self.discriminator_optimizer else None,
         }, disc_path)
+
+        # Save shape information
+        shape_info = {
+            'input_shape': self._input_shape,
+            'inferred_shape': self._inferred_shape,
+            'latent_dimension': self.latent_dimension
+        }
+        shape_file = self.models_saved_path / f"epoch_{epoch}_shape_info.json"
+        with open(shape_file, 'w') as f:
+            json.dump(shape_info, f)
 
         print(f"Models saved at epoch {epoch}")
 
     def load_models(self, epoch: int):
         """
-        Load generator and discriminator models.
+        Load generator and discriminator models with shape information.
 
         Args:
             epoch: Epoch number to load
@@ -598,18 +775,27 @@ class WassersteinAlgorithmTorch:
         disc_path = self.models_saved_path / f"{self.file_name_discriminator}_epoch_{epoch}.pt"
 
         if gen_path.exists():
-            checkpoint = torch.load(gen_path)
+            checkpoint = torch.load(gen_path, map_location=self.device)
             self.generator.load_state_dict(checkpoint['model_state_dict'])
-            if self.generator_optimizer:
+            if self.generator_optimizer and checkpoint.get('optimizer_state_dict'):
                 self.generator_optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             print(f"Generator loaded from epoch {epoch}")
 
         if disc_path.exists():
-            checkpoint = torch.load(disc_path)
+            checkpoint = torch.load(disc_path, map_location=self.device)
             self.discriminator.load_state_dict(checkpoint['model_state_dict'])
-            if self.discriminator_optimizer:
+            if self.discriminator_optimizer and checkpoint.get('optimizer_state_dict'):
                 self.discriminator_optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             print(f"Discriminator loaded from epoch {epoch}")
+
+        # Load shape information if available
+        shape_file = self.models_saved_path / f"epoch_{epoch}_shape_info.json"
+        if shape_file.exists():
+            with open(shape_file, 'r') as f:
+                shape_info = json.load(f)
+                self._input_shape = tuple(shape_info.get('input_shape', ()))
+                self._inferred_shape = tuple(shape_info.get('inferred_shape', ()))
+                self.latent_dimension = shape_info.get('latent_dimension', self.latent_dimension)
 
     def get_samples(self, num_samples, labels: Optional[torch.Tensor] = None) -> dict:
         """
@@ -681,7 +867,7 @@ class WassersteinAlgorithmTorch:
             total_samples = int(num_samples)
 
             if labels is None:
-                # binary classification - split samples between 2 classes
+                # Binary classification - split samples between 2 classes
                 num_classes = 2
                 samples_per_class = total_samples // num_classes
 
@@ -700,3 +886,17 @@ class WassersteinAlgorithmTorch:
 
         self.generator.train()
         return generated_samples_dict
+
+    @property
+    def input_shape(self):
+        """Get the current input shape."""
+        return self.get_input_shape()
+
+    @property
+    def metrics(self):
+        """Returns dictionary of metrics tracked during training."""
+        return {
+            'critic_loss': self.history['critic_loss'][-1] if self.history['critic_loss'] else 0.0,
+            'generator_loss': self.history['generator_loss'][-1] if self.history['generator_loss'] else 0.0,
+            'gradient_penalty': self.history['gradient_penalty'][-1] if self.history['gradient_penalty'] else 0.0
+        }
