@@ -90,6 +90,8 @@ class AdversarialModelTorch:
             Data type used for input data (default: torch.float32).
         @number_samples_per_class (Optional[Dict]):
             Optional dictionary containing the number of samples per class, if applicable.
+        @optimizer (str):
+            Type of architecture to use: 'dense' (default) or 'convolutional' for Conv1D.
 
     Raises:
         ValueError:
@@ -112,7 +114,8 @@ class AdversarialModelTorch:
         ...     dense_layer_sizes_g=[512, 256],
         ...     dense_layer_sizes_d=[512, 256],
         ...     dataset_type=torch.float32,
-        ...     number_samples_per_class={"number_classes": 10}
+        ...     number_samples_per_class={"number_classes": 10},
+        ...     optimizer='convolutional'
         ... )
         >>> generator = model.get_generator()
         >>> discriminator = model.get_discriminator()
@@ -130,7 +133,8 @@ class AdversarialModelTorch:
                  dense_layer_sizes_g: Optional[List[int]] = None,
                  dense_layer_sizes_d: Optional[List[int]] = None,
                  dataset_type: torch.dtype = torch.float32,
-                 number_samples_per_class: Optional[Dict] = None):
+                 number_samples_per_class: Optional[Dict] = None,
+                 optimizer: str = 'dense'):
         """
         Initializes the AdversarialModelTorch by creating separate generator and discriminator instances.
 
@@ -160,6 +164,9 @@ class AdversarialModelTorch:
             number_samples_per_class (Optional[Dict], optional):
                 Optional dictionary containing metadata about the number of samples per class.
                 If provided, it must include the key "number_classes".
+            optimizer (str, optional):
+                Type of architecture: 'dense' for fully-connected (default) or
+                'convolutional' for Conv1D architecture.
 
         Raises:
             ValueError:
@@ -175,6 +182,8 @@ class AdversarialModelTorch:
         if dense_layer_sizes_g is None:
             dense_layer_sizes_g = DEFAULT_ADVERSARIAL_DENSE_LAYERS_SETTINGS_G.copy()
 
+        self._optimizer = optimizer
+
         # Create generator instance using composition
         self._generator_builder = VanillaGeneratorTorch(
             latent_dimension=latent_dimension,
@@ -186,7 +195,8 @@ class AdversarialModelTorch:
             last_layer_activation=last_layer_activation,
             dense_layer_sizes_g=dense_layer_sizes_g,
             dataset_type=dataset_type,
-            number_samples_per_class=number_samples_per_class
+            number_samples_per_class=number_samples_per_class,
+            optimizer=optimizer
         )
 
         # Create discriminator instance using composition
@@ -200,7 +210,8 @@ class AdversarialModelTorch:
             last_layer_activation=last_layer_activation,
             dense_layer_sizes_d=dense_layer_sizes_d,
             dataset_type=dataset_type,
-            number_samples_per_class=number_samples_per_class
+            number_samples_per_class=number_samples_per_class,
+            optimizer=optimizer
         )
 
     def get_generator(self):
@@ -387,6 +398,32 @@ class AdversarialModelTorch:
         """
         self._discriminator_builder.set_dense_layer_sizes_discriminator(dense_layer_sizes_discriminator)
 
+    def get_optimizer(self) -> str:
+        """
+        Get the current optimizer/architecture type.
+
+        Returns:
+            str: The optimizer type ('dense' or 'convolutional').
+        """
+        return self._optimizer
+
+    def set_optimizer(self, optimizer: str) -> None:
+        """
+        Set the optimizer/architecture type for both generator and discriminator.
+
+        Args:
+            optimizer (str): The optimizer type ('dense' or 'convolutional').
+
+        Raises:
+            ValueError: If optimizer is not a string.
+        """
+        if not isinstance(optimizer, str):
+            raise ValueError("optimizer must be a string.")
+
+        self._optimizer = optimizer
+        self._generator_builder.set_optimizer(optimizer)
+        self._discriminator_builder.set_optimizer(optimizer)
+
     def get_generator_parameters(self) -> dict:
         """
         Returns the current configuration of the generator.
@@ -402,7 +439,8 @@ class AdversarialModelTorch:
             'dropout_decay_rate': self._generator_builder._generator_dropout_decay_rate_g,
             'dense_layer_sizes': self._generator_builder._generator_dense_layer_sizes_g,
             'initializer_mean': self._generator_builder._generator_initializer_mean,
-            'initializer_deviation': self._generator_builder._generator_initializer_deviation
+            'initializer_deviation': self._generator_builder._generator_initializer_deviation,
+            'optimizer': self._generator_builder.get_optimizer()
         }
 
     def get_discriminator_parameters(self) -> dict:
@@ -420,7 +458,8 @@ class AdversarialModelTorch:
             'dropout_decay_rate': self._discriminator_builder._discriminator_dropout_decay_rate_d,
             'dense_layer_sizes': self._discriminator_builder._discriminator_dense_layer_sizes_d,
             'initializer_mean': self._discriminator_builder._discriminator_initializer_mean,
-            'initializer_deviation': self._discriminator_builder._discriminator_initializer_deviation
+            'initializer_deviation': self._discriminator_builder._discriminator_initializer_deviation,
+            'optimizer': self._discriminator_builder.get_optimizer()
         }
 
     def to(self, device: torch.device):

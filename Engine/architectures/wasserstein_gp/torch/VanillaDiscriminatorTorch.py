@@ -58,6 +58,9 @@ class VanillaDiscriminatorTorch(Activations, nn.Module):
     functions, dropout rates, and initialization schemes, allowing it to be adapted to
     various tasks requiring a critic or discriminator network.
 
+    This class now supports both dense and convolutional (Conv1D) architectures through
+    the optimizer parameter.
+
     This class does not implement training or loss computation directly, focusing instead
     on the architecture definition and construction.
 
@@ -84,6 +87,8 @@ class VanillaDiscriminatorTorch(Activations, nn.Module):
         @discriminator_number_samples_per_class (Optional[Dict[str, int]]):
             Optional dictionary containing metadata about class distribution.
             Must include a key "number_classes" if provided.
+        @discriminator_optimizer (str):
+            Type of architecture to use: 'dense' (default) or 'convolutional' for Conv1D.
         @discriminator_model_dense (Optional[Model]):
             Placeholder for the compiled model after build().
 
@@ -111,7 +116,8 @@ class VanillaDiscriminatorTorch(Activations, nn.Module):
         ...     last_layer_activation=torch.sigmoid,
         ...     dense_layer_sizes_d=[512, 256, 128],
         ...     dataset_type=numpy.float32,
-        ...     number_samples_per_class={"number_classes": 10}
+        ...     number_samples_per_class={"number_classes": 10},
+        ...     optimizer='convolutional'
         ... )
         >>> discriminator.build()  # Example method call if present
     """
@@ -127,7 +133,8 @@ class VanillaDiscriminatorTorch(Activations, nn.Module):
             last_layer_activation: Callable,
             dense_layer_sizes_d: List[int],
             dataset_type: type = numpy.float32,
-            number_samples_per_class: Optional[Dict[str, int]] = None) -> None:
+            number_samples_per_class: Optional[Dict[str, int]] = None,
+            optimizer: str = 'dense') -> None:
         """
         Initializes the VanillaDiscriminator.
 
@@ -147,6 +154,8 @@ class VanillaDiscriminatorTorch(Activations, nn.Module):
             @dataset_type (type, optional):Data type of the input data (default: numpy.float32).
             @number_samples_per_class (Optional[Dict[str, int]], optional): Optional dictionary containing
             the number of samples per class. If provided, it must contain the key "number_classes".
+            @optimizer (str, optional): Type of architecture: 'dense' for fully-connected (default) or
+            'convolutional' for Conv1D architecture.
 
         Raises:
             ValueError:
@@ -181,11 +190,12 @@ class VanillaDiscriminatorTorch(Activations, nn.Module):
         self._discriminator_initializer_mean: float = initializer_mean
         self._discriminator_initializer_deviation: float = initializer_deviation
         self._discriminator_number_samples_per_class: Optional[Dict[str, int]] = number_samples_per_class
+        self._discriminator_optimizer: str = optimizer
         self._discriminator_model_dense = None
 
     def get_discriminator(self):
         """
-        Constructs the discriminator model using dense layers, dropout, and activation functions.
+        Constructs the discriminator model using either dense layers or Conv1D layers.
 
         Returns:
             nn.Module: A PyTorch Module instance representing the discriminator.
@@ -197,7 +207,56 @@ class VanillaDiscriminatorTorch(Activations, nn.Module):
             raise ValueError(
                 "number_samples_per_class with a 'number_classes' key must be provided to construct the model.")
 
-        # Dense discriminator model
+        # Build discriminator based on optimizer type
+        if self._discriminator_optimizer == 'convolutional':
+            self._discriminator_model_dense = self._build_convolutional_discriminator()
+        else:
+            self._discriminator_model_dense = self._build_dense_discriminator()
+
+        # Complete discriminator with label conditioning
+        class Discriminator(nn.Module):
+            def __init__(self, output_shape, num_classes, dense_model, init_mean, init_std, activation_fn):
+                super().__init__()
+                self.dense_model = dense_model
+                self.activation_fn = activation_fn
+                if isinstance(output_shape, tuple):
+                    output_dim = output_shape[0]
+                else:
+                    output_dim = output_shape
+                self.label_embedding = nn.Linear(output_dim + num_classes, output_dim)
+
+                nn.init.normal_(self.label_embedding.weight, mean=init_mean, std=init_std)
+                if self.label_embedding.bias is not None:
+                    nn.init.zeros_(self.label_embedding.bias)
+
+            def forward(self, inputs):
+                shape_input, label_input = inputs
+                concatenated = torch.cat([shape_input, label_input], dim=1)
+                embedded = self.label_embedding(concatenated)
+                if callable(self.activation_fn):
+                    embedded = self.activation_fn(embedded)
+                validity = self.dense_model(embedded)
+                return validity
+
+        discriminator = Discriminator(
+            self._discriminator_output_shape,
+            self._discriminator_number_samples_per_class["number_classes"],
+            self._discriminator_model_dense,
+            self._discriminator_initializer_mean,
+            self._discriminator_initializer_deviation,
+            self._discriminator_activation_function
+        )
+
+        return discriminator
+
+    def _build_dense_discriminator(self) -> nn.Module:
+        """
+        Build a fully-connected (dense) discriminator architecture.
+
+        Returns:
+            nn.Module: A PyTorch Module with dense layers.
+        """
+
         class DenseDiscriminator(nn.Module):
             def __init__(self, input_dim, layer_sizes, dropout_rate,
                          activation_fn, last_activation_fn, init_mean, init_std):
@@ -256,9 +315,11 @@ class VanillaDiscriminatorTorch(Activations, nn.Module):
                         return torch.sigmoid(x)
                 return x
 
-        self._discriminator_model_dense = DenseDiscriminator(
-            self._discriminator_output_shape[0] if isinstance(self._discriminator_output_shape,
-                                                              tuple) else self._discriminator_output_shape,
+        input_dim = self._discriminator_output_shape[0] if isinstance(self._discriminator_output_shape,
+                                                                      tuple) else self._discriminator_output_shape
+
+        return DenseDiscriminator(
+            input_dim,
             self._discriminator_dense_layer_sizes_d,
             self._discriminator_dropout_decay_rate_d,
             self._discriminator_activation_function,
@@ -267,37 +328,114 @@ class VanillaDiscriminatorTorch(Activations, nn.Module):
             self._discriminator_initializer_deviation
         )
 
-        # Complete discriminator with label conditioning
-        class Discriminator(nn.Module):
-            def __init__(self, output_shape, num_classes, dense_model, init_mean, init_std):
+    def _build_convolutional_discriminator(self) -> nn.Module:
+        """
+        Build a 1D convolutional discriminator architecture.
+
+        Returns:
+            nn.Module: A PyTorch Module with Conv1d layers.
+        """
+
+        class ConvolutionalDiscriminator(nn.Module):
+            def __init__(self, input_dim, layer_sizes, dropout_rate,
+                         activation_fn, last_activation_fn, init_mean, init_std):
                 super().__init__()
-                self.dense_model = dense_model
-                if isinstance(output_shape, tuple):
-                    output_dim = output_shape[0]
+                self.input_dim = input_dim
+                self.conv_layers = nn.ModuleList()
+                self.pool_layers = nn.ModuleList()
+                self.dropouts = nn.ModuleList()
+                self.activation_fn = activation_fn
+                self.last_activation_fn = last_activation_fn
+
+                # Build convolutional layers
+                in_channels = 1
+                for i, filters in enumerate(layer_sizes):
+                    kernel_size = min(3, input_dim // (2 ** i))
+                    kernel_size = max(2, kernel_size)
+
+                    conv = nn.Conv1d(in_channels, filters, kernel_size=kernel_size,
+                                     stride=1, padding=kernel_size // 2)
+                    nn.init.normal_(conv.weight, mean=init_mean, std=init_std)
+                    if conv.bias is not None:
+                        nn.init.zeros_(conv.bias)
+
+                    self.conv_layers.append(conv)
+                    self.pool_layers.append(nn.MaxPool1d(kernel_size=2, padding=1))
+                    self.dropouts.append(nn.Dropout(dropout_rate))
+                    in_channels = filters
+
+                # Calculate the flattened size after convolutions
+                self.flatten = nn.Flatten()
+
+                # Dense layers after flattening
+                self.dense1 = nn.Linear(layer_sizes[-1] * ((input_dim // (2 ** len(layer_sizes))) + len(layer_sizes)),
+                                        128)
+                nn.init.normal_(self.dense1.weight, mean=init_mean, std=init_std)
+                if self.dense1.bias is not None:
+                    nn.init.zeros_(self.dense1.bias)
+
+                self.dense_dropout = nn.Dropout(dropout_rate)
+
+                self.output_layer = nn.Linear(128, 1)
+                nn.init.normal_(self.output_layer.weight, mean=init_mean, std=init_std)
+                if self.output_layer.bias is not None:
+                    nn.init.zeros_(self.output_layer.bias)
+
+            def forward(self, x):
+                # Reshape to (batch, channels, sequence_length)
+                x = x.unsqueeze(1)  # Add channel dimension
+
+                # Apply convolutional layers
+                for conv, pool, dropout in zip(self.conv_layers, self.pool_layers, self.dropouts):
+                    x = conv(x)
+                    if callable(self.activation_fn):
+                        x = self.activation_fn(x)
+                    else:
+                        x = self._apply_activation_string(x, self.activation_fn)
+                    x = pool(x)
+                    x = dropout(x)
+
+                # Flatten and apply dense layers
+                x = self.flatten(x)
+                x = self.dense1(x)
+                if callable(self.activation_fn):
+                    x = self.activation_fn(x)
                 else:
-                    output_dim = output_shape
-                self.label_embedding = nn.Linear(output_dim + num_classes, output_dim)
+                    x = self._apply_activation_string(x, self.activation_fn)
+                x = self.dense_dropout(x)
 
-                nn.init.normal_(self.label_embedding.weight, mean=init_mean, std=init_std)
-                if self.label_embedding.bias is not None:
-                    nn.init.zeros_(self.label_embedding.bias)
+                # Output layer
+                x = self.output_layer(x)
+                if callable(self.last_activation_fn):
+                    x = self.last_activation_fn(x)
+                else:
+                    x = self._apply_activation_string(x, self.last_activation_fn)
+                return x
 
-            def forward(self, inputs):
-                shape_input, label_input = inputs
-                concatenated = torch.cat([shape_input, label_input], dim=1)
-                embedded = self.label_embedding(concatenated)
-                validity = self.dense_model(embedded)
-                return validity
+            def _apply_activation_string(self, x, activation_name):
+                if isinstance(activation_name, str):
+                    if activation_name.lower() == 'leakyrelu':
+                        return torch.nn.functional.leaky_relu(x)
+                    elif activation_name.lower() == 'relu':
+                        return torch.nn.functional.relu(x)
+                    elif activation_name.lower() == 'tanh':
+                        return torch.tanh(x)
+                    elif activation_name.lower() == 'sigmoid':
+                        return torch.sigmoid(x)
+                return x
 
-        discriminator = Discriminator(
-            self._discriminator_output_shape,
-            self._discriminator_number_samples_per_class["number_classes"],
-            self._discriminator_model_dense,
+        input_dim = self._discriminator_output_shape[0] if isinstance(self._discriminator_output_shape,
+                                                                      tuple) else self._discriminator_output_shape
+
+        return ConvolutionalDiscriminator(
+            input_dim,
+            self._discriminator_dense_layer_sizes_d,
+            self._discriminator_dropout_decay_rate_d,
+            self._discriminator_activation_function,
+            self._discriminator_last_layer_activation,
             self._discriminator_initializer_mean,
             self._discriminator_initializer_deviation
         )
-
-        return discriminator
 
     def dense_discriminator_model(self) -> Optional[nn.Module]:
         """Returns the dense part of the discriminator model."""
@@ -311,6 +449,10 @@ class VanillaDiscriminatorTorch(Activations, nn.Module):
         """Gets the sizes of the dense layers for the discriminator."""
         return self._discriminator_dense_layer_sizes_d
 
+    def optimizer(self) -> str:
+        """Gets the current optimizer/architecture type."""
+        return self._discriminator_optimizer
+
     def dropout_decay_rate_discriminator(self, dropout_decay_rate_discriminator: float) -> None:
         """Sets the dropout rate for the discriminator."""
         if dropout_decay_rate_discriminator < 0 or dropout_decay_rate_discriminator > 1:
@@ -323,3 +465,9 @@ class VanillaDiscriminatorTorch(Activations, nn.Module):
                 isinstance(x, int) and x > 0 for x in dense_layer_sizes_discriminator):
             raise ValueError("dense_layer_sizes_discriminator must be a non-empty list of positive integers.")
         self._discriminator_dense_layer_sizes_d = dense_layer_sizes_discriminator
+
+    def optimizer(self, optimizer: str) -> None:
+        """Sets the optimizer/architecture type."""
+        if optimizer not in ['dense', 'convolutional']:
+            raise ValueError("optimizer must be either 'dense' or 'convolutional'.")
+        self._discriminator_optimizer = optimizer

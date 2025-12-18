@@ -35,7 +35,7 @@ try:
     import numpy
 
     from tensorflow.keras.layers import Dense, Input, Dropout, Flatten, Reshape
-    from tensorflow.keras.layers import Concatenate
+    from tensorflow.keras.layers import Concatenate, Conv1D, UpSampling1D
     from tensorflow.keras.models import Model
     from tensorflow.keras.initializers import RandomNormal
     from Engine.activations.Activations import Activations
@@ -76,6 +76,8 @@ class VanillaDecoderTensorflow(Activations):
             Desvio padrão para distribuição normal de inicialização.
         @decoder_number_samples_per_class (Optional[dict]):
             Dicionário contendo metadados sobre número de classes para entrada de labels.
+        @decoder_optimizer (str):
+            Tipo de arquitetura: 'dense' (padrão) ou 'convolutional' para Conv1D.
 
     Raises:
         ValueError:
@@ -90,7 +92,7 @@ class VanillaDecoderTensorflow(Activations):
             - `number_samples_per_class` é fornecido mas não é um dict com 'number_classes'.
 
     Example:
-        >>> # Decoder 1D (vetor)
+        >>> # Decoder 1D (vetor) - Dense
         >>> decoder_1d = VanillaDecoderTensorflow(
         ...     latent_dimension=128,
         ...     output_shape=784,
@@ -101,6 +103,20 @@ class VanillaDecoderTensorflow(Activations):
         ...     last_layer_activation='sigmoid',
         ...     number_neurons_decoder=[512, 256],
         ...     number_samples_per_class={"number_classes": 10}
+        ... )
+        >>>
+        >>> # Decoder 1D - Convolutional
+        >>> decoder_conv = VanillaDecoderTensorflow(
+        ...     latent_dimension=128,
+        ...     output_shape=784,
+        ...     activation_function='ReLU',
+        ...     initializer_mean=0.0,
+        ...     initializer_deviation=0.02,
+        ...     dropout_decay_decoder=0.3,
+        ...     last_layer_activation='sigmoid',
+        ...     number_neurons_decoder=[128, 256],
+        ...     number_samples_per_class={"number_classes": 10},
+        ...     optimizer='convolutional'
         ... )
         >>>
         >>> # Decoder 2D (imagem)
@@ -115,25 +131,12 @@ class VanillaDecoderTensorflow(Activations):
         ...     number_neurons_decoder=[256, 512],
         ...     number_samples_per_class={"number_classes": 10}
         ... )
-        >>>
-        >>> # Decoder 3D (volume)
-        >>> decoder_3d = VanillaDecoderTensorflow(
-        ...     latent_dimension=256,
-        ...     output_shape=(16, 16, 16, 3),
-        ...     activation_function='ReLU',
-        ...     initializer_mean=0.0,
-        ...     initializer_deviation=0.02,
-        ...     dropout_decay_decoder=0.4,
-        ...     last_layer_activation='tanh',
-        ...     number_neurons_decoder=[512, 1024],
-        ...     number_samples_per_class={"number_classes": 5}
-        ... )
     """
 
     def __init__(self, latent_dimension: int, output_shape, activation_function: str, initializer_mean: float,
                  initializer_deviation: float, dropout_decay_decoder: float, last_layer_activation: str,
                  number_neurons_decoder: list[int], dataset_type: type = numpy.float32,
-                 number_samples_per_class: dict = None):
+                 number_samples_per_class: dict = None, optimizer: str = 'dense'):
         """
         Inicializa a classe VanillaDecoder com a configuração fornecida.
 
@@ -148,6 +151,8 @@ class VanillaDecoderTensorflow(Activations):
             number_neurons_decoder (list[int]): Número de neurônios nas camadas do decoder.
             dataset_type (type): Tipo de dados para entradas/saídas (padrão numpy.float32).
             number_samples_per_class (dict, optional): Número de classes para entrada de label.
+            optimizer (str, optional): Tipo de arquitetura: 'dense' para totalmente conectada (padrão) ou
+                'convolutional' para arquitetura Conv1D.
 
         Raises:
             ValueError: Se qualquer parâmetro fornecido for inválido.
@@ -206,8 +211,10 @@ class VanillaDecoderTensorflow(Activations):
         self._decoder_initializer_deviation = initializer_deviation
         self._decoder_number_neurons_decoder = number_neurons_decoder
         self._decoder_number_samples_per_class = number_samples_per_class
+        self._decoder_optimizer = optimizer
 
-    def _calculate_total_output_size(self, output_shape) -> int:
+    @staticmethod
+    def _calculate_total_output_size(output_shape) -> int:
         """
         Calcula o tamanho total da saída (número total de elementos).
 
@@ -222,7 +229,8 @@ class VanillaDecoderTensorflow(Activations):
         else:
             return int(numpy.prod(output_shape))
 
-    def _get_dimensionality(self, output_shape) -> int:
+    @staticmethod
+    def _get_dimensionality(output_shape) -> int:
         """
         Determina a dimensionalidade dos dados baseado na forma da saída.
 
@@ -236,6 +244,113 @@ class VanillaDecoderTensorflow(Activations):
             return 1
         else:
             return len(output_shape)
+
+    def _build_dense_decoder(self, concatenate_input, initialization, output_shape, total_output_size, dimensionality):
+        """
+        Constrói um decoder usando apenas camadas Dense.
+
+        Args:
+            concatenate_input: Entrada concatenada (latent + labels).
+            initialization: Inicializador de pesos.
+            output_shape: Forma da saída.
+            total_output_size: Tamanho total da saída.
+            dimensionality: Dimensionalidade dos dados.
+
+        Returns:
+            Tensor: Saída do decoder.
+        """
+        # Primeira camada Dense com dropout e ativação
+        conditional_decoder = Dense(self._decoder_number_neurons_decoder[0], kernel_initializer=initialization)(
+            concatenate_input)
+        conditional_decoder = Dropout(self._decoder_dropout_decay_rate_decoder)(conditional_decoder)
+        conditional_decoder = self._add_activation_layer(conditional_decoder, self._decoder_activation_function)
+
+        # Iterar sobre as camadas Dense subsequentes
+        for number_filters in self._decoder_number_neurons_decoder[1:]:
+            conditional_decoder = Dense(number_filters, kernel_initializer=initialization)(conditional_decoder)
+            conditional_decoder = Dropout(self._decoder_dropout_decay_rate_decoder)(conditional_decoder)
+            conditional_decoder = self._add_activation_layer(conditional_decoder, self._decoder_activation_function)
+
+        # Camada de saída Dense (produz vetor flat)
+        conditional_decoder = Dense(total_output_size, kernel_initializer=initialization, name="Output_Dense")(
+            conditional_decoder)
+        conditional_decoder = self._add_activation_layer(conditional_decoder, self._decoder_last_layer_activation)
+
+        # Reshape para a forma desejada (se não for 1D)
+        if dimensionality > 1:
+            conditional_decoder = Reshape(output_shape, name="Output_Reshape")(conditional_decoder)
+
+        return conditional_decoder
+
+    def _build_convolutional_decoder(self, concatenate_input, initialization, output_shape, total_output_size):
+        """
+        Constrói um decoder usando camadas Conv1D com upsampling.
+
+        Args:
+            concatenate_input: Entrada concatenada (latent + labels).
+            initialization: Inicializador de pesos.
+            output_shape: Forma da saída.
+            total_output_size: Tamanho total da saída.
+
+        Returns:
+            Tensor: Saída do decoder.
+        """
+        # Calcular dimensão espacial inicial
+        initial_spatial_dim = total_output_size // (2 ** len(self._decoder_number_neurons_decoder))
+        initial_spatial_dim = max(4, initial_spatial_dim)
+
+        # Primeira camada Dense para expandir
+        expanded_size = initial_spatial_dim * self._decoder_number_neurons_decoder[0]
+        conditional_decoder = Dense(expanded_size, kernel_initializer=initialization)(concatenate_input)
+        conditional_decoder = self._add_activation_layer(conditional_decoder, self._decoder_activation_function)
+
+        # Reshape para formato 3D (batch, timesteps, features)
+        conditional_decoder = Reshape((initial_spatial_dim, self._decoder_number_neurons_decoder[0]))(
+            conditional_decoder)
+
+        # Construir camadas convolucionais com upsampling
+        for i, filters in enumerate(self._decoder_number_neurons_decoder):
+            kernel_size = min(5, initial_spatial_dim * (2 ** i))
+            kernel_size = max(3, kernel_size)
+
+            # Camada Conv1D
+            conditional_decoder = Conv1D(
+                filters=filters,
+                kernel_size=kernel_size,
+                strides=1,
+                padding='same',
+                kernel_initializer=initialization
+            )(conditional_decoder)
+            conditional_decoder = self._add_activation_layer(conditional_decoder, self._decoder_activation_function)
+            conditional_decoder = Dropout(self._decoder_dropout_decay_rate_decoder)(conditional_decoder)
+
+            # Upsampling para aumentar dimensão espacial
+            if i < len(self._decoder_number_neurons_decoder) - 1:
+                conditional_decoder = UpSampling1D(size=2)(conditional_decoder)
+
+        # Conv1D final para produzir 1 canal
+        conditional_decoder = Conv1D(
+            filters=1,
+            kernel_size=3,
+            strides=1,
+            padding='same',
+            kernel_initializer=initialization
+        )(conditional_decoder)
+        conditional_decoder = self._add_activation_layer(conditional_decoder, self._decoder_last_layer_activation)
+
+        # Flatten
+        conditional_decoder = Flatten()(conditional_decoder)
+
+        # Dense final para garantir tamanho exato
+        conditional_decoder = Dense(total_output_size, kernel_initializer=initialization, name="Output_Dense")(
+            conditional_decoder)
+        conditional_decoder = self._add_activation_layer(conditional_decoder, self._decoder_last_layer_activation)
+
+        # Reshape se necessário
+        if isinstance(output_shape, tuple):
+            conditional_decoder = Reshape(output_shape, name="Output_Reshape")(conditional_decoder)
+
+        return conditional_decoder
 
     def get_decoder(self, output_shape):
         """
@@ -276,29 +391,36 @@ class VanillaDecoderTensorflow(Activations):
         # Concatenar espaço latente e labels
         concatenate_input = Concatenate()([neural_model_inputs, label_input])
 
-        # Primeira camada Dense com dropout e ativação
-        conditional_decoder = Dense(self._decoder_number_neurons_decoder[0], kernel_initializer=initialization)(
-            concatenate_input)
-        conditional_decoder = Dropout(self._decoder_dropout_decay_rate_decoder)(conditional_decoder)
-        conditional_decoder = self._add_activation_layer(conditional_decoder, self._decoder_activation_function)
-
-        # Iterar sobre as camadas Dense subsequentes
-        for number_filters in self._decoder_number_neurons_decoder[1:]:
-            conditional_decoder = Dense(number_filters, kernel_initializer=initialization)(conditional_decoder)
-            conditional_decoder = Dropout(self._decoder_dropout_decay_rate_decoder)(conditional_decoder)
-            conditional_decoder = self._add_activation_layer(conditional_decoder, self._decoder_activation_function)
-
-        # Camada de saída Dense (produz vetor flat)
-        conditional_decoder = Dense(total_output_size, kernel_initializer=initialization, name="Output_Dense")(
-            conditional_decoder)
-        conditional_decoder = self._add_activation_layer(conditional_decoder, self._decoder_last_layer_activation)
-
-        # Reshape para a forma desejada (se não for 1D)
-        if dimensionality > 1:
-            conditional_decoder = Reshape(output_shape, name="Output_Reshape")(conditional_decoder)
+        # Construir decoder baseado no optimizer
+        if self._decoder_optimizer == 'convolutional':
+            conditional_decoder = self._build_convolutional_decoder(
+                concatenate_input, initialization, output_shape, total_output_size
+            )
+        else:
+            conditional_decoder = self._build_dense_decoder(
+                concatenate_input, initialization, output_shape, total_output_size, dimensionality
+            )
 
         # Retornar o modelo construído
         return Model([neural_model_inputs, label_input], conditional_decoder, name=f"Decoder_{dimensionality}D")
+
+    def get_optimizer(self) -> str:
+        """
+        Obtém o tipo de arquitetura/optimizer atual.
+
+        Returns:
+            str: O tipo de optimizer ('dense' ou 'convolutional').
+        """
+        return self._decoder_optimizer
+
+    def set_optimizer(self, optimizer: str):
+        """
+        Define o tipo de arquitetura/optimizer.
+
+        Args:
+            optimizer (str): O tipo de optimizer ('dense' ou 'convolutional').
+        """
+        self._decoder_optimizer = optimizer
 
     @property
     def dropout_decay_rate_decoder(self) -> float:

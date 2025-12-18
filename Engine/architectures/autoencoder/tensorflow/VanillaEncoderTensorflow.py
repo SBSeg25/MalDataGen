@@ -40,6 +40,7 @@ try:
     from typing import Optional
 
     from tensorflow.keras.layers import Dense, Input, Dropout, Flatten, Concatenate
+    from tensorflow.keras.layers import Reshape, Conv1D, MaxPooling1D
     from tensorflow.keras.models import Model
     from tensorflow.keras.initializers import RandomNormal
     from Engine.activations.Activations import Activations
@@ -78,6 +79,8 @@ class VanillaEncoderTensorflow(Activations):
             Desvio padrão para distribuição normal usada para inicializar os pesos.
         @encoder_number_samples_per_class (Optional[dict]):
             Dicionário opcional contendo metadados sobre o número de amostras por classe.
+        @encoder_optimizer (str):
+            Tipo de arquitetura: 'dense' (padrão) ou 'convolutional' para Conv1D.
 
     Raises:
         ValueError:
@@ -90,7 +93,7 @@ class VanillaEncoderTensorflow(Activations):
             - `number_samples_per_class` é fornecido mas não é um dicionário.
 
     Example:
-        >>> # Encoder 1D (vetor de entrada)
+        >>> # Encoder 1D (vetor de entrada) - Dense
         >>> encoder_1d = VanillaEncoderTensorflow(
         ...     latent_dimension=128,
         ...     output_shape=128,
@@ -101,6 +104,20 @@ class VanillaEncoderTensorflow(Activations):
         ...     last_layer_activation='linear',
         ...     number_neurons_encoder=[256, 512],
         ...     number_samples_per_class={"number_classes": 10}
+        ... )
+        >>>
+        >>> # Encoder 1D - Convolutional
+        >>> encoder_conv = VanillaEncoderTensorflow(
+        ...     latent_dimension=128,
+        ...     output_shape=128,
+        ...     activation_function='ReLU',
+        ...     initializer_mean=0.0,
+        ...     initializer_deviation=0.02,
+        ...     dropout_decay_encoder=0.3,
+        ...     last_layer_activation='linear',
+        ...     number_neurons_encoder=[128, 256],
+        ...     number_samples_per_class={"number_classes": 10},
+        ...     optimizer='convolutional'
         ... )
         >>>
         >>> # Encoder 2D (imagem de entrada)
@@ -115,25 +132,12 @@ class VanillaEncoderTensorflow(Activations):
         ...     number_neurons_encoder=[512, 256],
         ...     number_samples_per_class={"number_classes": 10}
         ... )
-        >>>
-        >>> # Encoder 3D (volume de entrada)
-        >>> encoder_3d = VanillaEncoderTensorflow(
-        ...     latent_dimension=256,
-        ...     output_shape=256,
-        ...     activation_function='ReLU',
-        ...     initializer_mean=0.0,
-        ...     initializer_deviation=0.02,
-        ...     dropout_decay_encoder=0.4,
-        ...     last_layer_activation='linear',
-        ...     number_neurons_encoder=[1024, 512],
-        ...     number_samples_per_class={"number_classes": 5}
-        ... )
     """
 
     def __init__(self, latent_dimension: int, output_shape, activation_function: str, initializer_mean: float,
                  initializer_deviation: float, dropout_decay_encoder: float, last_layer_activation: str,
                  number_neurons_encoder: list, dataset_type: Any = numpy.float32,
-                 number_samples_per_class: Optional[Dict[str, Any]] = None):
+                 number_samples_per_class: Optional[Dict[str, Any]] = None, optimizer: str = 'dense'):
         """
         Inicializa o VanillaEncoder com os parâmetros fornecidos.
 
@@ -148,6 +152,8 @@ class VanillaEncoderTensorflow(Activations):
             number_neurons_encoder (list): Lista especificando número de neurônios em cada camada.
             dataset_type (dtype, optional): Tipo de dados do dataset de entrada. Padrão numpy.float32.
             number_samples_per_class (dict, optional): Especifica número de amostras por classe.
+            optimizer (str, optional): Tipo de arquitetura: 'dense' para totalmente conectada (padrão) ou
+                'convolutional' para arquitetura Conv1D.
         """
 
         if not isinstance(latent_dimension, int) or latent_dimension <= 0:
@@ -193,6 +199,7 @@ class VanillaEncoderTensorflow(Activations):
         self._encoder_initializer_deviation = initializer_deviation
         self._encoder_number_neurons_encoder = number_neurons_encoder
         self._encoder_number_samples_per_class = number_samples_per_class
+        self._encoder_optimizer = optimizer
 
     def _calculate_total_input_size(self, input_shape) -> int:
         """
@@ -224,11 +231,96 @@ class VanillaEncoderTensorflow(Activations):
         else:
             return len(shape)
 
+    def _build_dense_encoder(self, concatenate_input, initialization, dimensionality):
+        """
+        Constrói um encoder usando apenas camadas Dense.
+
+        Args:
+            concatenate_input: Entrada concatenada (dados + labels).
+            initialization: Inicializador de pesos.
+            dimensionality: Dimensionalidade dos dados.
+
+        Returns:
+            tuple: (encoded_output, label_input) - Saída codificada e labels.
+        """
+        # Primeira camada Dense com dropout e ativação
+        conditional_encoder = Dense(self._encoder_number_neurons_encoder[0],
+                                    kernel_initializer=initialization)(concatenate_input)
+        conditional_encoder = Dropout(self._encoder_dropout_decay_rate_encoder)(conditional_encoder)
+        conditional_encoder = self._add_activation_layer(conditional_encoder, self._encoder_activation_function)
+
+        # Iterar sobre camadas Dense especificadas
+        for number_neurons in self._encoder_number_neurons_encoder[1:]:
+            conditional_encoder = Dense(number_neurons, kernel_initializer=initialization)(conditional_encoder)
+            conditional_encoder = Dropout(self._encoder_dropout_decay_rate_encoder)(conditional_encoder)
+            conditional_encoder = self._add_activation_layer(conditional_encoder, self._encoder_activation_function)
+
+        # Mapear para o espaço latente
+        conditional_encoder = Dense(self._encoder_latent_dimension, kernel_initializer=initialization,
+                                    name="Latent_Space")(conditional_encoder)
+        conditional_encoder = self._add_activation_layer(conditional_encoder, self._encoder_last_layer_activation)
+
+        return conditional_encoder
+
+    def _build_convolutional_encoder(self, flattened_input, initialization, input_shape):
+        """
+        Constrói um encoder usando camadas Conv1D com MaxPooling1D.
+
+        Args:
+            flattened_input: Entrada achatada (para 1D) ou original (para N-D).
+            initialization: Inicializador de pesos.
+            input_shape: Forma original da entrada.
+
+        Returns:
+            Tensor: Saída codificada.
+        """
+        # Calcular tamanho total da entrada
+        total_input_size = self._calculate_total_input_size(input_shape)
+
+        # Reshape para formato 3D (batch, timesteps, features=1)
+        if isinstance(input_shape, int):
+            reshaped = Reshape((input_shape, 1))(flattened_input)
+        else:
+            reshaped = Reshape((total_input_size, 1))(flattened_input)
+
+        conditional_encoder = reshaped
+
+        # Construir camadas convolucionais
+        for i, filters in enumerate(self._encoder_number_neurons_encoder):
+            kernel_size = min(3, total_input_size // (2 ** i))
+            kernel_size = max(2, kernel_size)
+
+            conditional_encoder = Conv1D(
+                filters=filters,
+                kernel_size=kernel_size,
+                strides=1,
+                padding='same',
+                kernel_initializer=initialization
+            )(conditional_encoder)
+            conditional_encoder = self._add_activation_layer(conditional_encoder, self._encoder_activation_function)
+            conditional_encoder = MaxPooling1D(pool_size=2, padding='same')(conditional_encoder)
+            conditional_encoder = Dropout(self._encoder_dropout_decay_rate_encoder)(conditional_encoder)
+
+        # Flatten
+        conditional_encoder = Flatten()(conditional_encoder)
+
+        # Dense intermediária
+        conditional_encoder = Dense(256, kernel_initializer=initialization)(conditional_encoder)
+        conditional_encoder = self._add_activation_layer(conditional_encoder, self._encoder_activation_function)
+        conditional_encoder = Dropout(self._encoder_dropout_decay_rate_encoder)(conditional_encoder)
+
+        # Camada final para espaço latente
+        conditional_encoder = Dense(self._encoder_latent_dimension, kernel_initializer=initialization,
+                                    name="Latent_Space")(conditional_encoder)
+        conditional_encoder = self._add_activation_layer(conditional_encoder, self._encoder_last_layer_activation)
+
+        return conditional_encoder
+
     def get_encoder(self, input_shape) -> Model:
         """
         Cria e retorna o modelo encoder adaptado automaticamente à dimensionalidade.
 
-        Este método constrói a rede neural empilhando camadas Dense com as configurações
+        Este método constrói a rede neural empilhando camadas Dense ou Conv1D com as configurações
         fornecidas (neurônios, dropout e ativação). Ele também concatena os dados de entrada
         e labels antes de passar pelas camadas. Se a entrada for N-D, usa Flatten automaticamente.
 
@@ -271,27 +363,41 @@ class VanillaEncoderTensorflow(Activations):
         label_input = Input(shape=(self._encoder_number_samples_per_class["number_classes"],),
                             dtype=self._encoder_dataset_type, name="second_input")
 
-        # Concatenar dados e labels e aplicar primeira camada Dense com dropout e ativação
-        concatenate_input = Concatenate()([flattened_input, label_input])
-        conditional_encoder = Dense(self._encoder_number_neurons_encoder[0],
-                                    kernel_initializer=initialization)(concatenate_input)
-        conditional_encoder = Dropout(self._encoder_dropout_decay_rate_encoder)(conditional_encoder)
-        conditional_encoder = self._add_activation_layer(conditional_encoder, self._encoder_activation_function)
-
-        # Iterar sobre camadas Dense especificadas
-        for number_neurons in self._encoder_number_neurons_encoder[1:]:
-            conditional_encoder = Dense(number_neurons, kernel_initializer=initialization)(conditional_encoder)
-            conditional_encoder = Dropout(self._encoder_dropout_decay_rate_encoder)(conditional_encoder)
-            conditional_encoder = self._add_activation_layer(conditional_encoder, self._encoder_activation_function)
-
-        # Mapear para o espaço latente
-        conditional_encoder = Dense(self._encoder_latent_dimension, kernel_initializer=initialization,
-                                    name="Latent_Space")(conditional_encoder)
-        conditional_encoder = self._add_activation_layer(conditional_encoder, self._encoder_last_layer_activation)
+        # Construir encoder baseado no optimizer
+        if self._encoder_optimizer == 'convolutional':
+            # Para Conv1D, processar dados antes de concatenar com labels
+            conv_encoded = self._build_convolutional_encoder(flattened_input, initialization, input_shape)
+            # Concatenar com labels e processar com Dense
+            concatenate_output = Concatenate()([conv_encoded, label_input])
+            conditional_encoder = Dense(self._encoder_latent_dimension, kernel_initializer=initialization,
+                                       name="Latent_Space_Final")(concatenate_output)
+            conditional_encoder = self._add_activation_layer(conditional_encoder, self._encoder_last_layer_activation)
+        else:
+            # Dense encoder original
+            concatenate_input = Concatenate()([flattened_input, label_input])
+            conditional_encoder = self._build_dense_encoder(concatenate_input, initialization, dimensionality)
 
         # Retornar o modelo encoder
         return Model([neural_model_inputs, label_input], [conditional_encoder, label_input],
                      name=f"Encoder_{dimensionality}D")
+
+    def get_optimizer(self) -> str:
+        """
+        Obtém o tipo de arquitetura/optimizer atual.
+
+        Returns:
+            str: O tipo de optimizer ('dense' ou 'convolutional').
+        """
+        return self._encoder_optimizer
+
+    def set_optimizer(self, optimizer: str):
+        """
+        Define o tipo de arquitetura/optimizer.
+
+        Args:
+            optimizer (str): O tipo de optimizer ('dense' ou 'convolutional').
+        """
+        self._encoder_optimizer = optimizer
 
     @property
     def dropout_decay_rate_encoder(self) -> float:

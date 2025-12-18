@@ -75,6 +75,8 @@ class VanillaGeneratorTorch(nn.Module):
             The data type for the input tensors (default is torch.float32).
         @number_samples_per_class (Optional[dict]):
             An optional dictionary indicating the number of samples per class for conditional data generation.
+        @optimizer (str):
+            Type of architecture to use: 'dense' (default) or 'convolutional' for Conv1D.
 
     Raises:
         ValueError:
@@ -93,7 +95,8 @@ class VanillaGeneratorTorch(nn.Module):
         ...     dropout_decay_rate_g=0.3,
         ...     last_layer_activation="sigmoid",
         ...     dense_layer_sizes_g=[128, 256, 512],
-        ...     number_samples_per_class={"number_classes": 10}
+        ...     number_samples_per_class={"number_classes": 10},
+        ...     optimizer='convolutional'
         ... )
         >>> model = generator.get_generator()
         >>> output = model([latent_vectors, labels])
@@ -109,7 +112,8 @@ class VanillaGeneratorTorch(nn.Module):
                  last_layer_activation: str,
                  dense_layer_sizes_g: List[int],
                  dataset_type: torch.dtype = torch.float32,
-                 number_samples_per_class: Optional[dict] = None):
+                 number_samples_per_class: Optional[dict] = None,
+                 optimizer: str = 'dense'):
         """
         Initializes the VanillaGeneratorTorch class with the specified parameters.
 
@@ -124,6 +128,8 @@ class VanillaGeneratorTorch(nn.Module):
             dense_layer_sizes_g (List[int]): List of dense layer sizes.
             dataset_type (torch.dtype): Data type for the input tensors.
             number_samples_per_class (Optional[dict]): Dictionary with the number of samples per class.
+            optimizer (str, optional): Type of architecture: 'dense' for fully-connected (default) or
+                'convolutional' for Conv1D architecture.
 
         Raises:
             ValueError: If any parameter validation fails.
@@ -170,6 +176,7 @@ class VanillaGeneratorTorch(nn.Module):
         self._generator_dataset_type = dataset_type
         self._generator_initializer_mean = initializer_mean
         self._generator_initializer_deviation = initializer_deviation
+        self._generator_optimizer = optimizer
         self._generator_model_dense = None
 
     def _add_activation_layer(self, activation_name: str) -> nn.Module:
@@ -207,29 +214,20 @@ class VanillaGeneratorTorch(nn.Module):
         Args:
             module: PyTorch module to initialize.
         """
-        if isinstance(module, nn.Linear):
+        if isinstance(module, (nn.Linear, nn.Conv1d, nn.ConvTranspose1d)):
             nn.init.normal_(module.weight,
                             mean=self._generator_initializer_mean,
                             std=self._generator_initializer_deviation)
             if module.bias is not None:
                 nn.init.zeros_(module.bias)
 
-    def get_generator(self):
+    def _build_dense_generator(self):
         """
-        Builds and returns the conditional generator model.
+        Build a fully-connected (dense) generator architecture.
 
         Returns:
-            ConditionalGenerator: A PyTorch module with inputs for latent vectors
-                                 and conditional labels, and an output for generated data.
-
-        Raises:
-            ValueError: If `number_samples_per_class` is not provided for conditional generation.
+            nn.Sequential: A PyTorch Sequential model with dense layers.
         """
-        if not self._generator_number_samples_per_class or "number_classes" not in self._generator_number_samples_per_class:
-            raise ValueError(
-                "`number_samples_per_class` must include a 'number_classes' key for conditional generation.")
-
-        # Build the core dense generator model
         layers = []
 
         # First layer
@@ -250,7 +248,100 @@ class VanillaGeneratorTorch(nn.Module):
                                 self._generator_output_shape))
         layers.append(self._add_activation_layer(self._generator_last_layer_activation))
 
-        self._generator_model_dense = nn.Sequential(*layers)
+        return nn.Sequential(*layers)
+
+    def _build_convolutional_generator(self):
+        """
+        Build a 1D convolutional generator architecture using transposed convolutions (upsampling).
+
+        Returns:
+            nn.Sequential: A PyTorch Sequential model with Conv1D and upsampling layers.
+        """
+        layers = []
+
+        # Calculate initial spatial dimension
+        initial_spatial_dim = self._generator_output_shape // (2 ** len(self._generator_dense_layer_sizes_g))
+        initial_spatial_dim = max(4, initial_spatial_dim)
+
+        # Start with a dense layer to expand latent dimension
+        expanded_size = initial_spatial_dim * self._generator_dense_layer_sizes_g[0]
+        layers.append(nn.Linear(self._generator_latent_dimension, expanded_size))
+        layers.append(self._add_activation_layer(self._generator_activation_function))
+
+        # Reshape to 3D tensor for Conv1D: (batch, channels, length)
+        class ReshapeLayer(nn.Module):
+            def __init__(self, channels, length):
+                super().__init__()
+                self.channels = channels
+                self.length = length
+
+            def forward(self, x):
+                return x.view(x.size(0), self.channels, self.length)
+
+        layers.append(ReshapeLayer(self._generator_dense_layer_sizes_g[0], initial_spatial_dim))
+
+        # Build convolutional layers with upsampling
+        in_channels = self._generator_dense_layer_sizes_g[0]
+        for i, filters in enumerate(self._generator_dense_layer_sizes_g):
+            kernel_size = min(5, initial_spatial_dim * (2 ** i))
+            kernel_size = max(3, kernel_size)
+
+            # Conv1D layer
+            layers.append(nn.Conv1d(
+                in_channels=in_channels,
+                out_channels=filters,
+                kernel_size=kernel_size,
+                stride=1,
+                padding=kernel_size // 2
+            ))
+            layers.append(self._add_activation_layer(self._generator_activation_function))
+            layers.append(nn.Dropout(self._generator_dropout_decay_rate_g))
+
+            # Upsample to increase spatial dimension
+            if i < len(self._generator_dense_layer_sizes_g) - 1:
+                layers.append(nn.Upsample(scale_factor=2, mode='linear', align_corners=False))
+
+            in_channels = filters
+
+        # Final Conv1D layer to produce single channel output
+        layers.append(nn.Conv1d(
+            in_channels=in_channels,
+            out_channels=1,
+            kernel_size=3,
+            stride=1,
+            padding=1
+        ))
+        layers.append(self._add_activation_layer(self._generator_last_layer_activation))
+
+        # Flatten to match output_shape
+        layers.append(nn.Flatten())
+
+        # Final dense layer to ensure exact output shape
+        layers.append(nn.LazyLinear(self._generator_output_shape))
+        layers.append(self._add_activation_layer(self._generator_last_layer_activation))
+
+        return nn.Sequential(*layers)
+
+    def get_generator(self):
+        """
+        Builds and returns the conditional generator model.
+
+        Returns:
+            ConditionalGenerator: A PyTorch module with inputs for latent vectors
+                                 and conditional labels, and an output for generated data.
+
+        Raises:
+            ValueError: If `number_samples_per_class` is not provided for conditional generation.
+        """
+        if not self._generator_number_samples_per_class or "number_classes" not in self._generator_number_samples_per_class:
+            raise ValueError(
+                "`number_samples_per_class` must include a 'number_classes' key for conditional generation.")
+
+        # Build the core generator network based on optimizer type
+        if self._generator_optimizer == 'convolutional':
+            self._generator_model_dense = self._build_convolutional_generator()
+        else:
+            self._generator_model_dense = self._build_dense_generator()
 
         # Initialize weights
         self._generator_model_dense.apply(self._initialize_weights)
@@ -307,6 +398,24 @@ class VanillaGeneratorTorch(nn.Module):
         if not dense_layer_sizes_generator or any(size <= 0 for size in dense_layer_sizes_generator):
             raise ValueError("`dense_layer_sizes_generator` must be a list of positive integers.")
         self._generator_dense_layer_sizes_g = dense_layer_sizes_generator
+
+    def get_optimizer(self) -> str:
+        """
+        Get the current optimizer/architecture type.
+
+        Returns:
+            str: The optimizer type ('dense' or 'convolutional').
+        """
+        return self._generator_optimizer
+
+    def set_optimizer(self, optimizer: str):
+        """
+        Set the optimizer/architecture type.
+
+        Args:
+            optimizer (str): The optimizer type ('dense' or 'convolutional').
+        """
+        self._generator_optimizer = optimizer
 
 
 class ConditionalGenerator(nn.Module):

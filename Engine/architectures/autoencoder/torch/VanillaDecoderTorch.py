@@ -74,6 +74,8 @@ class VanillaDecoderTorch(Activations, nn.Module):
             The standard deviation for the normal distribution used to initialize the weights.
         @decoder_number_samples_per_class (Optional[dict]):
             An optional dictionary containing metadata about the number of classes for label input.
+        @decoder_optimizer (str):
+            Type of architecture to use: 'dense' (default) or 'convolutional' for Conv1D.
 
     Raises:
         ValueError:
@@ -97,14 +99,15 @@ class VanillaDecoderTorch(Activations, nn.Module):
         ...     last_layer_activation='sigmoid',
         ...     number_neurons_decoder=[512, 256, 128],
         ...     dataset_type=numpy.float32,
-        ...     number_samples_per_class={"number_classes": 10}
+        ...     number_samples_per_class={"number_classes": 10},
+        ...     optimizer='convolutional'
         ... )
     """
 
     def __init__(self, latent_dimension: int, output_shape: int, activation_function: str, initializer_mean: float,
                  initializer_deviation: float, dropout_decay_decoder: float, last_layer_activation: str,
                  number_neurons_decoder: list[int], dataset_type: type = numpy.float32,
-                 number_samples_per_class: dict = None):
+                 number_samples_per_class: dict = None, optimizer: str = 'dense'):
         """
         Initializes the VanillaDecoder class with the given configuration.
 
@@ -119,6 +122,8 @@ class VanillaDecoderTorch(Activations, nn.Module):
             number_neurons_decoder (list[int]): Number of neurons in decoder layers.
             dataset_type (type): Data type for inputs/outputs (default is numpy.float32).
             number_samples_per_class (dict, optional): Number of classes for label input.
+            optimizer (str, optional): Type of architecture: 'dense' for fully-connected (default) or
+                'convolutional' for Conv1D architecture.
 
         Raises:
             ValueError: If any of the provided parameters are invalid.
@@ -177,6 +182,7 @@ class VanillaDecoderTorch(Activations, nn.Module):
         self._decoder_initializer_deviation = initializer_deviation
         self._decoder_number_neurons_decoder = number_neurons_decoder
         self._decoder_number_samples_per_class = number_samples_per_class
+        self._decoder_optimizer = optimizer
 
     def get_decoder(self, output_shape: int):
         """
@@ -194,13 +200,28 @@ class VanillaDecoderTorch(Activations, nn.Module):
         if not isinstance(output_shape, int) or output_shape <= 0:
             raise ValueError(f"Invalid value for output_shape: {output_shape}. It must be a positive integer.")
 
-        class DecoderModule(nn.Module):
+        # Choose architecture based on optimizer
+        if self._decoder_optimizer == 'convolutional':
+            return self._build_convolutional_decoder(output_shape)
+        else:
+            return self._build_dense_decoder(output_shape)
+
+    def _build_dense_decoder(self, output_shape: int):
+        """
+        Builds a fully-connected (dense) decoder architecture.
+
+        Args:
+            output_shape (int): The output dimensionality of the decoder.
+
+        Returns:
+            nn.Module: The constructed dense decoder model.
+        """
+        class DenseDecoderModule(nn.Module):
             def __init__(self, latent_dim, num_classes, out_shape, number_neurons,
                          init_mean, init_std, dropout_rate, activation_fn, last_activation_fn,
                          get_activation_func):
                 super().__init__()
 
-                # Store only the necessary configuration, not the parent object
                 self.latent_dim = latent_dim
                 self.num_classes = num_classes
                 self.out_shape = out_shape
@@ -245,36 +266,157 @@ class VanillaDecoderTorch(Activations, nn.Module):
                     nn.init.zeros_(layer.bias)
 
             def forward(self, x):
-                """
-                Forward pass through the decoder.
-
-                Args:
-                    x: List/tuple of [latent_input, label_input] or tensor if concatenated
-
-                Returns:
-                    Decoded output tensor
-                """
-                # Handle both list/tuple input and direct tensor input
                 if isinstance(x, (list, tuple)):
                     latent_input, label_input = x
                     x = torch.cat([latent_input, label_input], dim=1)
 
-                # Pass through layers
                 for layer, dropout, activation_name in zip(self.layers, self.dropouts, self.activations):
                     x = layer(x)
                     x = dropout(x)
                     x = self.get_activation_func(activation_name)(x)
 
-                # Output layer
                 x = self.output_layer(x)
                 x = self.get_activation_func(self.output_activation)(x)
 
                 return x
 
-        # Create decoder with configuration values instead of parent reference
         num_classes = self._decoder_number_samples_per_class["number_classes"]
 
-        return DecoderModule(
+        return DenseDecoderModule(
+            latent_dim=self._decoder_latent_dimension,
+            num_classes=num_classes,
+            out_shape=output_shape,
+            number_neurons=self._decoder_number_neurons_decoder,
+            init_mean=self._decoder_initializer_mean,
+            init_std=self._decoder_initializer_deviation,
+            dropout_rate=self._decoder_dropout_decay_rate_decoder,
+            activation_fn=self._decoder_activation_function,
+            last_activation_fn=self._decoder_last_layer_activation,
+            get_activation_func=self._get_activation
+        )
+
+    def _build_convolutional_decoder(self, output_shape: int):
+        """
+        Builds a 1D convolutional decoder architecture with upsampling.
+
+        Args:
+            output_shape (int): The output dimensionality of the decoder.
+
+        Returns:
+            nn.Module: The constructed convolutional decoder model.
+        """
+        class ConvDecoderModule(nn.Module):
+            def __init__(self, latent_dim, num_classes, out_shape, number_neurons,
+                         init_mean, init_std, dropout_rate, activation_fn, last_activation_fn,
+                         get_activation_func):
+                super().__init__()
+
+                self.latent_dim = latent_dim
+                self.num_classes = num_classes
+                self.out_shape = out_shape
+                self.get_activation_func = get_activation_func
+
+                # Calculate input dimension (latent + labels)
+                input_dim = latent_dim + num_classes
+
+                # Calculate initial spatial dimension
+                initial_spatial_dim = out_shape // (2 ** len(number_neurons))
+                initial_spatial_dim = max(4, initial_spatial_dim)
+
+                # Initial dense layer to expand
+                expanded_size = initial_spatial_dim * number_neurons[0]
+                self.initial_dense = nn.Linear(input_dim, expanded_size)
+                self._init_weights(self.initial_dense, init_mean, init_std)
+                self.initial_activation_name = activation_fn
+
+                self.initial_spatial_dim = initial_spatial_dim
+                self.initial_channels = number_neurons[0]
+
+                # Build convolutional layers
+                self.conv_layers = nn.ModuleList()
+                self.dropouts = nn.ModuleList()
+                self.activations = []
+
+                in_channels = number_neurons[0]
+                for i, filters in enumerate(number_neurons):
+                    kernel_size = min(5, initial_spatial_dim * (2 ** i))
+                    kernel_size = max(3, kernel_size)
+
+                    conv = nn.Conv1d(
+                        in_channels=in_channels,
+                        out_channels=filters,
+                        kernel_size=kernel_size,
+                        stride=1,
+                        padding=kernel_size // 2
+                    )
+                    self._init_weights(conv, init_mean, init_std)
+                    self.conv_layers.append(conv)
+                    self.dropouts.append(nn.Dropout(dropout_rate))
+                    self.activations.append(activation_fn)
+
+                    in_channels = filters
+
+                # Final conv layer
+                self.final_conv = nn.Conv1d(
+                    in_channels=in_channels,
+                    out_channels=1,
+                    kernel_size=3,
+                    stride=1,
+                    padding=1
+                )
+                self._init_weights(self.final_conv, init_mean, init_std)
+                self.final_activation_name = last_activation_fn
+
+                # Final dense layer to ensure exact output shape
+                self.final_dense = nn.LazyLinear(out_shape)
+                self.output_activation_name = last_activation_fn
+
+            def _init_weights(self, layer, mean, std):
+                """Initialize layer weights with normal distribution."""
+                if isinstance(layer, (nn.Linear, nn.Conv1d)):
+                    nn.init.normal_(layer.weight, mean=mean, std=std)
+                    if layer.bias is not None:
+                        nn.init.zeros_(layer.bias)
+
+            def forward(self, x):
+                if isinstance(x, (list, tuple)):
+                    latent_input, label_input = x
+                    x = torch.cat([latent_input, label_input], dim=1)
+
+                # Initial dense expansion
+                x = self.initial_dense(x)
+                x = self.get_activation_func(self.initial_activation_name)(x)
+
+                # Reshape to (batch, channels, length)
+                x = x.view(x.size(0), self.initial_channels, self.initial_spatial_dim)
+
+                # Conv layers with upsampling
+                for i, (conv, dropout, activation_name) in enumerate(
+                        zip(self.conv_layers, self.dropouts, self.activations)):
+                    x = conv(x)
+                    x = self.get_activation_func(activation_name)(x)
+                    x = dropout(x)
+
+                    # Upsample (except for last layer)
+                    if i < len(self.conv_layers) - 1:
+                        x = nn.functional.interpolate(x, scale_factor=2, mode='linear', align_corners=False)
+
+                # Final conv
+                x = self.final_conv(x)
+                x = self.get_activation_func(self.final_activation_name)(x)
+
+                # Flatten
+                x = x.view(x.size(0), -1)
+
+                # Final dense to exact output shape
+                x = self.final_dense(x)
+                x = self.get_activation_func(self.output_activation_name)(x)
+
+                return x
+
+        num_classes = self._decoder_number_samples_per_class["number_classes"]
+
+        return ConvDecoderModule(
             latent_dim=self._decoder_latent_dimension,
             num_classes=num_classes,
             out_shape=output_shape,
@@ -321,6 +463,24 @@ class VanillaDecoderTorch(Activations, nn.Module):
                 return self._add_activation_layer(None, activation_name)
             except:
                 raise ValueError(f"Unsupported activation function: {activation_name}")
+
+    def get_optimizer(self) -> str:
+        """
+        Get the current optimizer/architecture type.
+
+        Returns:
+            str: The optimizer type ('dense' or 'convolutional').
+        """
+        return self._decoder_optimizer
+
+    def set_optimizer(self, optimizer: str):
+        """
+        Set the optimizer/architecture type.
+
+        Args:
+            optimizer (str): The optimizer type ('dense' or 'convolutional').
+        """
+        self._decoder_optimizer = optimizer
 
     @property
     def dropout_decay_rate_decoder(self) -> float:

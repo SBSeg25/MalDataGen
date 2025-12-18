@@ -79,6 +79,8 @@ class VanillaEncoderTorch(Activations, nn.Module):
             The standard deviation for the normal distribution used to initialize the weights.
         @encoder_number_samples_per_class (Optional[dict]):
             An optional dictionary containing metadata about the number of samples per class.
+        @encoder_optimizer (str):
+            Type of architecture to use: 'dense' (default) or 'convolutional' for Conv1D.
 
     Raises:
         ValueError:
@@ -100,14 +102,15 @@ class VanillaEncoderTorch(Activations, nn.Module):
         ...     last_layer_activation='sigmoid',
         ...     number_neurons_encoder=[512, 256, 128],
         ...     dataset_type=numpy.float32,
-        ...     number_samples_per_class={"number_classes": 10}
+        ...     number_samples_per_class={"number_classes": 10},
+        ...     optimizer='convolutional'
         ... )
     """
 
     def __init__(self, latent_dimension: int, output_shape: tuple, activation_function: str, initializer_mean: float,
                  initializer_deviation: float, dropout_decay_encoder: float, last_layer_activation: str,
                  number_neurons_encoder: list, dataset_type: Any = numpy.float32,
-                 number_samples_per_class: Optional[Dict[str, Any]] = None):
+                 number_samples_per_class: Optional[Dict[str, Any]] = None, optimizer: str = 'dense'):
         """
         Initializes the VanillaEncoder with the provided parameters.
 
@@ -122,6 +125,8 @@ class VanillaEncoderTorch(Activations, nn.Module):
             number_neurons_encoder (list): List specifying the number of neurons in each encoder layer.
             dataset_type (dtype, optional): The data type of the input dataset. Defaults to numpy.float32.
             number_samples_per_class (dict, optional): Specifies the number of samples per class.
+            optimizer (str, optional): Type of architecture: 'dense' for fully-connected (default) or
+                'convolutional' for Conv1D architecture.
         """
         # Initialize activations first (if it's a class with __init__)
         try:
@@ -165,6 +170,7 @@ class VanillaEncoderTorch(Activations, nn.Module):
         self._encoder_initializer_deviation = initializer_deviation
         self._encoder_number_neurons_encoder = number_neurons_encoder
         self._encoder_number_samples_per_class = number_samples_per_class
+        self._encoder_optimizer = optimizer
 
     def get_encoder(self, input_shape: int) -> nn.Module:
         """
@@ -181,14 +187,28 @@ class VanillaEncoderTorch(Activations, nn.Module):
             nn.Module: The encoder model which takes input data and labels and outputs the
                        encoded latent representation and labels.
         """
+        # Choose architecture based on optimizer
+        if self._encoder_optimizer == 'convolutional':
+            return self._build_convolutional_encoder(input_shape)
+        else:
+            return self._build_dense_encoder(input_shape)
 
-        class EncoderModule(nn.Module):
+    def _build_dense_encoder(self, input_shape: int) -> nn.Module:
+        """
+        Builds a fully-connected (dense) encoder architecture.
+
+        Args:
+            input_shape (int): The shape of the input data.
+
+        Returns:
+            nn.Module: The constructed dense encoder model.
+        """
+        class DenseEncoderModule(nn.Module):
             def __init__(self, latent_dim, num_classes, input_dim, number_neurons,
                          init_mean, init_std, dropout_rate, activation_fn, last_activation_fn,
                          get_activation_func):
                 super().__init__()
 
-                # Store only the necessary configuration, not the parent object
                 self.latent_dim = latent_dim
                 self.num_classes = num_classes
                 self.get_activation_func = get_activation_func
@@ -255,11 +275,141 @@ class VanillaEncoderTorch(Activations, nn.Module):
 
                 return x, label_input
 
-        # Create encoder with configuration values instead of parent reference
         num_classes = self._encoder_number_samples_per_class["number_classes"]
         input_dim = input_shape + num_classes
 
-        return EncoderModule(
+        return DenseEncoderModule(
+            latent_dim=self._encoder_latent_dimension,
+            num_classes=num_classes,
+            input_dim=input_dim,
+            number_neurons=self._encoder_number_neurons_encoder,
+            init_mean=self._encoder_initializer_mean,
+            init_std=self._encoder_initializer_deviation,
+            dropout_rate=self._encoder_dropout_decay_rate_encoder,
+            activation_fn=self._encoder_activation_function,
+            last_activation_fn=self._encoder_last_layer_activation,
+            get_activation_func=self._get_activation
+        )
+
+    def _build_convolutional_encoder(self, input_shape: int) -> nn.Module:
+        """
+        Builds a 1D convolutional encoder architecture with downsampling.
+
+        Args:
+            input_shape (int): The shape of the input data.
+
+        Returns:
+            nn.Module: The constructed convolutional encoder model.
+        """
+        class ConvEncoderModule(nn.Module):
+            def __init__(self, latent_dim, num_classes, input_dim, number_neurons,
+                         init_mean, init_std, dropout_rate, activation_fn, last_activation_fn,
+                         get_activation_func):
+                super().__init__()
+
+                self.latent_dim = latent_dim
+                self.num_classes = num_classes
+                self.input_dim = input_dim
+                self.get_activation_func = get_activation_func
+
+                # Initial dense layer to expand to spatial dimension
+                initial_spatial_dim = input_dim
+                self.initial_dense = nn.Linear(input_dim, initial_spatial_dim)
+                self._init_weights(self.initial_dense, init_mean, init_std)
+                self.initial_activation_name = activation_fn
+
+                self.initial_spatial_dim = initial_spatial_dim
+
+                # Build convolutional layers
+                self.conv_layers = nn.ModuleList()
+                self.dropouts = nn.ModuleList()
+                self.activations = []
+
+                in_channels = 1
+                for i, filters in enumerate(number_neurons):
+                    spatial_size = initial_spatial_dim // (2 ** i)
+                    kernel_size = min(5, max(3, spatial_size // 4))
+
+                    conv = nn.Conv1d(
+                        in_channels=in_channels,
+                        out_channels=filters,
+                        kernel_size=kernel_size,
+                        stride=1,
+                        padding=kernel_size // 2
+                    )
+                    self._init_weights(conv, init_mean, init_std)
+                    self.conv_layers.append(conv)
+                    self.dropouts.append(nn.Dropout(dropout_rate))
+                    self.activations.append(activation_fn)
+
+                    in_channels = filters
+
+                # Flatten and final dense layers
+                self.flatten_dense = nn.LazyLinear(number_neurons[-1])
+                self.flatten_activation_name = activation_fn
+
+                # Latent layer
+                self.latent_layer = nn.Linear(number_neurons[-1], latent_dim)
+                self._init_weights(self.latent_layer, init_mean, init_std)
+                self.latent_activation_name = last_activation_fn
+
+            def _init_weights(self, layer, mean, std):
+                """Initialize layer weights with normal distribution."""
+                if isinstance(layer, (nn.Linear, nn.Conv1d)):
+                    nn.init.normal_(layer.weight, mean=mean, std=std)
+                    if layer.bias is not None:
+                        nn.init.zeros_(layer.bias)
+
+            def forward(self, x):
+                """
+                Forward pass through the convolutional encoder.
+
+                Args:
+                    x: List/tuple of [data_input, label_input]
+
+                Returns:
+                    Tuple of (latent_representation, label_input)
+                """
+                data_input, label_input = x
+
+                # Concatenate data and labels
+                x = torch.cat([data_input, label_input], dim=1)
+
+                # Initial dense expansion
+                x = self.initial_dense(x)
+                x = self.get_activation_func(self.initial_activation_name)(x)
+
+                # Reshape to (batch, channels, length)
+                x = x.unsqueeze(1)  # Add channel dimension
+
+                # Conv layers with downsampling
+                for i, (conv, dropout, activation_name) in enumerate(
+                        zip(self.conv_layers, self.dropouts, self.activations)):
+                    x = conv(x)
+                    x = self.get_activation_func(activation_name)(x)
+                    x = dropout(x)
+
+                    # Downsample (except for last layer)
+                    if i < len(self.conv_layers) - 1:
+                        x = nn.functional.avg_pool1d(x, kernel_size=2, stride=2)
+
+                # Flatten
+                x = x.view(x.size(0), -1)
+
+                # Final dense layer
+                x = self.flatten_dense(x)
+                x = self.get_activation_func(self.flatten_activation_name)(x)
+
+                # Latent layer
+                x = self.latent_layer(x)
+                x = self.get_activation_func(self.latent_activation_name)(x)
+
+                return x, label_input
+
+        num_classes = self._encoder_number_samples_per_class["number_classes"]
+        input_dim = input_shape + num_classes
+
+        return ConvEncoderModule(
             latent_dim=self._encoder_latent_dimension,
             num_classes=num_classes,
             input_dim=input_dim,
@@ -306,6 +456,24 @@ class VanillaEncoderTorch(Activations, nn.Module):
                 return self._add_activation_layer(None, activation_name)
             except:
                 raise ValueError(f"Unsupported activation function: {activation_name}")
+
+    def get_optimizer(self) -> str:
+        """
+        Get the current optimizer/architecture type.
+
+        Returns:
+            str: The optimizer type ('dense' or 'convolutional').
+        """
+        return self._encoder_optimizer
+
+    def set_optimizer(self, optimizer: str):
+        """
+        Set the optimizer/architecture type.
+
+        Args:
+            optimizer (str): The optimizer type ('dense' or 'convolutional').
+        """
+        self._encoder_optimizer = optimizer
 
     @property
     def dropout_decay_rate_encoder(self) -> float:

@@ -47,6 +47,9 @@ try:
 
     from tensorflow.keras.layers import Flatten
     from tensorflow.keras.layers import Dropout
+    from tensorflow.keras.layers import Reshape
+    from tensorflow.keras.layers import Conv1D
+    from tensorflow.keras.layers import MaxPooling1D
 
     from tensorflow.keras.layers import Concatenate
 
@@ -93,6 +96,8 @@ class VanillaDiscriminator(Activations):
              Standard deviation of the normal distribution used for weight initialization.
          @discriminator_number_samples_per_class (Optional[Dict[str, int]]):
              Optional dictionary containing the number of samples per class.
+         @discriminator_optimizer (str):
+             Type of architecture to use: 'dense' (default) or 'convolutional' for Conv1D.
          @discriminator_model_dense (Optional[Model]):
              Placeholder for the compiled Keras model after building the network.
 
@@ -115,7 +120,8 @@ class VanillaDiscriminator(Activations):
          ...     last_layer_activation='sigmoid',
          ...     dense_layer_sizes_d=[512, 256, 128],
          ...     dataset_type=numpy.float32,
-         ...     number_samples_per_class={"number_classes": 10}
+         ...     number_samples_per_class={"number_classes": 10},
+         ...     optimizer='convolutional'
          ... )
          >>> discriminator.build()  # Example method call if present
      """
@@ -130,7 +136,8 @@ class VanillaDiscriminator(Activations):
                  last_layer_activation: str,
                  dense_layer_sizes_d: List[int],
                  dataset_type: numpy.dtype = numpy.float32,
-                 number_samples_per_class: Optional[Dict[str, int]] = None):
+                 number_samples_per_class: Optional[Dict[str, int]] = None,
+                 optimizer: str = 'dense'):
         """
         Initializes the VanillaDiscriminator class with the provided parameters.
 
@@ -160,6 +167,9 @@ class VanillaDiscriminator(Activations):
             number_samples_per_class (Optional[Dict[str, int]], optional):
                 A dictionary containing metadata about class distribution. It should
                 include the key "number_classes" if provided.
+            optimizer (str, optional):
+                Type of architecture: 'dense' for fully-connected (default) or
+                'convolutional' for Conv1D architecture.
 
         Raises:
             ValueError:
@@ -179,14 +189,16 @@ class VanillaDiscriminator(Activations):
         self._discriminator_dataset_type = dataset_type
         self._discriminator_initializer_mean = initializer_mean
         self._discriminator_initializer_deviation = initializer_deviation
+        self._discriminator_optimizer = optimizer
         self._discriminator_model_dense = None
 
     def get_discriminator(self) -> Model:
         """
         Build and return the complete discriminator model.
 
-        This method constructs a neural network model using dense layers with dropout and activation functions
-        as specified during initialization. The model is built for the purpose of classifying inputs as real or fake.
+        This method constructs a neural network model using either dense layers or
+        convolutional 1D layers based on the optimizer parameter. The model is built
+        for the purpose of classifying inputs as real or fake.
 
         Returns:
             Model: A Keras Model instance representing the discriminator.
@@ -194,23 +206,14 @@ class VanillaDiscriminator(Activations):
         # Define the input layers
         neural_model_input = Input(shape=(self._discriminator_output_shape,), dtype=self._discriminator_dataset_type)
         discriminator_shape_input = Input(shape=(self._discriminator_output_shape,))
-        label_input = Input(shape=(self._discriminator_number_samples_per_class["number_classes"],), dtype=self._discriminator_dataset_type)
+        label_input = Input(shape=(self._discriminator_number_samples_per_class["number_classes"],),
+                            dtype=self._discriminator_dataset_type)
 
-        # Build the discriminator model
-        discriminator_model = Dense(self._discriminator_dense_layer_sizes_d[0])(neural_model_input)
-        discriminator_model = Dropout(self._discriminator_dropout_decay_rate_d)(discriminator_model)
-        discriminator_model = self._add_activation_layer(discriminator_model, self._discriminator_activation_function)
-
-        # Add additional dense layers with dropout and activations
-        for layer_size in self._discriminator_dense_layer_sizes_d[1:]:
-            discriminator_model = Dense(layer_size)(discriminator_model)
-            discriminator_model = Dropout(self._discriminator_dropout_decay_rate_d)(discriminator_model)
-            discriminator_model = self._add_activation_layer(discriminator_model, self._discriminator_activation_function)
-
-        # Final output layer with specified activation function
-        discriminator_model = Dense(1)(discriminator_model)
-        discriminator_model = self._add_activation_layer(discriminator_model, self._discriminator_last_layer_activation)
-        discriminator_model = Model(inputs=neural_model_input, outputs=discriminator_model)
+        # Build discriminator based on optimizer type
+        if self._discriminator_optimizer == 'convolutional':
+            discriminator_model = self._build_convolutional_discriminator(neural_model_input)
+        else:
+            discriminator_model = self._build_dense_discriminator(neural_model_input)
 
         # Save the discriminator model for later use
         self._discriminator_model_dense = discriminator_model
@@ -225,6 +228,79 @@ class VanillaDiscriminator(Activations):
         validity = discriminator_model(model_input)
 
         return Model(inputs=[discriminator_shape_input, label_input], outputs=validity, name='Discriminator')
+
+    def _build_dense_discriminator(self, input_layer):
+        """
+        Build a fully-connected (dense) discriminator architecture.
+
+        Args:
+            input_layer: Input layer for the discriminator.
+
+        Returns:
+            Model: A Keras Model with dense layers.
+        """
+        discriminator_model = Dense(self._discriminator_dense_layer_sizes_d[0])(input_layer)
+        discriminator_model = Dropout(self._discriminator_dropout_decay_rate_d)(discriminator_model)
+        discriminator_model = self._add_activation_layer(discriminator_model, self._discriminator_activation_function)
+
+        # Add additional dense layers with dropout and activations
+        for layer_size in self._discriminator_dense_layer_sizes_d[1:]:
+            discriminator_model = Dense(layer_size)(discriminator_model)
+            discriminator_model = Dropout(self._discriminator_dropout_decay_rate_d)(discriminator_model)
+            discriminator_model = self._add_activation_layer(discriminator_model,
+                                                             self._discriminator_activation_function)
+
+        # Final output layer with specified activation function
+        discriminator_model = Dense(1)(discriminator_model)
+        discriminator_model = self._add_activation_layer(discriminator_model, self._discriminator_last_layer_activation)
+
+        return Model(inputs=input_layer, outputs=discriminator_model)
+
+    def _build_convolutional_discriminator(self, input_layer):
+        """
+        Build a 1D convolutional discriminator architecture.
+
+        Args:
+            input_layer: Input layer for the discriminator.
+
+        Returns:
+            Model: A Keras Model with Conv1D layers.
+        """
+        # Reshape input to (batch, timesteps, features) for Conv1D
+        # Assuming output_shape is the total number of features, we'll reshape to (output_shape, 1)
+        discriminator_model = Reshape((self._discriminator_output_shape, 1))(input_layer)
+
+        # Build convolutional layers based on dense_layer_sizes_d
+        for i, filters in enumerate(self._discriminator_dense_layer_sizes_d):
+            kernel_size = min(3, self._discriminator_output_shape // (2 ** i))  # Adaptive kernel size
+            kernel_size = max(2, kernel_size)  # Minimum kernel size of 2
+
+            discriminator_model = Conv1D(
+                filters=filters,
+                kernel_size=kernel_size,
+                strides=1,
+                padding='same',
+                kernel_initializer=RandomNormal(
+                    mean=self._discriminator_initializer_mean,
+                    stddev=self._discriminator_initializer_deviation
+                )
+            )(discriminator_model)
+            discriminator_model = self._add_activation_layer(discriminator_model,
+                                                             self._discriminator_activation_function)
+            discriminator_model = MaxPooling1D(pool_size=2, padding='same')(discriminator_model)
+            discriminator_model = Dropout(self._discriminator_dropout_decay_rate_d)(discriminator_model)
+
+        # Flatten and add final dense layers
+        discriminator_model = Flatten()(discriminator_model)
+        discriminator_model = Dense(128)(discriminator_model)
+        discriminator_model = self._add_activation_layer(discriminator_model, self._discriminator_activation_function)
+        discriminator_model = Dropout(self._discriminator_dropout_decay_rate_d)(discriminator_model)
+
+        # Final output layer
+        discriminator_model = Dense(1)(discriminator_model)
+        discriminator_model = self._add_activation_layer(discriminator_model, self._discriminator_last_layer_activation)
+
+        return Model(inputs=input_layer, outputs=discriminator_model)
 
     def set_model(self, model):
         self._discriminator_model_dense = model
@@ -255,3 +331,21 @@ class VanillaDiscriminator(Activations):
             dense_layer_sizes_discriminator (List[int]): A list of integers specifying the layer sizes.
         """
         self._discriminator_dense_layer_sizes_d = dense_layer_sizes_discriminator
+
+    def get_optimizer(self) -> str:
+        """
+        Get the current optimizer/architecture type.
+
+        Returns:
+            str: The optimizer type ('dense' or 'convolutional').
+        """
+        return self._discriminator_optimizer
+
+    def set_optimizer(self, optimizer: str):
+        """
+        Set the optimizer/architecture type.
+
+        Args:
+            optimizer (str): The optimizer type ('dense' or 'convolutional').
+        """
+        self._discriminator_optimizer = optimizer

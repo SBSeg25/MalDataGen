@@ -42,6 +42,9 @@ try:
 
     from tensorflow.keras.layers import Dropout
     from tensorflow.keras.layers import Flatten
+    from tensorflow.keras.layers import Reshape
+    from tensorflow.keras.layers import Conv1D
+    from tensorflow.keras.layers import UpSampling1D
 
     from tensorflow.keras.layers import Concatenate
 
@@ -61,6 +64,9 @@ class VanillaGeneratorTensorflow(Activations):
     such as GANs. This generator is designed to work with label conditioning and
     supports customization of activation functions, layer sizes, initialization, and
     other hyperparameters.
+
+    This class now supports both dense and convolutional (Conv1D) architectures through
+    the optimizer parameter.
 
     Attributes:
         @generator_latent_dimension (int):
@@ -84,6 +90,8 @@ class VanillaGeneratorTensorflow(Activations):
         @generator_number_samples_per_class (Optional[Dict[str, int]]):
             Optional dictionary containing metadata about class distribution.
             Must include a key "number_classes" if provided.
+        @generator_optimizer (str):
+            Type of architecture to use: 'dense' (default) or 'convolutional' for Conv1D.
         @generator_model_dense (Optional[Model]):
             Placeholder for the compiled Keras Model after build().
 
@@ -111,7 +119,8 @@ class VanillaGeneratorTensorflow(Activations):
         ...     last_layer_activation=tanh,
         ...     dense_layer_sizes_g=[256, 512, 1024],
         ...     dataset_type=numpy.float32,
-        ...     number_samples_per_class={"number_classes": 10}
+        ...     number_samples_per_class={"number_classes": 10},
+        ...     optimizer='convolutional'
         ... )
         >>> generator.build()  # Example method call if present
     """
@@ -125,7 +134,8 @@ class VanillaGeneratorTensorflow(Activations):
                  last_layer_activation: callable,
                  dense_layer_sizes_g: list[int],
                  dataset_type: type = numpy.float32,
-                 number_samples_per_class: dict | None = None):
+                 number_samples_per_class: dict | None = None,
+                 optimizer: str = 'dense'):
         """
         Initializes the VanillaGenerator class with the provided parameters.
 
@@ -150,6 +160,8 @@ class VanillaGeneratorTensorflow(Activations):
                 Data type of the input data (default: numpy.float32).
             @number_samples_per_class (Optional[Dict[str, int]], optional):
                 Optional dictionary containing the number of samples per class. If provided, it must contain the key "number_classes".
+            @optimizer (str, optional):
+                Type of architecture: 'dense' for fully-connected (default) or 'convolutional' for Conv1D architecture.
 
         Raises:
             ValueError:
@@ -188,11 +200,12 @@ class VanillaGeneratorTensorflow(Activations):
         self._generator_initializer_mean = initializer_mean
         self._generator_initializer_deviation = initializer_deviation
         self._generator_number_samples_per_class = number_samples_per_class
+        self._generator_optimizer = optimizer
         self._generator_model_dense = None
 
     def get_generator(self) -> Model:
         """
-        Constructs and returns the generator model, including the latent space input and label conditioning.
+        Constructs and returns the generator model using either dense or Conv1D layers.
 
         Returns:
         --------
@@ -207,29 +220,17 @@ class VanillaGeneratorTensorflow(Activations):
         if not self._generator_number_samples_per_class or "number_classes" not in self._generator_number_samples_per_class:
             raise ValueError("Number of samples per class must include 'number_classes'.")
 
-        initialization = RandomNormal(mean=self._generator_initializer_mean,
-                                      stddev=self._generator_initializer_deviation)
-
         # Define inputs
         neural_model_inputs = Input(shape=(self._generator_latent_dimension,), dtype=self._generator_dataset_type)
         latent_input = Input(shape=(self._generator_latent_dimension,))
         label_input = Input(shape=(self._generator_number_samples_per_class["number_classes"],),
                             dtype=self._generator_dataset_type)
 
-        # Dense generator model
-        generator_model = Dense(self._generator_dense_layer_sizes_g[0],
-                                kernel_initializer=initialization)(neural_model_inputs)
-        generator_model = Dropout(self._generator_dropout_decay_rate_g)(generator_model)
-        generator_model = self._add_activation_layer(generator_model, self._generator_activation_function)
-
-        for layer_size in self._generator_dense_layer_sizes_g[1:]:
-            generator_model = Dense(layer_size, kernel_initializer=initialization)(generator_model)
-            generator_model = Dropout(self._generator_dropout_decay_rate_g)(generator_model)
-            generator_model = self._add_activation_layer(generator_model, self._generator_activation_function)
-
-        generator_model = Dense(self._generator_output_shape, kernel_initializer=initialization)(generator_model)
-        generator_model = self._add_activation_layer(generator_model, self._generator_last_layer_activation)
-        generator_model = Model(neural_model_inputs, generator_model, name="Dense_Generator")
+        # Build generator based on optimizer type
+        if self._generator_optimizer == 'convolutional':
+            generator_model = self._build_convolutional_generator(neural_model_inputs)
+        else:
+            generator_model = self._build_dense_generator(neural_model_inputs)
 
         self._generator_model_dense = generator_model
 
@@ -241,6 +242,99 @@ class VanillaGeneratorTensorflow(Activations):
         generator_output_flow = generator_model(model_input)
 
         return Model([latent_input, label_input], generator_output_flow, name="Generator")
+
+    def _build_dense_generator(self, input_layer) -> Model:
+        """
+        Build a fully-connected (dense) generator architecture.
+
+        Args:
+            input_layer: Input layer for the generator.
+
+        Returns:
+            Model: A Keras Model with dense layers.
+        """
+        initialization = RandomNormal(mean=self._generator_initializer_mean,
+                                      stddev=self._generator_initializer_deviation)
+
+        generator_model = Dense(self._generator_dense_layer_sizes_g[0],
+                                kernel_initializer=initialization)(input_layer)
+        generator_model = Dropout(self._generator_dropout_decay_rate_g)(generator_model)
+        generator_model = self._add_activation_layer(generator_model, self._generator_activation_function)
+
+        for layer_size in self._generator_dense_layer_sizes_g[1:]:
+            generator_model = Dense(layer_size, kernel_initializer=initialization)(generator_model)
+            generator_model = Dropout(self._generator_dropout_decay_rate_g)(generator_model)
+            generator_model = self._add_activation_layer(generator_model, self._generator_activation_function)
+
+        generator_model = Dense(self._generator_output_shape, kernel_initializer=initialization)(generator_model)
+        generator_model = self._add_activation_layer(generator_model, self._generator_last_layer_activation)
+
+        return Model(input_layer, generator_model, name="Dense_Generator")
+
+    def _build_convolutional_generator(self, input_layer) -> Model:
+        """
+        Build a 1D convolutional generator architecture.
+
+        Args:
+            input_layer: Input layer for the generator.
+
+        Returns:
+            Model: A Keras Model with Conv1D layers.
+        """
+        initialization = RandomNormal(mean=self._generator_initializer_mean,
+                                      stddev=self._generator_initializer_deviation)
+
+        # Start with a dense layer to project latent dimension to initial size
+        initial_size = self._generator_output_shape // (2 ** len(self._generator_dense_layer_sizes_g))
+        initial_size = max(4, initial_size)  # Minimum initial size
+
+        generator_model = Dense(initial_size * self._generator_dense_layer_sizes_g[0],
+                               kernel_initializer=initialization)(input_layer)
+        generator_model = self._add_activation_layer(generator_model, self._generator_activation_function)
+        generator_model = Dropout(self._generator_dropout_decay_rate_g)(generator_model)
+
+        # Reshape to (batch, timesteps, features) for Conv1D
+        generator_model = Reshape((initial_size, self._generator_dense_layer_sizes_g[0]))(generator_model)
+
+        # Build convolutional layers with upsampling
+        for i, filters in enumerate(self._generator_dense_layer_sizes_g[1:]):
+            kernel_size = 3  # Fixed kernel size for upsampling
+
+            generator_model = UpSampling1D(size=2)(generator_model)
+            generator_model = Conv1D(
+                filters=filters,
+                kernel_size=kernel_size,
+                strides=1,
+                padding='same',
+                kernel_initializer=initialization
+            )(generator_model)
+            generator_model = self._add_activation_layer(generator_model, self._generator_activation_function)
+            generator_model = Dropout(self._generator_dropout_decay_rate_g)(generator_model)
+
+        # Upsample if needed to reach target output shape
+        current_size = initial_size * (2 ** len(self._generator_dense_layer_sizes_g[1:]))
+        while current_size < self._generator_output_shape:
+            generator_model = UpSampling1D(size=2)(generator_model)
+            current_size *= 2
+
+        # Final Conv1D to get single feature dimension and flatten
+        generator_model = Conv1D(
+            filters=1,
+            kernel_size=3,
+            strides=1,
+            padding='same',
+            kernel_initializer=initialization
+        )(generator_model)
+        generator_model = self._add_activation_layer(generator_model, self._generator_activation_function)
+
+        # Flatten to match output shape
+        generator_model = Flatten()(generator_model)
+
+        # Final dense layer to ensure exact output shape
+        generator_model = Dense(self._generator_output_shape, kernel_initializer=initialization)(generator_model)
+        generator_model = self._add_activation_layer(generator_model, self._generator_last_layer_activation)
+
+        return Model(input_layer, generator_model, name="Convolutional_Generator")
 
     @property
     def dense_generator_model(self) -> Model | None:
@@ -256,6 +350,11 @@ class VanillaGeneratorTensorflow(Activations):
     def dense_layer_sizes_generator(self) -> list[int]:
         """Property to get the dense layer sizes for the generator."""
         return self._generator_dense_layer_sizes_g
+
+    @property
+    def optimizer(self) -> str:
+        """Property to get the current optimizer/architecture type."""
+        return self._generator_optimizer
 
     @dropout_decay_rate_generator.setter
     def dropout_decay_rate_generator(self, dropout_decay_rate_generator: float):
@@ -274,3 +373,10 @@ class VanillaGeneratorTensorflow(Activations):
             raise ValueError("Dense layer sizes must be a list of positive integers.")
 
         self._generator_dense_layer_sizes_g = dense_layer_sizes_generator
+
+    @optimizer.setter
+    def optimizer(self, optimizer: str):
+        """Property to set the optimizer/architecture type."""
+        if optimizer not in ['dense', 'convolutional']:
+            raise ValueError("optimizer must be either 'dense' or 'convolutional'.")
+        self._generator_optimizer = optimizer

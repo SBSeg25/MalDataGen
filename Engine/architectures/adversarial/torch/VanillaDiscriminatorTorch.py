@@ -77,6 +77,8 @@ class VanillaDiscriminatorTorch(nn.Module):
             Standard deviation of the normal distribution used for weight initialization.
         @discriminator_number_samples_per_class (Optional[Dict[str, int]]):
             Optional dictionary containing the number of samples per class.
+        @discriminator_optimizer (str):
+            Type of architecture to use: 'dense' (default) or 'convolutional' for Conv1D.
 
     Raises:
         ValueError:
@@ -97,7 +99,8 @@ class VanillaDiscriminatorTorch(nn.Module):
         ...     last_layer_activation='sigmoid',
         ...     dense_layer_sizes_d=[512, 256, 128],
         ...     dataset_type=torch.float32,
-        ...     number_samples_per_class={"number_classes": 10}
+        ...     number_samples_per_class={"number_classes": 10},
+        ...     optimizer='convolutional'
         ... )
         >>> model = discriminator.get_discriminator()
         >>> output = model([data, labels])
@@ -113,7 +116,8 @@ class VanillaDiscriminatorTorch(nn.Module):
                  last_layer_activation: str,
                  dense_layer_sizes_d: List[int],
                  dataset_type: torch.dtype = torch.float32,
-                 number_samples_per_class: Optional[Dict[str, int]] = None):
+                 number_samples_per_class: Optional[Dict[str, int]] = None,
+                 optimizer: str = 'dense'):
         """
         Initializes the VanillaDiscriminatorTorch class with the provided parameters.
 
@@ -138,6 +142,9 @@ class VanillaDiscriminatorTorch(nn.Module):
                 The data type of the input data (default is torch.float32).
             number_samples_per_class (Optional[Dict[str, int]], optional):
                 A dictionary containing metadata about class distribution.
+            optimizer (str, optional):
+                Type of architecture: 'dense' for fully-connected (default) or
+                'convolutional' for Conv1D architecture.
 
         Raises:
             ValueError: If any parameter validation fails.
@@ -184,6 +191,7 @@ class VanillaDiscriminatorTorch(nn.Module):
         self._discriminator_dataset_type = dataset_type
         self._discriminator_initializer_mean = initializer_mean
         self._discriminator_initializer_deviation = initializer_deviation
+        self._discriminator_optimizer = optimizer
         self._discriminator_model_dense = None
 
     @staticmethod
@@ -222,24 +230,20 @@ class VanillaDiscriminatorTorch(nn.Module):
         Args:
             module: PyTorch module to initialize.
         """
-        if isinstance(module, nn.Linear):
+        if isinstance(module, (nn.Linear, nn.Conv1d)):
             nn.init.normal_(module.weight,
                             mean=self._discriminator_initializer_mean,
                             std=self._discriminator_initializer_deviation)
             if module.bias is not None:
                 nn.init.zeros_(module.bias)
 
-    def get_discriminator(self):
+    def _build_dense_discriminator(self):
         """
-        Build and return the complete discriminator model as a conditional discriminator.
-
-        This method constructs a neural network model using dense layers with dropout
-        and activation functions. The model accepts both data and labels as input.
+        Build a fully-connected (dense) discriminator architecture.
 
         Returns:
-            ConditionalDiscriminator: A PyTorch Module representing the conditional discriminator.
+            nn.Sequential: A PyTorch Sequential model with dense layers.
         """
-        # Build the core discriminator network (processes combined input)
         layers = []
 
         # First layer
@@ -259,7 +263,79 @@ class VanillaDiscriminatorTorch(nn.Module):
         layers.append(nn.Linear(self._discriminator_dense_layer_sizes_d[-1], 1))
         layers.append(self._add_activation_layer(self._discriminator_last_layer_activation))
 
-        self._discriminator_model_dense = nn.Sequential(*layers)
+        return nn.Sequential(*layers)
+
+    def _build_convolutional_discriminator(self):
+        """
+        Build a 1D convolutional discriminator architecture.
+
+        Returns:
+            nn.Sequential: A PyTorch Sequential model with Conv1D layers.
+        """
+        layers = []
+
+        # Reshape will be handled in forward pass: (batch, features) -> (batch, 1, features)
+        # First, add a reshape operation using Lambda-like functionality
+        class ReshapeLayer(nn.Module):
+            def __init__(self, output_shape):
+                super().__init__()
+                self.output_shape = output_shape
+
+            def forward(self, x):
+                # Reshape from (batch, features) to (batch, 1, features)
+                return x.view(x.size(0), 1, -1)
+
+        layers.append(ReshapeLayer(self._discriminator_output_shape))
+
+        # Build convolutional layers
+        in_channels = 1
+        for i, filters in enumerate(self._discriminator_dense_layer_sizes_d):
+            kernel_size = min(3, self._discriminator_output_shape // (2 ** i))
+            kernel_size = max(2, kernel_size)
+
+            layers.append(nn.Conv1d(
+                in_channels=in_channels,
+                out_channels=filters,
+                kernel_size=kernel_size,
+                stride=1,
+                padding=kernel_size // 2
+            ))
+            layers.append(self._add_activation_layer(self._discriminator_activation_function))
+            layers.append(nn.MaxPool1d(kernel_size=2, stride=2, padding=0))
+            layers.append(nn.Dropout(self._discriminator_dropout_decay_rate_d))
+
+            in_channels = filters
+
+        # Flatten
+        layers.append(nn.Flatten())
+
+        # Add final dense layers
+        layers.append(nn.LazyLinear(128))
+        layers.append(self._add_activation_layer(self._discriminator_activation_function))
+        layers.append(nn.Dropout(self._discriminator_dropout_decay_rate_d))
+
+        # Output layer
+        layers.append(nn.Linear(128, 1))
+        layers.append(self._add_activation_layer(self._discriminator_last_layer_activation))
+
+        return nn.Sequential(*layers)
+
+    def get_discriminator(self):
+        """
+        Build and return the complete discriminator model as a conditional discriminator.
+
+        This method constructs a neural network model using either dense layers or
+        convolutional 1D layers based on the optimizer parameter. The model accepts
+        both data and labels as input.
+
+        Returns:
+            ConditionalDiscriminator: A PyTorch Module representing the conditional discriminator.
+        """
+        # Build the core discriminator network based on optimizer type
+        if self._discriminator_optimizer == 'convolutional':
+            self._discriminator_model_dense = self._build_convolutional_discriminator()
+        else:
+            self._discriminator_model_dense = self._build_dense_discriminator()
 
         # Initialize weights
         self._discriminator_model_dense.apply(self._initialize_weights)
@@ -310,6 +386,24 @@ class VanillaDiscriminatorTorch(nn.Module):
         if not all(isinstance(n, int) and n > 0 for n in dense_layer_sizes_discriminator):
             raise ValueError("All layer sizes must be positive integers.")
         self._discriminator_dense_layer_sizes_d = dense_layer_sizes_discriminator
+
+    def get_optimizer(self) -> str:
+        """
+        Get the current optimizer/architecture type.
+
+        Returns:
+            str: The optimizer type ('dense' or 'convolutional').
+        """
+        return self._discriminator_optimizer
+
+    def set_optimizer(self, optimizer: str):
+        """
+        Set the optimizer/architecture type.
+
+        Args:
+            optimizer (str): The optimizer type ('dense' or 'convolutional').
+        """
+        self._discriminator_optimizer = optimizer
 
 
 class ConditionalDiscriminator(nn.Module):
