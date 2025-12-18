@@ -53,7 +53,8 @@ class AdversarialModelTensorflow(VanillaGenerator, VanillaDiscriminator):
                  dense_layer_sizes_g=None,
                  dense_layer_sizes_d=None,
                  dataset_type: type = numpy.float32,
-                 number_samples_per_class: dict | None = None):
+                 number_samples_per_class: dict | None = None,
+                 optimizer="convolutional"):
         """
         Initializes the AdversarialModel.
 
@@ -80,7 +81,8 @@ class AdversarialModelTensorflow(VanillaGenerator, VanillaDiscriminator):
                                   last_layer_activation,
                                   dense_layer_sizes_g,
                                   dataset_type,
-                                  number_samples_per_class)
+                                  number_samples_per_class,
+                                  optimizer=optimizer)
 
         VanillaDiscriminator.__init__(self,
                                       latent_dimension,
@@ -92,7 +94,8 @@ class AdversarialModelTensorflow(VanillaGenerator, VanillaDiscriminator):
                                       last_layer_activation,
                                       dense_layer_sizes_d,
                                       dataset_type,
-                                      number_samples_per_class)
+                                      number_samples_per_class,
+                                      optimizer=optimizer)
 
     def set_model(self, model):
         """

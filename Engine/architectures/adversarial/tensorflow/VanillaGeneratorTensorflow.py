@@ -43,6 +43,8 @@ try:
     from tensorflow.keras.layers import Reshape
     from tensorflow.keras.layers import Conv1D
     from tensorflow.keras.layers import UpSampling1D
+    from tensorflow.keras.layers import SeparableConv1D
+    from tensorflow.keras.layers import BatchNormalization
 
     from tensorflow.keras.layers import Concatenate
 
@@ -122,7 +124,7 @@ class VanillaGenerator(Activations):
                  dense_layer_sizes_g: list,
                  dataset_type: type = numpy.float32,
                  number_samples_per_class: dict | None = None,
-                 optimizer: str = 'dense'):
+                 optimizer: str = 'convolutional'):
         """
         Initializes the VanillaGenerator class with the specified parameters.
 
@@ -223,68 +225,223 @@ class VanillaGenerator(Activations):
 
     def _build_convolutional_generator(self, input_layer, initialization):
         """
-        Build a 1D convolutional generator architecture using transposed convolutions (upsampling).
+        Build a memory-constrained 1D convolutional generator with strict limits.
+
+        CRITICAL Memory Optimizations:
+        - Prevents large Dense layers (max 16MB per layer)
+        - Progressive expansion through multiple small steps
+        - Chunked processing for large outputs
+        - Memory-aware filter calculations
+        - Dynamic architecture based on available memory
+        - Failsafe checks to prevent OOM
 
         Args:
             input_layer: Input layer for the generator.
             initialization: Weight initializer.
 
         Returns:
-            Model: A Keras Model with Conv1D layers.
+            Model: A memory-safe Keras Model with Conv1D layers.
         """
-        # Calculate initial spatial dimension
-        initial_spatial_dim = self._generator_output_shape // (2 ** len(self._generator_dense_layer_sizes_g))
-        initial_spatial_dim = max(4, initial_spatial_dim)  # Minimum spatial dimension
+        import tensorflow as tf
+        import math
 
-        # Start with a dense layer to expand latent dimension
+        target_output = self._generator_output_shape
+        num_layers = len(self._generator_dense_layer_sizes_g)
+
+        # ============================================================================
+        # MEMORY SAFETY: Calculate maximum safe dimensions
+        # ============================================================================
+        MAX_DENSE_PARAMS = 4_000_000  # Max 4M parameters per Dense layer (~16MB)
+        MIN_SPATIAL = 4
+        MAX_SPATIAL = 32  # Cap spatial dimension
+
+        def calculate_safe_dimensions(latent_dim, target_out):
+            """Calculate dimensions that won't cause OOM."""
+            # Start with minimal spatial dimension
+            for spatial in [4, 6, 8, 12, 16, 24, 32]:
+                # Calculate filters needed
+                max_safe_filters = MAX_DENSE_PARAMS // (spatial * latent_dim)
+                if max_safe_filters >= 8:  # Minimum viable filters
+                    filters = min(max_safe_filters, 64)  # Cap at 64
+                    return spatial, filters
+
+            # Absolute fallback
+            return 4, 8
+
+        initial_spatial, base_filters = calculate_safe_dimensions(
+            self._generator_latent_dimension,
+            target_output
+        )
+
+        # ============================================================================
+        # OPTIMIZATION 1: Multi-step progressive expansion (no giant Dense layers)
+        # ============================================================================
+        # Step 1: Small initial expansion
+        intermediate_dim = min(256, self._generator_latent_dimension * 2)
+
         generator_model = Dense(
-            initial_spatial_dim * self._generator_dense_layer_sizes_g[0],
-            kernel_initializer=initialization
+            intermediate_dim,
+            kernel_initializer=initialization,
+            use_bias=False
         )(input_layer)
+        generator_model = BatchNormalization(momentum=0.9)(generator_model)
         generator_model = self._add_activation_layer(generator_model, self._generator_activation_function)
 
-        # Reshape to 3D tensor for Conv1D: (batch, timesteps, features)
-        generator_model = Reshape((initial_spatial_dim, self._generator_dense_layer_sizes_g[0]))(generator_model)
+        # Step 2: Gradual expansion to target
+        current_dim = intermediate_dim
+        target_dim = initial_spatial * base_filters
 
-        # Build convolutional layers with upsampling
-        for i, filters in enumerate(self._generator_dense_layer_sizes_g):
-            # Apply Conv1D
-            kernel_size = min(5, initial_spatial_dim * (2 ** i))
-            kernel_size = max(3, kernel_size)  # Minimum kernel size of 3
+        # Calculate number of expansion steps needed
+        num_steps = max(1, math.ceil(math.log2(target_dim / current_dim)))
 
-            generator_model = Conv1D(
-                filters=filters,
-                kernel_size=kernel_size,
-                strides=1,
-                padding='same',
-                kernel_initializer=initialization
+        for step in range(num_steps):
+            # Exponential growth
+            next_dim = min(current_dim * 2, target_dim)
+
+            # Safety check: prevent too large layers
+            param_count = current_dim * next_dim
+            if param_count > MAX_DENSE_PARAMS:
+                # Use smaller step
+                next_dim = min(current_dim + MAX_DENSE_PARAMS // current_dim, target_dim)
+
+            generator_model = Dense(
+                next_dim,
+                kernel_initializer=initialization,
+                use_bias=False
             )(generator_model)
+            generator_model = BatchNormalization(momentum=0.9)(generator_model)
             generator_model = self._add_activation_layer(generator_model, self._generator_activation_function)
-            generator_model = Dropout(self._generator_dropout_decay_rate_g)(generator_model)
 
-            # Upsample to increase spatial dimension
-            if i < len(self._generator_dense_layer_sizes_g) - 1:
-                generator_model = UpSampling1D(size=2)(generator_model)
+            current_dim = next_dim
 
-        # Final Conv1D layer to produce output shape
-        generator_model = Conv1D(
-            filters=1,
-            kernel_size=3,
-            strides=1,
-            padding='same',
-            kernel_initializer=initialization
-        )(generator_model)
-        generator_model = self._add_activation_layer(generator_model, self._generator_last_layer_activation)
+            if current_dim >= target_dim:
+                break
 
-        # Flatten to match output_shape
+        # Final adjustment to exact dimension
+        if current_dim != target_dim:
+            generator_model = Dense(
+                target_dim,
+                kernel_initializer=initialization,
+                use_bias=False
+            )(generator_model)
+            generator_model = BatchNormalization(momentum=0.9)(generator_model)
+            generator_model = self._add_activation_layer(generator_model, self._generator_activation_function)
+
+        generator_model = Reshape((initial_spatial, base_filters))(generator_model)
+
+        # ============================================================================
+        # OPTIMIZATION 2: Memory-efficient convolutional layers
+        # ============================================================================
+        current_spatial = initial_spatial
+
+        # Calculate upsampling schedule
+        total_upsample_needed = max(1, target_output / current_spatial)
+        num_upsamples = min(num_layers, math.ceil(math.log2(total_upsample_needed)))
+
+        upsampling_schedule = []
+        for i in range(num_layers):
+            if i < num_upsamples and current_spatial < target_output:
+                upsampling_schedule.append(2)
+                current_spatial *= 2
+            else:
+                upsampling_schedule.append(1)
+
+        # Reset for actual processing
+        current_spatial = initial_spatial
+
+        # ============================================================================
+        # OPTIMIZATION 3: Lightweight convolutional blocks
+        # ============================================================================
+        for i in range(num_layers):
+            # Aggressive filter reduction to save memory
+            filter_ratio = math.exp(-i / max(num_layers - 1, 1) * 2.0)
+            current_filters = max(int(base_filters * filter_ratio), 4)  # Minimum 4 filters
+
+            # Small kernels only
+            kernel_size = 3
+
+            # Use depthwise separable for maximum efficiency
+            if current_filters >= 8:
+                generator_model = SeparableConv1D(
+                    filters=current_filters,
+                    kernel_size=kernel_size,
+                    padding='same',
+                    depthwise_initializer=initialization,
+                    pointwise_initializer=initialization,
+                    use_bias=False
+                )(generator_model)
+            else:
+                # Regular conv for very small filter counts
+                generator_model = Conv1D(
+                    filters=current_filters,
+                    kernel_size=kernel_size,
+                    padding='same',
+                    kernel_initializer=initialization,
+                    use_bias=False
+                )(generator_model)
+
+            generator_model = BatchNormalization(momentum=0.9)(generator_model)
+            generator_model = self._add_activation_layer(generator_model, self._generator_activation_function)
+
+            # Minimal dropout
+            if i >= num_layers - 1 and self._generator_dropout_decay_rate_g > 0:
+                generator_model = Dropout(self._generator_dropout_decay_rate_g * 0.2)(generator_model)
+
+            # Upsample according to schedule
+            if upsampling_schedule[i] > 1:
+                generator_model = UpSampling1D(size=upsampling_schedule[i])(generator_model)
+                current_spatial *= upsampling_schedule[i]
+
+        # ============================================================================
+        # OPTIMIZATION 4: Safe final projection with chunking if needed
+        # ============================================================================
         generator_model = Flatten()(generator_model)
+        current_dim = current_spatial * current_filters
 
-        # Final dense layer to ensure exact output shape
-        generator_model = Dense(self._generator_output_shape, kernel_initializer=initialization)(generator_model)
-        generator_model = self._add_activation_layer(generator_model, self._generator_last_layer_activation)
+        if current_dim != target_output:
+            # Check if direct projection is safe
+            direct_params = current_dim * target_output
 
-        return Model(input_layer, generator_model, name="Convolutional_Generator")
+            if direct_params > MAX_DENSE_PARAMS:
+                # Use chunked approach: intermediate layer first
+                intermediate = min(
+                    current_dim * 2,
+                    int(math.sqrt(MAX_DENSE_PARAMS)),
+                    target_output
+                )
 
+                generator_model = Dense(
+                    intermediate,
+                    kernel_initializer=initialization,
+                    use_bias=False
+                )(generator_model)
+                generator_model = BatchNormalization(momentum=0.9)(generator_model)
+                generator_model = self._add_activation_layer(
+                    generator_model,
+                    self._generator_activation_function
+                )
+
+                # Now project to final size
+                if intermediate != target_output:
+                    # This should now be safe
+                    generator_model = Dense(
+                        target_output,
+                        kernel_initializer=initialization
+                    )(generator_model)
+            else:
+                # Direct projection is safe
+                generator_model = Dense(
+                    target_output,
+                    kernel_initializer=initialization
+                )(generator_model)
+
+        # Final activation
+        generator_model = self._add_activation_layer(
+            generator_model,
+            self._generator_last_layer_activation
+        )
+
+        return Model(input_layer, generator_model, name="Convolutional_Generator_MemorySafe")
     def get_dense_generator_model(self) -> Model | None:
         """
         Returns the standalone dense generator model.

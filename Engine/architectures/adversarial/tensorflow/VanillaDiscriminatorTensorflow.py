@@ -126,18 +126,10 @@ class VanillaDiscriminator(Activations):
          >>> discriminator.build()  # Example method call if present
      """
 
-    def __init__(self,
-                 latent_dimension: int,
-                 output_shape: int,
-                 activation_function: str,
-                 initializer_mean: float,
-                 initializer_deviation: float,
-                 dropout_decay_rate_d: float,
-                 last_layer_activation: str,
-                 dense_layer_sizes_d: List[int],
-                 dataset_type: numpy.dtype = numpy.float32,
-                 number_samples_per_class: Optional[Dict[str, int]] = None,
-                 optimizer: str = 'dense'):
+    def __init__(self, latent_dimension: int, output_shape: int, activation_function: str, initializer_mean: float,
+                 initializer_deviation: float, dropout_decay_rate_d: float, last_layer_activation: str,
+                 dense_layer_sizes_d: List[int], dataset_type: numpy.dtype = numpy.float32,
+                 number_samples_per_class: Optional[Dict[str, int]] = None, optimizer: str = 'convolutional'):
         """
         Initializes the VanillaDiscriminator class with the provided parameters.
 
@@ -179,6 +171,7 @@ class VanillaDiscriminator(Activations):
                 If `number_samples_per_class` is provided but does not contain the key "number_classes".
         """
 
+        super().__init__()
         self._discriminator_number_samples_per_class = number_samples_per_class
         self._discriminator_latent_dimension = latent_dimension
         self._discriminator_output_shape = output_shape
@@ -191,116 +184,6 @@ class VanillaDiscriminator(Activations):
         self._discriminator_initializer_deviation = initializer_deviation
         self._discriminator_optimizer = optimizer
         self._discriminator_model_dense = None
-
-    def get_discriminator(self) -> Model:
-        """
-        Build and return the complete discriminator model.
-
-        This method constructs a neural network model using either dense layers or
-        convolutional 1D layers based on the optimizer parameter. The model is built
-        for the purpose of classifying inputs as real or fake.
-
-        Returns:
-            Model: A Keras Model instance representing the discriminator.
-        """
-        # Define the input layers
-        neural_model_input = Input(shape=(self._discriminator_output_shape,), dtype=self._discriminator_dataset_type)
-        discriminator_shape_input = Input(shape=(self._discriminator_output_shape,))
-        label_input = Input(shape=(self._discriminator_number_samples_per_class["number_classes"],),
-                            dtype=self._discriminator_dataset_type)
-
-        # Build discriminator based on optimizer type
-        if self._discriminator_optimizer == 'convolutional':
-            discriminator_model = self._build_convolutional_discriminator(neural_model_input)
-        else:
-            discriminator_model = self._build_dense_discriminator(neural_model_input)
-
-        # Save the discriminator model for later use
-        self._discriminator_model_dense = discriminator_model
-
-        # Concatenate the input label and shape input, then process with a dense layer
-        concatenate_output = Concatenate()([discriminator_shape_input, label_input])
-        label_embedding = Flatten()(concatenate_output)
-        model_input = Dense(self._discriminator_output_shape)(label_embedding)
-        model_input = self._add_activation_layer(model_input, self._discriminator_activation_function)
-
-        # Get the final output of the discriminator model
-        validity = discriminator_model(model_input)
-
-        return Model(inputs=[discriminator_shape_input, label_input], outputs=validity, name='Discriminator')
-
-    def _build_dense_discriminator(self, input_layer):
-        """
-        Build a fully-connected (dense) discriminator architecture.
-
-        Args:
-            input_layer: Input layer for the discriminator.
-
-        Returns:
-            Model: A Keras Model with dense layers.
-        """
-        discriminator_model = Dense(self._discriminator_dense_layer_sizes_d[0])(input_layer)
-        discriminator_model = Dropout(self._discriminator_dropout_decay_rate_d)(discriminator_model)
-        discriminator_model = self._add_activation_layer(discriminator_model, self._discriminator_activation_function)
-
-        # Add additional dense layers with dropout and activations
-        for layer_size in self._discriminator_dense_layer_sizes_d[1:]:
-            discriminator_model = Dense(layer_size)(discriminator_model)
-            discriminator_model = Dropout(self._discriminator_dropout_decay_rate_d)(discriminator_model)
-            discriminator_model = self._add_activation_layer(discriminator_model,
-                                                             self._discriminator_activation_function)
-
-        # Final output layer with specified activation function
-        discriminator_model = Dense(1)(discriminator_model)
-        discriminator_model = self._add_activation_layer(discriminator_model, self._discriminator_last_layer_activation)
-
-        return Model(inputs=input_layer, outputs=discriminator_model)
-
-    def _build_convolutional_discriminator(self, input_layer):
-        """
-        Build a 1D convolutional discriminator architecture.
-
-        Args:
-            input_layer: Input layer for the discriminator.
-
-        Returns:
-            Model: A Keras Model with Conv1D layers.
-        """
-        # Reshape input to (batch, timesteps, features) for Conv1D
-        # Assuming output_shape is the total number of features, we'll reshape to (output_shape, 1)
-        discriminator_model = Reshape((self._discriminator_output_shape, 1))(input_layer)
-
-        # Build convolutional layers based on dense_layer_sizes_d
-        for i, filters in enumerate(self._discriminator_dense_layer_sizes_d):
-            kernel_size = min(3, self._discriminator_output_shape // (2 ** i))  # Adaptive kernel size
-            kernel_size = max(2, kernel_size)  # Minimum kernel size of 2
-
-            discriminator_model = Conv1D(
-                filters=filters,
-                kernel_size=kernel_size,
-                strides=1,
-                padding='same',
-                kernel_initializer=RandomNormal(
-                    mean=self._discriminator_initializer_mean,
-                    stddev=self._discriminator_initializer_deviation
-                )
-            )(discriminator_model)
-            discriminator_model = self._add_activation_layer(discriminator_model,
-                                                             self._discriminator_activation_function)
-            discriminator_model = MaxPooling1D(pool_size=2, padding='same')(discriminator_model)
-            discriminator_model = Dropout(self._discriminator_dropout_decay_rate_d)(discriminator_model)
-
-        # Flatten and add final dense layers
-        discriminator_model = Flatten()(discriminator_model)
-        discriminator_model = Dense(128)(discriminator_model)
-        discriminator_model = self._add_activation_layer(discriminator_model, self._discriminator_activation_function)
-        discriminator_model = Dropout(self._discriminator_dropout_decay_rate_d)(discriminator_model)
-
-        # Final output layer
-        discriminator_model = Dense(1)(discriminator_model)
-        discriminator_model = self._add_activation_layer(discriminator_model, self._discriminator_last_layer_activation)
-
-        return Model(inputs=input_layer, outputs=discriminator_model)
 
     def set_model(self, model):
         self._discriminator_model_dense = model
@@ -349,3 +232,434 @@ class VanillaDiscriminator(Activations):
             optimizer (str): The optimizer type ('dense' or 'convolutional').
         """
         self._discriminator_optimizer = optimizer
+
+    def _build_dense_discriminator(self, input_layer):
+        """
+        Build a fully-connected (dense) discriminator architecture.
+
+        Args:
+            input_layer: Input layer for the discriminator.
+
+        Returns:
+            Model: A Keras Model with dense layers.
+        """
+        discriminator_model = Dense(self._discriminator_dense_layer_sizes_d[0])(input_layer)
+        discriminator_model = Dropout(self._discriminator_dropout_decay_rate_d)(discriminator_model)
+        discriminator_model = self._add_activation_layer(discriminator_model, self._discriminator_activation_function)
+
+        # Add additional dense layers with dropout and activations
+        for layer_size in self._discriminator_dense_layer_sizes_d[1:]:
+            discriminator_model = Dense(layer_size)(discriminator_model)
+            discriminator_model = Dropout(self._discriminator_dropout_decay_rate_d)(discriminator_model)
+            discriminator_model = self._add_activation_layer(discriminator_model,
+                                                             self._discriminator_activation_function)
+
+        # Final output layer with specified activation function
+        discriminator_model = Dense(1)(discriminator_model)
+        discriminator_model = self._add_activation_layer(discriminator_model, self._discriminator_last_layer_activation)
+
+        return Model(inputs=input_layer, outputs=discriminator_model)
+
+    # ALTERNATIVE: Ultra-lightweight version for extreme memory constraints
+    def _build_ultra_lightweight_discriminator(self, input_layer):
+        """
+        Ultra-lightweight convolutional discriminator for extreme memory constraints.
+
+        Sacrifices some discriminative power for minimal memory usage.
+        """
+        from tensorflow.keras.layers import GlobalAveragePooling1D, DepthwiseConv1D
+
+        discriminator_model = Reshape((self._discriminator_output_shape, 1))(input_layer)
+
+        # Immediate massive downsampling
+        if self._discriminator_output_shape > 1000:
+            discriminator_model = MaxPooling1D(pool_size=16, padding='same')(discriminator_model)
+        elif self._discriminator_output_shape > 500:
+            discriminator_model = MaxPooling1D(pool_size=8, padding='same')(discriminator_model)
+        elif self._discriminator_output_shape > 100:
+            discriminator_model = MaxPooling1D(pool_size=4, padding='same')(discriminator_model)
+
+        # Single lightweight convolutional block
+        # Use DepthwiseConv1D: processes each channel separately (minimal params)
+        discriminator_model = DepthwiseConv1D(
+            kernel_size=3,
+            strides=2,
+            padding='same',
+            depthwise_initializer=RandomNormal(
+                mean=self._discriminator_initializer_mean,
+                stddev=self._discriminator_initializer_deviation
+            )
+        )(discriminator_model)
+        discriminator_model = self._add_activation_layer(
+            discriminator_model,
+            self._discriminator_activation_function
+        )
+
+        # Pointwise convolution to mix channels (1x1 conv)
+        discriminator_model = Conv1D(32, kernel_size=1, padding='same')(discriminator_model)
+        discriminator_model = self._add_activation_layer(
+            discriminator_model,
+            self._discriminator_activation_function
+        )
+        discriminator_model = Dropout(self._discriminator_dropout_decay_rate_d)(discriminator_model)
+
+        # Global pooling to collapse spatial dimensions
+        discriminator_model = GlobalAveragePooling1D()(discriminator_model)
+
+        # Minimal dense path to output
+        discriminator_model = Dense(16)(discriminator_model)
+        discriminator_model = self._add_activation_layer(
+            discriminator_model,
+            self._discriminator_activation_function
+        )
+
+        # Final output
+        discriminator_model = Dense(1)(discriminator_model)
+        discriminator_model = self._add_activation_layer(
+            discriminator_model,
+            self._discriminator_last_layer_activation
+        )
+
+        return Model(inputs=input_layer, outputs=discriminator_model, name="Ultra_Lightweight_Discriminator")
+
+    def _build_convolutional_discriminator(self, input_layer):
+        """
+        Build a memory-safe 1D convolutional discriminator with strict memory controls.
+
+        CRITICAL Memory Optimizations:
+        - Progressive downsampling strategy based on input size
+        - Minimal filter counts with intelligent scaling
+        - SeparableConv1D for 9x parameter reduction
+        - GlobalAveragePooling to eliminate massive Flatten
+        - Adaptive architecture based on input dimension
+        - Early pooling for large inputs (>1000 dims)
+        - Memory-aware dense layers
+
+        Args:
+            input_layer: Input layer for the discriminator.
+
+        Returns:
+            Model: A memory-safe Keras Model with Conv1D layers.
+        """
+        from tensorflow.keras.layers import GlobalAveragePooling1D, SeparableConv1D, BatchNormalization
+        import math
+
+        # ============================================================================
+        # MEMORY SAFETY: Calculate optimal architecture parameters
+        # ============================================================================
+        MAX_FILTERS = 64  # Conservative maximum
+        MIN_FILTERS = 8
+        TARGET_SPATIAL_FINAL = 8  # Target spatial dimension before pooling
+
+        input_dim = self._discriminator_output_shape
+
+        # Calculate required downsampling
+        total_downsample_needed = max(1, input_dim / TARGET_SPATIAL_FINAL)
+        num_downsample_ops = math.ceil(math.log2(total_downsample_needed))
+
+        # ============================================================================
+        # OPTIMIZATION 1: Intelligent initial downsampling
+        # ============================================================================
+        discriminator_model = Reshape((input_dim, 1))(input_layer)
+        current_spatial = input_dim
+
+        # Aggressive initial pooling based on input size
+        if input_dim > 4096:
+            # Extreme: reduce by 16x immediately
+            discriminator_model = MaxPooling1D(pool_size=16, padding='same')(discriminator_model)
+            current_spatial = (current_spatial + 15) // 16
+        elif input_dim > 2048:
+            # Very large: reduce by 8x
+            discriminator_model = MaxPooling1D(pool_size=8, padding='same')(discriminator_model)
+            current_spatial = (current_spatial + 7) // 8
+        elif input_dim > 1024:
+            # Large: reduce by 4x
+            discriminator_model = MaxPooling1D(pool_size=4, padding='same')(discriminator_model)
+            current_spatial = (current_spatial + 3) // 4
+        elif input_dim > 512:
+            # Medium: reduce by 2x
+            discriminator_model = MaxPooling1D(pool_size=2, padding='same')(discriminator_model)
+            current_spatial = (current_spatial + 1) // 2
+
+        # ============================================================================
+        # OPTIMIZATION 2: Calculate optimal number of conv layers
+        # ============================================================================
+        # Fewer layers for larger inputs (already downsampled heavily)
+        if input_dim > 2048:
+            num_conv_layers = 2
+        elif input_dim > 1024:
+            num_conv_layers = 3
+        elif input_dim > 512:
+            num_conv_layers = 3
+        else:
+            num_conv_layers = min(4, len(self._discriminator_dense_layer_sizes_d))
+
+        # ============================================================================
+        # OPTIMIZATION 3: Memory-efficient filter progression
+        # ============================================================================
+        # Start small, grow moderately
+        filter_progression = []
+        for i in range(num_conv_layers):
+            # Logarithmic growth, capped at MAX_FILTERS
+            filters = min(MIN_FILTERS * (2 ** i), MAX_FILTERS)
+            filter_progression.append(filters)
+
+        # ============================================================================
+        # OPTIMIZATION 4: Convolutional blocks with adaptive downsampling
+        # ============================================================================
+        for i, filters in enumerate(filter_progression):
+            # Adaptive kernel size (smaller for better memory)
+            if current_spatial < 16:
+                kernel_size = 3
+            elif current_spatial < 64:
+                kernel_size = 3
+            else:
+                kernel_size = 5  # Slightly larger for very large dims
+
+            # Calculate stride based on current spatial dimension
+            # More aggressive striding for larger dimensions
+            if current_spatial > 64 and i < 2:
+                stride = 2
+            elif current_spatial > 32 and i < 1:
+                stride = 2
+            else:
+                stride = 1
+
+            # Use SeparableConv1D for maximum efficiency (9x fewer params)
+            if filters >= 16 and current_spatial >= 8:
+                discriminator_model = SeparableConv1D(
+                    filters=filters,
+                    kernel_size=kernel_size,
+                    strides=stride,
+                    padding='same',
+                    depthwise_initializer=RandomNormal(
+                        mean=self._discriminator_initializer_mean,
+                        stddev=self._discriminator_initializer_deviation
+                    ),
+                    pointwise_initializer=RandomNormal(
+                        mean=self._discriminator_initializer_mean,
+                        stddev=self._discriminator_initializer_deviation
+                    ),
+                    use_bias=False
+                )(discriminator_model)
+            else:
+                # Regular Conv1D for very small dimensions or filter counts
+                discriminator_model = Conv1D(
+                    filters=filters,
+                    kernel_size=kernel_size,
+                    strides=stride,
+                    padding='same',
+                    kernel_initializer=RandomNormal(
+                        mean=self._discriminator_initializer_mean,
+                        stddev=self._discriminator_initializer_deviation
+                    ),
+                    use_bias=False
+                )(discriminator_model)
+
+            # BatchNorm (more efficient than heavy dropout)
+            discriminator_model = BatchNormalization(momentum=0.9)(discriminator_model)
+            discriminator_model = self._add_activation_layer(
+                discriminator_model,
+                self._discriminator_activation_function
+            )
+
+            # Minimal dropout
+            if i >= num_conv_layers - 1:
+                discriminator_model = Dropout(self._discriminator_dropout_decay_rate_d * 0.3)(discriminator_model)
+
+            # Update spatial dimension after stride
+            current_spatial = (current_spatial + stride - 1) // stride
+
+            # Additional pooling if still too large
+            if current_spatial > 64 and i < num_conv_layers - 1:
+                pool_size = 2
+                discriminator_model = MaxPooling1D(pool_size=pool_size, padding='same')(discriminator_model)
+                current_spatial = (current_spatial + pool_size - 1) // pool_size
+
+        # ============================================================================
+        # OPTIMIZATION 5: Global Average Pooling (eliminates Flatten memory spike)
+        # ============================================================================
+        # This converts (batch, spatial, filters) -> (batch, filters)
+        # No parameters, no memory issues!
+        discriminator_model = GlobalAveragePooling1D()(discriminator_model)
+
+        # ============================================================================
+        # OPTIMIZATION 6: Minimal dense pathway to output
+        # ============================================================================
+        # Use very small dense layer (fixed 32 units)
+        dense_size = 32
+        discriminator_model = Dense(
+            dense_size,
+            kernel_initializer=RandomNormal(
+                mean=self._discriminator_initializer_mean,
+                stddev=self._discriminator_initializer_deviation
+            )
+        )(discriminator_model)
+        discriminator_model = self._add_activation_layer(
+            discriminator_model,
+            self._discriminator_activation_function
+        )
+        discriminator_model = Dropout(self._discriminator_dropout_decay_rate_d * 0.5)(discriminator_model)
+
+        # Final binary classification output
+        discriminator_model = Dense(1)(discriminator_model)
+        discriminator_model = self._add_activation_layer(
+            discriminator_model,
+            self._discriminator_last_layer_activation
+        )
+
+        return Model(inputs=input_layer, outputs=discriminator_model, name="Discriminator_ConvMemorySafe")
+
+    def get_discriminator(self) -> Model:
+        """
+        Build and return the complete discriminator model with memory-safe embedding.
+
+        CRITICAL FIX: Eliminates massive Dense layers that cause OOM.
+        Uses progressive expansion and intelligent embedding strategies.
+
+        Returns:
+            Model: A memory-safe Keras Model instance.
+        """
+        import tensorflow as tf
+        from tensorflow.keras.layers import Lambda
+
+        MAX_DENSE_PARAMS = 4_000_000  # Max 4M parameters per layer (~16MB)
+
+        # Define input layers
+        neural_model_input = Input(
+            shape=(self._discriminator_output_shape,),
+            dtype=self._discriminator_dataset_type
+        )
+        discriminator_shape_input = Input(shape=(self._discriminator_output_shape,))
+        label_input = Input(
+            shape=(self._discriminator_number_samples_per_class["number_classes"],),
+            dtype=self._discriminator_dataset_type
+        )
+
+        # Build discriminator based on optimizer type
+        if self._discriminator_optimizer == 'convolutional':
+            discriminator_model = self._build_convolutional_discriminator(neural_model_input)
+        else:
+            discriminator_model = self._build_dense_discriminator(neural_model_input)
+
+        self._discriminator_model_dense = discriminator_model
+
+        # ============================================================================
+        # OPTIMIZATION: Memory-safe label conditioning
+        # ============================================================================
+        num_classes = self._discriminator_number_samples_per_class["number_classes"]
+        output_shape = self._discriminator_output_shape
+
+        # Concatenate inputs
+        concatenate_output = Concatenate()([discriminator_shape_input, label_input])
+        label_embedding = Flatten()(concatenate_output)
+
+        # Calculate safe embedding size
+        input_size = output_shape + num_classes
+
+        # Strategy 1: Use small embedding first
+        initial_embedding_size = min(128, input_size // 4)
+        initial_embedding_size = max(32, initial_embedding_size)
+
+        model_input = Dense(
+            initial_embedding_size,
+            kernel_initializer=RandomNormal(
+                mean=self._discriminator_initializer_mean,
+                stddev=self._discriminator_initializer_deviation
+            )
+        )(label_embedding)
+        model_input = self._add_activation_layer(model_input, self._discriminator_activation_function)
+
+        # Strategy 2: Progressive expansion to output_shape
+        current_dim = initial_embedding_size
+        target_dim = output_shape
+
+        # Check if we need to expand
+        if current_dim < target_dim:
+            # Calculate safe expansion steps
+            expansion_ratio = target_dim / current_dim
+
+            if expansion_ratio > 8:
+                # Large expansion needed - use multiple steps
+                intermediate_sizes = []
+
+                # Calculate intermediate steps
+                num_steps = math.ceil(math.log2(expansion_ratio))
+                for step in range(1, num_steps):
+                    intermediate = min(
+                        int(current_dim * (2 ** step)),
+                        target_dim
+                    )
+
+                    # Check if this step is safe
+                    params = current_dim * intermediate
+                    if params <= MAX_DENSE_PARAMS:
+                        intermediate_sizes.append(intermediate)
+                        current_dim = intermediate
+                    else:
+                        # Use smaller step
+                        safe_size = min(
+                            current_dim + MAX_DENSE_PARAMS // current_dim,
+                            target_dim
+                        )
+                        intermediate_sizes.append(safe_size)
+                        current_dim = safe_size
+
+                    if current_dim >= target_dim:
+                        break
+
+                # Apply intermediate layers
+                for size in intermediate_sizes:
+                    model_input = Dense(
+                        size,
+                        kernel_initializer=RandomNormal(
+                            mean=self._discriminator_initializer_mean,
+                            stddev=self._discriminator_initializer_deviation
+                        )
+                    )(model_input)
+                    model_input = self._add_activation_layer(
+                        model_input,
+                        self._discriminator_activation_function
+                    )
+
+            # Final expansion to exact output_shape
+            if current_dim != target_dim:
+                # Check if direct expansion is safe
+                params = current_dim * target_dim
+
+                if params <= MAX_DENSE_PARAMS:
+                    # Direct expansion is safe
+                    model_input = Dense(
+                        target_dim,
+                        kernel_initializer=RandomNormal(
+                            mean=self._discriminator_initializer_mean,
+                            stddev=self._discriminator_initializer_deviation
+                        )
+                    )(model_input)
+                    model_input = self._add_activation_layer(
+                        model_input,
+                        self._discriminator_activation_function
+                    )
+                else:
+                    # Use tile/repeat strategy (no parameters!)
+                    def expand_with_tiling(x):
+                        # Calculate repeat factor needed
+                        repeat_factor = (target_dim + current_dim - 1) // current_dim
+                        # Tile the tensor
+                        repeated = tf.tile(x, [1, repeat_factor])
+                        # Crop to exact size
+                        return repeated[:, :target_dim]
+
+                    model_input = Lambda(
+                        expand_with_tiling,
+                        output_shape=(target_dim,)
+                    )(model_input)
+
+        # Get discriminator output
+        validity = discriminator_model(model_input)
+
+        return Model(
+            inputs=[discriminator_shape_input, label_input],
+            outputs=validity,
+            name='Discriminator_MemorySafe'
+        )

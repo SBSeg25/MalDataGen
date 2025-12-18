@@ -51,6 +51,9 @@ class VanillaGeneratorTorch(Activations, nn.Module):
     supports customization of activation functions, layer sizes, initialization, and
     other hyperparameters.
 
+    This class now supports both dense and convolutional (Conv1D) architectures through
+    the optimizer parameter.
+
     Attributes:
         @generator_latent_dimension (int):
             Dimensionality of the input latent space.
@@ -73,6 +76,8 @@ class VanillaGeneratorTorch(Activations, nn.Module):
         @generator_number_samples_per_class (Optional[Dict[str, int]]):
             Optional dictionary containing metadata about class distribution.
             Must include a key "number_classes" if provided.
+        @generator_optimizer (str):
+            Type of architecture to use: 'dense' (default) or 'convolutional' for Conv1D.
         @generator_model_dense (Optional[Model]):
             Placeholder for the compiled model after build().
 
@@ -100,7 +105,8 @@ class VanillaGeneratorTorch(Activations, nn.Module):
         ...     last_layer_activation=tanh,
         ...     dense_layer_sizes_g=[256, 512, 1024],
         ...     dataset_type=numpy.float32,
-        ...     number_samples_per_class={"number_classes": 10}
+        ...     number_samples_per_class={"number_classes": 10},
+        ...     optimizer='convolutional'
         ... )
         >>> generator.build()  # Example method call if present
     """
@@ -114,7 +120,8 @@ class VanillaGeneratorTorch(Activations, nn.Module):
                  last_layer_activation: callable,
                  dense_layer_sizes_g: list[int],
                  dataset_type: type = numpy.float32,
-                 number_samples_per_class: dict | None = None):
+                 number_samples_per_class: dict | None = None,
+                 optimizer: str = 'dense'):
         """
         Initializes the VanillaGenerator class with the provided parameters.
 
@@ -139,6 +146,8 @@ class VanillaGeneratorTorch(Activations, nn.Module):
                 Data type of the input data (default: numpy.float32).
             @number_samples_per_class (Optional[Dict[str, int]], optional):
                 Optional dictionary containing the number of samples per class. If provided, it must contain the key "number_classes".
+            @optimizer (str, optional):
+                Type of architecture: 'dense' for fully-connected (default) or 'convolutional' for Conv1D architecture.
 
         Raises:
             ValueError:
@@ -179,11 +188,12 @@ class VanillaGeneratorTorch(Activations, nn.Module):
         self._generator_initializer_mean = initializer_mean
         self._generator_initializer_deviation = initializer_deviation
         self._generator_number_samples_per_class = number_samples_per_class
+        self._generator_optimizer = optimizer
         self._generator_model_dense = None
 
     def get_generator(self):
         """
-        Constructs and returns the generator model, including the latent space input and label conditioning.
+        Constructs and returns the generator model using either dense or Conv1D layers.
 
         Returns:
         --------
@@ -198,7 +208,66 @@ class VanillaGeneratorTorch(Activations, nn.Module):
         if not self._generator_number_samples_per_class or "number_classes" not in self._generator_number_samples_per_class:
             raise ValueError("Number of samples per class must include 'number_classes'.")
 
-        # Dense generator model
+        # Build generator based on optimizer type
+        if self._generator_optimizer == 'convolutional':
+            self._generator_model_dense = self._build_convolutional_generator()
+        else:
+            self._generator_model_dense = self._build_dense_generator()
+
+        # Complete generator with label conditioning
+        class Generator(nn.Module):
+            def __init__(self, latent_dim, num_classes, dense_model, activation_fn):
+                super().__init__()
+                self.dense_model = dense_model
+                self.activation_fn = activation_fn
+                self.label_embedding = nn.Linear(latent_dim + num_classes, latent_dim)
+
+                nn.init.normal_(self.label_embedding.weight, mean=0.0, std=0.02)
+                if self.label_embedding.bias is not None:
+                    nn.init.zeros_(self.label_embedding.bias)
+
+            def forward(self, inputs):
+                latent_input, label_input = inputs
+                concatenated = torch.cat([latent_input, label_input], dim=1)
+                embedded = self.label_embedding(concatenated)
+
+                if callable(self.activation_fn):
+                    embedded = self.activation_fn(embedded)
+                else:
+                    embedded = self._apply_activation_string(embedded, self.activation_fn)
+
+                output = self.dense_model(embedded)
+                return output
+
+            def _apply_activation_string(self, x, activation_name):
+                if isinstance(activation_name, str):
+                    if activation_name.lower() == 'leakyrelu':
+                        return torch.nn.functional.leaky_relu(x)
+                    elif activation_name.lower() == 'relu':
+                        return torch.nn.functional.relu(x)
+                    elif activation_name.lower() == 'tanh':
+                        return torch.tanh(x)
+                    elif activation_name.lower() == 'sigmoid':
+                        return torch.sigmoid(x)
+                return x
+
+        generator = Generator(
+            self._generator_latent_dimension,
+            self._generator_number_samples_per_class["number_classes"],
+            self._generator_model_dense,
+            self._generator_activation_function
+        )
+
+        return generator
+
+    def _build_dense_generator(self) -> nn.Module:
+        """
+        Build a fully-connected (dense) generator architecture.
+
+        Returns:
+            nn.Module: A PyTorch Module with dense layers.
+        """
+
         class DenseGenerator(nn.Module):
             def __init__(self, input_dim, layer_sizes, output_dim, dropout_rate,
                          activation_fn, last_activation_fn, init_mean, init_std):
@@ -257,7 +326,7 @@ class VanillaGeneratorTorch(Activations, nn.Module):
                         return torch.sigmoid(x)
                 return x
 
-        self._generator_model_dense = DenseGenerator(
+        return DenseGenerator(
             self._generator_latent_dimension,
             self._generator_dense_layer_sizes_g,
             self._generator_output_shape,
@@ -268,30 +337,106 @@ class VanillaGeneratorTorch(Activations, nn.Module):
             self._generator_initializer_deviation
         )
 
-        # Complete generator with label conditioning
-        class Generator(nn.Module):
-            def __init__(self, latent_dim, num_classes, dense_model, activation_fn):
+    def _build_convolutional_generator(self) -> nn.Module:
+        """
+        Build a 1D convolutional generator architecture.
+
+        Returns:
+            nn.Module: A PyTorch Module with Conv1d layers.
+        """
+
+        class ConvolutionalGenerator(nn.Module):
+            def __init__(self, input_dim, layer_sizes, output_dim, dropout_rate,
+                         activation_fn, last_activation_fn, init_mean, init_std):
                 super().__init__()
-                self.dense_model = dense_model
                 self.activation_fn = activation_fn
-                self.label_embedding = nn.Linear(latent_dim + num_classes, latent_dim)
+                self.last_activation_fn = last_activation_fn
+                self.output_dim = output_dim
 
-                nn.init.normal_(self.label_embedding.weight, mean=0.0, std=0.02)
-                if self.label_embedding.bias is not None:
-                    nn.init.zeros_(self.label_embedding.bias)
+                # Calculate initial size
+                initial_size = output_dim // (2 ** len(layer_sizes))
+                initial_size = max(4, initial_size)
 
-            def forward(self, inputs):
-                latent_input, label_input = inputs
-                concatenated = torch.cat([latent_input, label_input], dim=1)
-                embedded = self.label_embedding(concatenated)
+                # Initial dense layer to project latent to initial size
+                self.initial_dense = nn.Linear(input_dim, initial_size * layer_sizes[0])
+                nn.init.normal_(self.initial_dense.weight, mean=init_mean, std=init_std)
+                if self.initial_dense.bias is not None:
+                    nn.init.zeros_(self.initial_dense.bias)
 
+                self.initial_dropout = nn.Dropout(dropout_rate)
+                self.initial_size = initial_size
+                self.initial_channels = layer_sizes[0]
+
+                # Build convolutional layers with upsampling
+                self.upsample_layers = nn.ModuleList()
+                self.conv_layers = nn.ModuleList()
+                self.dropouts = nn.ModuleList()
+
+                in_channels = layer_sizes[0]
+                for i, filters in enumerate(layer_sizes[1:]):
+                    self.upsample_layers.append(nn.Upsample(scale_factor=2, mode='linear', align_corners=False))
+
+                    conv = nn.Conv1d(in_channels, filters, kernel_size=3, stride=1, padding=1)
+                    nn.init.normal_(conv.weight, mean=init_mean, std=init_std)
+                    if conv.bias is not None:
+                        nn.init.zeros_(conv.bias)
+
+                    self.conv_layers.append(conv)
+                    self.dropouts.append(nn.Dropout(dropout_rate))
+                    in_channels = filters
+
+                # Final conv to single channel
+                self.final_conv = nn.Conv1d(in_channels, 1, kernel_size=3, stride=1, padding=1)
+                nn.init.normal_(self.final_conv.weight, mean=init_mean, std=init_std)
+                if self.final_conv.bias is not None:
+                    nn.init.zeros_(self.final_conv.bias)
+
+                # Final dense layer to ensure exact output shape
+                self.final_dense = nn.Linear(initial_size * (2 ** len(layer_sizes[1:])), output_dim)
+                nn.init.normal_(self.final_dense.weight, mean=init_mean, std=init_std)
+                if self.final_dense.bias is not None:
+                    nn.init.zeros_(self.final_dense.bias)
+
+            def forward(self, x):
+                # Project to initial size
+                x = self.initial_dense(x)
                 if callable(self.activation_fn):
-                    embedded = self.activation_fn(embedded)
+                    x = self.activation_fn(x)
                 else:
-                    embedded = self._apply_activation_string(embedded, self.activation_fn)
+                    x = self._apply_activation_string(x, self.activation_fn)
+                x = self.initial_dropout(x)
 
-                output = self.dense_model(embedded)
-                return output
+                # Reshape to (batch, channels, sequence_length)
+                x = x.view(-1, self.initial_channels, self.initial_size)
+
+                # Apply convolutional layers with upsampling
+                for upsample, conv, dropout in zip(self.upsample_layers, self.conv_layers, self.dropouts):
+                    x = upsample(x)
+                    x = conv(x)
+                    if callable(self.activation_fn):
+                        x = self.activation_fn(x)
+                    else:
+                        x = self._apply_activation_string(x, self.activation_fn)
+                    x = dropout(x)
+
+                # Final conv to single channel
+                x = self.final_conv(x)
+                if callable(self.activation_fn):
+                    x = self.activation_fn(x)
+                else:
+                    x = self._apply_activation_string(x, self.activation_fn)
+
+                # Flatten
+                x = x.view(x.size(0), -1)
+
+                # Final dense layer to match exact output shape
+                x = self.final_dense(x)
+                if callable(self.last_activation_fn):
+                    x = self.last_activation_fn(x)
+                else:
+                    x = self._apply_activation_string(x, self.last_activation_fn)
+
+                return x
 
             def _apply_activation_string(self, x, activation_name):
                 if isinstance(activation_name, str):
@@ -305,14 +450,16 @@ class VanillaGeneratorTorch(Activations, nn.Module):
                         return torch.sigmoid(x)
                 return x
 
-        generator = Generator(
+        return ConvolutionalGenerator(
             self._generator_latent_dimension,
-            self._generator_number_samples_per_class["number_classes"],
-            self._generator_model_dense,
-            self._generator_activation_function
+            self._generator_dense_layer_sizes_g,
+            self._generator_output_shape,
+            self._generator_dropout_decay_rate_g,
+            self._generator_activation_function,
+            self._generator_last_layer_activation,
+            self._generator_initializer_mean,
+            self._generator_initializer_deviation
         )
-
-        return generator
 
     @property
     def dense_generator_model(self):
@@ -328,6 +475,11 @@ class VanillaGeneratorTorch(Activations, nn.Module):
     def dense_layer_sizes_generator(self) -> list[int]:
         """Property to get the dense layer sizes for the generator."""
         return self._generator_dense_layer_sizes_g
+
+    @property
+    def optimizer(self) -> str:
+        """Property to get the current optimizer/architecture type."""
+        return self._generator_optimizer
 
     @dropout_decay_rate_generator.setter
     def dropout_decay_rate_generator(self, dropout_decay_rate_generator: float):
@@ -346,3 +498,10 @@ class VanillaGeneratorTorch(Activations, nn.Module):
             raise ValueError("Dense layer sizes must be a list of positive integers.")
 
         self._generator_dense_layer_sizes_g = dense_layer_sizes_generator
+
+    @optimizer.setter
+    def optimizer(self, optimizer: str):
+        """Property to set the optimizer/architecture type."""
+        if optimizer not in ['dense', 'convolutional']:
+            raise ValueError("optimizer must be either 'dense' or 'convolutional'.")
+        self._generator_optimizer = optimizer

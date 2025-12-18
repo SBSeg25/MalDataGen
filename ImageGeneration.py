@@ -9,10 +9,10 @@ Testa todos os modelos disponíveis e salva resultados
 
 import os
 import numpy as np
-
+os.environ["ML_FRAMEWORK"] = "tensorflow"
 from Engine.architectures.adversarial.AdversarialModel import AdversarialModel
 
-os.environ["ML_FRAMEWORK"] = "tensorflow"
+
 
 from Engine.models.Adversarial import Adversarial
 
@@ -21,7 +21,7 @@ from Engine.models.Adversarial import Adversarial
 # =====================
 
 IMAGE_SIZE = (64, 64)
-INPUT_SHAPE = (64, 64, 1)
+INPUT_SHAPE = (64, 64, 3)
 
 N_CLASSES = 10
 BATCH_LIMIT = 3000
@@ -79,11 +79,6 @@ print("Imagens:", x_real_samples.shape)
 print("Labels:", y_real_samples.shape)
 print("Labels únicos:", np.unique(y_real_samples))
 
-
-
-
-x_real_samples = np.array(x_real_samples, dtype=np.float32)
-y_real_samples = np.array(y_real_samples, dtype=np.int32)
 
 
 class MyClass(AdversarialModel):
@@ -325,9 +320,9 @@ number_samples_per_class = {
 models = {
     "adversarial": Adversarial(
         number_classes=N_CLASSES,
-        latent_dimension=LATENT_DIMENSION,  # CRÍTICO: Mesmo valor!
-        model=MyClass(),
-        number_samples_per_class=number_samples_per_class
+        # latent_dimension=LATENT_DIMENSION,  # CRÍTICO: Mesmo valor!
+        # model=MyClass(),
+        # number_samples_per_class=number_samples_per_class
     ),
 }
 
@@ -375,7 +370,7 @@ for model_name, model in models.items():
         input_shape=INPUT_SHAPE,
         x_real_samples=x_real_samples,
         y_real_samples=y_real_samples,
-        flatten=False
+        flatten=True
     )
     print(f"✓ Treinamento concluído")
 
