@@ -355,9 +355,9 @@ class VanillaDiscriminator(Activations):
             number_samples_per_class: Optional[Dict[str, int]] = None,
             # ========== HYPERPARAMETERS ==========
             # Regularization
-            use_spectral_norm: bool = True,
-            noise_stddev: float = 0.05,
-            use_input_noise: bool = True,
+            use_spectral_norm: bool = False,
+            noise_stddev: float = 0.0,
+            use_input_noise: bool = False,
             label_smoothing: float = 0.0,
             # Normalization
             norm_type: str = 'layer',  # 'batch', 'layer', 'none'
@@ -369,7 +369,7 @@ class VanillaDiscriminator(Activations):
             channel_attention_type: str = 'se',  # 'se' (Squeeze-Excitation) ou 'eca'
             # Minibatch Discrimination
             use_minibatch_stddev: bool = True,
-            minibatch_stddev_group_size: int = 1,
+            minibatch_stddev_group_size: int = 8,
             minibatch_stddev_averaging: str = 'all',  # 'all' ou 'spatial'
             # Architecture
             use_residual_connections: bool = True,

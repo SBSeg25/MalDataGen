@@ -50,7 +50,7 @@ except ImportError as error:
     sys.exit(-1)
 
 # Default values from your constants file
-DEFAULT_ADVERSARIAL_NUMBER_EPOCHS = 6000
+DEFAULT_ADVERSARIAL_NUMBER_EPOCHS = 400
 DEFAULT_ADVERSARIAL_LATENT_DIMENSION = 64
 DEFAULT_ADVERSARIAL_TRAINING_ALGORITHM = "Adam"
 DEFAULT_ADVERSARIAL_INTERMEDIARY_ACTIVATION = "swish"
@@ -469,7 +469,7 @@ class Adversarial:
 
         # Set up optimizers for the generator and discriminator
         generator_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001, beta_1=0.5, beta_2=0.9)
-        discriminator_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001, beta_1=0.5, beta_2=0.9)
+        discriminator_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0005, beta_1=0.5, beta_2=0.9)
 
         # Compile the adversarial algorithm with binary cross-entropy loss
         self._adversarial_algorithm.compile(
