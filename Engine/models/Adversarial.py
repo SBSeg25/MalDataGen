@@ -50,24 +50,24 @@ except ImportError as error:
     sys.exit(-1)
 
 # Default values from your constants file
-DEFAULT_ADVERSARIAL_NUMBER_EPOCHS = 200
+DEFAULT_ADVERSARIAL_NUMBER_EPOCHS = 6000
 DEFAULT_ADVERSARIAL_LATENT_DIMENSION = 64
 DEFAULT_ADVERSARIAL_TRAINING_ALGORITHM = "Adam"
-DEFAULT_ADVERSARIAL_INTERMEDIARY_ACTIVATION = "LeakyReLU"
-DEFAULT_ADVERSARIAL_LAST_ACTIVATION_LAYER = "Sigmoid"
+DEFAULT_ADVERSARIAL_INTERMEDIARY_ACTIVATION = "swish"
+DEFAULT_ADVERSARIAL_LAST_ACTIVATION_LAYER = "linear"
 DEFAULT_ADVERSARIAL_DROPOUT_DECAY_RATE_G = 0.0
 DEFAULT_ADVERSARIAL_DROPOUT_DECAY_RATE_D = 0.1
 DEFAULT_ADVERSARIAL_INITIALIZER_MEAN = 0.0
 DEFAULT_ADVERSARIAL_INITIALIZER_DEVIATION = 0.15
-DEFAULT_ADVERSARIAL_BATCH_SIZE = 32
-DEFAULT_ADVERSARIAL_DENSE_LAYERS_SETTINGS_G = [1024]
+DEFAULT_ADVERSARIAL_BATCH_SIZE = 512
+DEFAULT_ADVERSARIAL_DENSE_LAYERS_SETTINGS_G = [4096, 2048]
 DEFAULT_ADVERSARIAL_DENSE_LAYERS_SETTINGS_D = [256]
-DEFAULT_ADVERSARIAL_RANDOM_latent_standard_deviation = 0.250
+DEFAULT_ADVERSARIAL_RANDOM_latent_standard_deviation = 0.50
 DEFAULT_ADVERSARIAL_LOSS_GENERATOR = 'binary_crossentropy'
 DEFAULT_ADVERSARIAL_LOSS_DISCRIMINATOR = 'binary_crossentropy'
 DEFAULT_ADVERSARIAL_SMOOTHING_RATE = 0.15
 DEFAULT_ADVERSARIAL_LATENT_MEAN_DISTRIBUTION = 0.0
-DEFAULT_ADVERSARIAL_latent_standard_deviation = 0.250
+DEFAULT_ADVERSARIAL_latent_standard_deviation = 0.50
 DEFAULT_ADVERSARIAL_FILE_NAME_DISCRIMINATOR = "discriminator_model"
 DEFAULT_ADVERSARIAL_FILE_NAME_GENERATOR = "generator_model"
 DEFAULT_ADVERSARIAL_PATH_OUTPUT_MODELS = "models_saved/"
@@ -469,7 +469,7 @@ class Adversarial:
 
         # Set up optimizers for the generator and discriminator
         generator_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001, beta_1=0.5, beta_2=0.9)
-        discriminator_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0005, beta_1=0.5, beta_2=0.9)
+        discriminator_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001, beta_1=0.5, beta_2=0.9)
 
         # Compile the adversarial algorithm with binary cross-entropy loss
         self._adversarial_algorithm.compile(

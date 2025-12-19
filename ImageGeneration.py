@@ -1,55 +1,28 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-"""
-Exemplo Condicional: Geração de Imagens MNIST - Todos os Algoritmos
-Dataset: MNIST (torchvision)
-Testa todos os modelos disponíveis e salva resultados
-"""
 
 import os
 import numpy as np
+from PIL import Image
 os.environ["ML_FRAMEWORK"] = "tensorflow"
+
 from Engine.architectures.adversarial.AdversarialModel import AdversarialModel
-
-
-
 from Engine.models.Adversarial import Adversarial
 
-# =====================
-# Configurações MNIST
-# =====================
+from tensorflow.keras.layers import Input, Dense, Flatten, Dropout, Concatenate, Conv2D, Reshape, LeakyReLU
+from tensorflow.keras.models import Model
+from tensorflow.keras.initializers import RandomNormal
 
 IMAGE_SIZE = (64, 64)
 INPUT_SHAPE = (64, 64, 3)
-
+DATASET_DIR = "./50k"
+MAX_SAMPLES = 4200
 N_CLASSES = 10
-BATCH_LIMIT = 3000
+BATCH_LIMIT = 4200
 LATENT_DIMENSION = 128
 
 OUTPUT_DIR = "./output_mnist"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-
-import os
-import numpy as np
-from PIL import Image
-
-# =====================
-# Configurações
-# =====================
-
-DATASET_DIR = "./50k"
-IMAGE_SIZE = (64, 64)
-MAX_SAMPLES = 2000
-N_CLASSES = 10
-
-# =====================
-# Carregamento
-# =====================
-
-x_real_samples = []
-y_real_samples = []
+x_real_samples, y_real_samples = [], []
 
 image_files = sorted(os.listdir(DATASET_DIR))
 
@@ -72,14 +45,9 @@ for img_name in image_files:
     if len(x_real_samples) >= MAX_SAMPLES:
         break
 
+
 x_real_samples = np.array(x_real_samples, dtype=np.float32)
 y_real_samples = np.array(y_real_samples, dtype=np.int32)
-
-print("Imagens:", x_real_samples.shape)
-print("Labels:", y_real_samples.shape)
-print("Labels únicos:", np.unique(y_real_samples))
-
-
 
 class MyClass(AdversarialModel):
 
@@ -98,11 +66,6 @@ class MyClass(AdversarialModel):
 
         Input format: image_shape (64x64x3)
         """
-
-        from tensorflow.keras.layers import (Input, Dense, Flatten, Dropout, Concatenate, Conv2D, Reshape)
-        from tensorflow.keras.models import Model
-        from tensorflow.keras.initializers import RandomNormal
-        from tensorflow.keras.layers import LeakyReLU
 
         if dataset_type is None:
             import numpy as np
@@ -320,36 +283,12 @@ number_samples_per_class = {
 models = {
     "adversarial": Adversarial(
         number_classes=N_CLASSES,
-        # latent_dimension=LATENT_DIMENSION,  # CRÍTICO: Mesmo valor!
-        # model=MyClass(),
-        # number_samples_per_class=number_samples_per_class
+        latent_dimension=LATENT_DIMENSION,  # CRÍTICO: Mesmo valor!
+        model=MyClass(),
+        number_samples_per_class=number_samples_per_class
     ),
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# =====================
-# Treinamento e Geração
-# =====================
 
 try:
     import matplotlib.pyplot as plt

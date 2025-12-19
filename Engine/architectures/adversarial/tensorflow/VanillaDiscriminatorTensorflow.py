@@ -3,663 +3,742 @@
 
 __author__ = 'Synthetic Ocean AI - Team'
 __email__ = 'syntheticoceanai@gmail.com'
-__version__ = '{1}.{0}.{1}'
+__version__ = '{2}.{0}.{0}'
 __initial_data__ = '2022/06/01'
-__last_update__ = '2025/03/29'
+__last_update__ = '2025/12/18'
 __credits__ = ['Synthetic Ocean AI']
 
 # MIT License
-#
 # Copyright (c) 2025 Synthetic Ocean AI
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 
 try:
     import sys
-    import numpy
+    import numpy as np
+    import math
+    from typing import Dict, List, Tuple, Optional, Callable, Union
 
-    from typing import List
-    from typing import Dict
-    from typing import Union
-
-    from typing import Optional
-
-    from tensorflow.keras.layers import Input
-    from tensorflow.keras.layers import Dense
+    import tensorflow as tf
+    from tensorflow.keras.layers import (
+        Layer, Dense, Input, Dropout, Flatten, Concatenate,
+        Lambda, Multiply, Add, BatchNormalization, LayerNormalization,
+        GlobalAveragePooling1D, Reshape, Activation
+    )
     from tensorflow.keras.models import Model
-
-    from tensorflow.keras.layers import Flatten
-    from tensorflow.keras.layers import Dropout
-    from tensorflow.keras.layers import Reshape
-    from tensorflow.keras.layers import Conv1D
-    from tensorflow.keras.layers import MaxPooling1D
-
-    from tensorflow.keras.layers import Concatenate
+    from tensorflow.keras.initializers import RandomNormal, HeNormal
+    from tensorflow.keras import backend as K
 
     from Engine.activations.Activations import Activations
-    from tensorflow.keras.initializers import RandomNormal
-
 
 except ImportError as error:
     print(error)
     sys.exit(-1)
 
 
+class SpectralDense(Layer):
+    """
+    Dense layer com Spectral Normalization integrada.
+    Mais eficiente e compatível com tf.function.
+    """
+
+    def __init__(
+            self,
+            units: int,
+            activation=None,
+            use_bias=True,
+            kernel_initializer='glorot_uniform',
+            use_spectral_norm=True,
+            n_iterations=1,
+            **kwargs
+    ):
+        super().__init__(**kwargs)
+        self.units = units
+        self.activation = tf.keras.activations.get(activation)
+        self.use_bias = use_bias
+        self.kernel_initializer = tf.keras.initializers.get(kernel_initializer)
+        self.use_spectral_norm = use_spectral_norm
+        self.n_iterations = n_iterations
+
+    def build(self, input_shape):
+        self.kernel = self.add_weight(
+            name='kernel',
+            shape=[input_shape[-1], self.units],
+            initializer=self.kernel_initializer,
+            trainable=True
+        )
+
+        if self.use_bias:
+            self.bias = self.add_weight(
+                name='bias',
+                shape=[self.units],
+                initializer='zeros',
+                trainable=True
+            )
+
+        if self.use_spectral_norm:
+            self.u = self.add_weight(
+                name='sn_u',
+                shape=[1, self.units],
+                initializer='random_normal',
+                trainable=False
+            )
+
+        super().build(input_shape)
+
+    def call(self, x, training=None):
+        kernel = self.kernel
+
+        # Apply spectral normalization
+        if self.use_spectral_norm:
+            w_shape = kernel.shape
+            w_mat = tf.reshape(kernel, [-1, w_shape[-1]])
+
+            u = self.u
+
+            # Power iteration
+            for _ in range(self.n_iterations):
+                v = tf.nn.l2_normalize(tf.matmul(u, tf.transpose(w_mat)))
+                u = tf.nn.l2_normalize(tf.matmul(v, w_mat))
+
+            # Update u during training
+            if training:
+                self.u.assign(u)
+
+            # Compute spectral norm
+            sigma = tf.matmul(tf.matmul(v, w_mat), tf.transpose(u))
+            kernel = kernel / (sigma + 1e-8)
+
+        # Dense operation
+        output = tf.matmul(x, kernel)
+
+        if self.use_bias:
+            output = tf.nn.bias_add(output, self.bias)
+
+        if self.activation is not None:
+            output = self.activation(output)
+
+        return output
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            'units': self.units,
+            'activation': tf.keras.activations.serialize(self.activation),
+            'use_bias': self.use_bias,
+            'kernel_initializer': tf.keras.initializers.serialize(self.kernel_initializer),
+            'use_spectral_norm': self.use_spectral_norm,
+            'n_iterations': self.n_iterations
+        })
+        return config
+
+
+class EfficientChannelAttention(Layer):
+    """
+    ECA adaptado para features densas (1D).
+    Usa convolução 1D ao invés de 2D para vetores de features.
+    """
+
+    def __init__(self, gamma: int = 2, b: int = 1, **kwargs):
+        super().__init__(**kwargs)
+        self.gamma = gamma
+        self.b = b
+
+    def build(self, input_shape):
+        channels = input_shape[-1]
+        # Calcula kernel adaptativo
+        t = int(abs(math.log2(channels) + self.b) / self.gamma)
+        self.k_size = max(3, t if t % 2 else t + 1)
+
+        # Convolução 1D para features densas
+        self.conv = tf.keras.layers.Conv1D(
+            1,
+            self.k_size,
+            padding='same',
+            use_bias=False,
+            name='eca_conv1d'
+        )
+        super().build(input_shape)
+
+    def call(self, x):
+        # x shape: (batch, features)
+        # Expande para (batch, features, 1) para Conv1D
+        x_expanded = tf.expand_dims(x, axis=-1)
+
+        # Apply 1D convolution
+        attention = self.conv(x_expanded)  # (batch, features, 1)
+        attention = tf.nn.sigmoid(attention)
+        attention = tf.squeeze(attention, axis=-1)  # (batch, features)
+
+        # Apply attention
+        return x * attention
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            'gamma': self.gamma,
+            'b': self.b
+        })
+        return config
+
+
+class SqueezeExcitation(Layer):
+    """
+    Squeeze-and-Excitation block adaptado para features densas.
+    Alternativa mais simples e robusta ao ECA.
+    """
+
+    def __init__(self, ratio: int = 8, **kwargs):
+        super().__init__(**kwargs)
+        self.ratio = ratio
+
+    def build(self, input_shape):
+        channels = input_shape[-1]
+        self.fc1 = Dense(
+            max(channels // self.ratio, 8),
+            activation='relu',
+            use_bias=False,
+            name='se_fc1'
+        )
+        self.fc2 = Dense(
+            channels,
+            activation='sigmoid',
+            use_bias=False,
+            name='se_fc2'
+        )
+        super().build(input_shape)
+
+    def call(self, x):
+        # Global average pooling já está implícito (features densas)
+        squeeze = self.fc1(x)
+        excitation = self.fc2(squeeze)
+        return x * excitation
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({'ratio': self.ratio})
+        return config
+
+
+class ConditionalBatchNorm(Layer):
+    """Conditional Batch Normalization - melhor que FiLM para GANs."""
+
+    def __init__(self, num_features: int, num_classes: int, **kwargs):
+        super().__init__(**kwargs)
+        self.num_features = num_features
+        self.num_classes = num_classes
+
+    def build(self, input_shape):
+        self.bn = BatchNormalization(scale=False, center=False)
+        self.gamma_embed = Dense(self.num_features, use_bias=False)
+        self.beta_embed = Dense(self.num_features, use_bias=False)
+        super().build(input_shape)
+
+    def call(self, inputs):
+        x, y = inputs
+        x = self.bn(x)
+        gamma = self.gamma_embed(y)
+        beta = self.beta_embed(y)
+        return x * (1 + gamma) + beta
+
+    def compute_output_shape(self, input_shape):
+        return input_shape[0]
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            'num_features': self.num_features,
+            'num_classes': self.num_classes
+        })
+        return config
+
+
+class SelfAttention(Layer):
+    """
+    Self-Attention para features densas (feature-wise attention).
+    Calcula atenção entre diferentes dimensões do vetor de features.
+    """
+
+    def __init__(self, channels: int, reduction: int = 8, **kwargs):
+        super().__init__(**kwargs)
+        self.channels = channels
+        self.reduction = reduction
+        self.hidden_dim = max(channels // reduction, 8)
+
+    def build(self, input_shape):
+        # Query, Key, Value projections
+        self.query = Dense(self.hidden_dim, use_bias=False, name='attn_q')
+        self.key = Dense(self.hidden_dim, use_bias=False, name='attn_k')
+        self.value = Dense(self.hidden_dim, use_bias=False, name='attn_v')
+
+        # Output projection
+        self.out_proj = Dense(self.channels, use_bias=False, name='attn_out')
+
+        # Learnable residual weight
+        self.gamma = self.add_weight(
+            name='attn_gamma',
+            shape=[1],
+            initializer='zeros',
+            trainable=True
+        )
+        super().build(input_shape)
+
+    def call(self, x):
+        # x shape: (batch, channels)
+        batch_size = tf.shape(x)[0]
+
+        # Project to query, key, value
+        q = self.query(x)  # [B, H']
+        k = self.key(x)  # [B, H']
+        v = self.value(x)  # [B, H']
+
+        # Compute attention: queremos atenção "global" sobre as features
+        # Para batch de features, fazemos atenção entre samples
+        # Expandir para fazer matmul: [B, 1, H'] @ [B, H', 1] = [B, 1, 1]
+
+        # Alternativa: atenção elemento-wise (mais simples e eficiente)
+        attention_weights = tf.nn.softmax(
+            q * k / tf.sqrt(tf.cast(self.hidden_dim, tf.float32)),
+            axis=-1
+        )  # [B, H']
+
+        # Apply attention
+        attended = attention_weights * v  # [B, H']
+
+        # Project back to original dimension
+        out = self.out_proj(attended)  # [B, C]
+
+        # Residual connection with learnable weight
+        return self.gamma * out + x
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            'channels': self.channels,
+            'reduction': self.reduction
+        })
+        return config
+
+
 class VanillaDiscriminator(Activations):
     """
-     VanillaDiscriminator
+    Advanced Discriminator com técnicas SOTA:
 
-     Implements a fully-connected (dense) discriminator network for use in generative models,
-     such as Generative adversarial Networks (GANs). This class provides flexibility in the design
-     of the architecture, including customizable latent dimensions, output shapes, activation functions,
-     dropout rates, and layer sizes. It allows easy adaptation to various GAN tasks where a discriminator
-     or critic network is required.
+    - Spectral Normalization (SNGAN, 2018)
+    - Conditional Batch Normalization (cGAN improvements)
+    - Efficient Channel Attention ou Squeeze-Excitation
+    - Self-Attention otimizado
+    - Minibatch Discrimination otimizado
+    - Progressive Growing ready
+    - Mixed Precision ready
+    - Gradient Penalty ready
+    """
 
-     This class focuses on defining the model architecture and does not directly handle training
-     or loss computation.
+    def __init__(
+            self,
+            latent_dimension: int,
+            output_shape: Tuple[int, ...],
+            activation_function: Callable,
+            initializer_mean: float,
+            initializer_deviation: float,
+            dropout_decay_rate_d: float,
+            last_layer_activation: Callable,
+            dense_layer_sizes_d: List[int],
+            dataset_type: type = np.float32,
+            number_samples_per_class: Optional[Dict[str, int]] = None,
+            # ========== HYPERPARAMETERS ==========
+            # Regularization
+            use_spectral_norm: bool = True,
+            noise_stddev: float = 0.05,
+            use_input_noise: bool = True,
+            label_smoothing: float = 0.0,
+            # Normalization
+            norm_type: str = 'layer',  # 'batch', 'layer', 'none'
+            use_conditional_bn: bool = True,
+            # Attention & Features
+            use_self_attention: bool = True,
+            attention_layers: List[int] = None,  # Indices de layers com attention
+            use_channel_attention: bool = True,
+            channel_attention_type: str = 'se',  # 'se' (Squeeze-Excitation) ou 'eca'
+            # Minibatch Discrimination
+            use_minibatch_stddev: bool = True,
+            minibatch_stddev_group_size: int = 1,
+            minibatch_stddev_averaging: str = 'all',  # 'all' ou 'spatial'
+            # Architecture
+            use_residual_connections: bool = True,
+            residual_scaling: float = 0.1,
+            bottleneck_factor: float = 0.25,
+            # Output
+            use_gradient_penalty: bool = False,
+            output_units: int = 1,
+            # Performance
+            use_mixed_precision: bool = False,
+    ) -> None:
 
-     Attributes:
-         @discriminator_latent_dimension (int):
-             Dimensionality of the input latent space for the discriminator network.
-         @discriminator_output_shape (int):
-             The output shape of the network, typically used to define the shape of input data like images.
-         @discriminator_activation_function (str):
-             The activation function applied to all hidden layers (e.g., 'relu', 'leaky_relu').
-         @discriminator_last_layer_activation (str):
-             The activation function applied to the last layer (e.g., 'sigmoid').
-         @discriminator_dropout_decay_rate_d (float):
-             Dropout rate applied to layers in the network to help prevent overfitting.
-         @discriminator_dense_layer_sizes_d (List[int]):
-             List of integers defining the number of units in each dense layer.
-         @discriminator_dataset_type (numpy.dtype):
-             The data type of the dataset (default: numpy.float32).
-         @discriminator_initializer_mean (float):
-             Mean of the normal distribution used for weight initialization.
-         @discriminator_initializer_deviation (float):
-             Standard deviation of the normal distribution used for weight initialization.
-         @discriminator_number_samples_per_class (Optional[Dict[str, int]]):
-             Optional dictionary containing the number of samples per class.
-         @discriminator_optimizer (str):
-             Type of architecture to use: 'dense' (default) or 'convolutional' for Conv1D.
-         @discriminator_model_dense (Optional[Model]):
-             Placeholder for the compiled Keras model after building the network.
+        # Validações
+        if latent_dimension <= 0:
+            raise ValueError("latent_dimension must be > 0")
+        if not 0.0 <= dropout_decay_rate_d <= 1.0:
+            raise ValueError("dropout_decay_rate_d must be in [0, 1]")
+        if not dense_layer_sizes_d:
+            raise ValueError("dense_layer_sizes_d cannot be empty")
 
-     Raises:
-         ValueError:
-             Raised if invalid arguments are passed during initialization, such as:
-             - Non-positive `latent_dimension`
-             - Dropout rate outside the range [0, 1]
-             - Empty or invalid `dense_layer_sizes_d`
-             - Missing required key "number_classes" in `number_samples_per_class`, if provided
+        # Atributos básicos
+        self._latent_dim = latent_dimension
+        self._output_shape = output_shape
+        self._activation_fn = activation_function
+        self._last_activation = last_layer_activation
+        self._dropout = dropout_decay_rate_d
+        self._dense_sizes = dense_layer_sizes_d
+        self._dtype = dataset_type
+        self._init_mean = initializer_mean
+        self._init_std = initializer_deviation
+        self._class_info = number_samples_per_class
 
-     Example:
-         >>> discriminator = VanillaDiscriminator(
-         ...     latent_dimension=100,
-         ...     output_shape=(28, 28, 1),
-         ...     activation_function='leaky_relu',
-         ...     initializer_mean=0.0,
-         ...     initializer_deviation=0.02,
-         ...     dropout_decay_rate_d=0.3,
-         ...     last_layer_activation='sigmoid',
-         ...     dense_layer_sizes_d=[512, 256, 128],
-         ...     dataset_type=numpy.float32,
-         ...     number_samples_per_class={"number_classes": 10},
-         ...     optimizer='convolutional'
-         ... )
-         >>> discriminator.build()  # Example method call if present
-     """
+        # Hyperparameters
+        self._use_sn = use_spectral_norm
+        self._noise_std = noise_stddev
+        self._use_noise = use_input_noise
+        self._label_smooth = label_smoothing
+        self._norm_type = norm_type
+        self._use_cbn = use_conditional_bn
+        self._use_attn = use_self_attention
+        self._attn_layers = attention_layers or [len(dense_layer_sizes_d) // 2]
+        self._use_ch_attn = use_channel_attention
+        self._ch_attn_type = channel_attention_type
+        self._use_mbstd = use_minibatch_stddev
+        self._mb_group = minibatch_stddev_group_size
+        self._mb_avg = minibatch_stddev_averaging
+        self._use_residual = use_residual_connections
+        self._res_scale = residual_scaling
+        self._bottleneck = bottleneck_factor
+        self._use_gp = use_gradient_penalty
+        self._output_units = output_units
+        self._mixed_precision = use_mixed_precision
 
-    def __init__(self, latent_dimension: int, output_shape: int, activation_function: str, initializer_mean: float,
-                 initializer_deviation: float, dropout_decay_rate_d: float, last_layer_activation: str,
-                 dense_layer_sizes_d: List[int], dataset_type: numpy.dtype = numpy.float32,
-                 number_samples_per_class: Optional[Dict[str, int]] = None, optimizer: str = 'convolutional'):
-        """
-        Initializes the VanillaDiscriminator class with the provided parameters.
+        self._model: Optional[Model] = None
 
-        This constructor sets up the architecture of the discriminator, including the latent
-        dimension, output shape, activation functions, weight initializers, dropout rates,
-        and any additional information like class distribution metadata.
+    # ==================================================================
+    # UTILITY LAYERS
+    # ==================================================================
 
-        Args:
-            latent_dimension (int):
-                The dimensionality of the input latent space.
-            output_shape (int):
-                The shape of the expected output data (e.g., image size).
-            activation_function (str):
-                The activation function to apply to all hidden layers.
-            initializer_mean (float):
-                The mean for weight initialization.
-            initializer_deviation (float):
-                The standard deviation for weight initialization.
-            dropout_decay_rate_d (float):
-                Dropout rate for dense layers (should be between 0 and 1).
-            last_layer_activation (str):
-                The activation function for the last output layer.
-            dense_layer_sizes_d (List[int]):
-                A list of integers specifying the number of units in each dense layer.
-            dataset_type (numpy.dtype, optional):
-                The data type of the input data (default is numpy.float32).
-            number_samples_per_class (Optional[Dict[str, int]], optional):
-                A dictionary containing metadata about class distribution. It should
-                include the key "number_classes" if provided.
-            optimizer (str, optional):
-                Type of architecture: 'dense' for fully-connected (default) or
-                'convolutional' for Conv1D architecture.
+    def _get_dense_layer(self, units: int, use_bias: bool = True, name: str = None):
+        """Retorna Dense layer com ou sem Spectral Normalization."""
+        init = self._get_initializer()
 
-        Raises:
-            ValueError:
-                If `latent_dimension` is <= 0.
-                If `dropout_decay_rate_d` is not within the range [0, 1].
-                If `dense_layer_sizes_d` is empty or contains invalid values.
-                If `number_samples_per_class` is provided but does not contain the key "number_classes".
-        """
-
-        super().__init__()
-        self._discriminator_number_samples_per_class = number_samples_per_class
-        self._discriminator_latent_dimension = latent_dimension
-        self._discriminator_output_shape = output_shape
-        self._discriminator_activation_function = activation_function
-        self._discriminator_last_layer_activation = last_layer_activation
-        self._discriminator_dropout_decay_rate_d = dropout_decay_rate_d
-        self._discriminator_dense_layer_sizes_d = dense_layer_sizes_d
-        self._discriminator_dataset_type = dataset_type
-        self._discriminator_initializer_mean = initializer_mean
-        self._discriminator_initializer_deviation = initializer_deviation
-        self._discriminator_optimizer = optimizer
-        self._discriminator_model_dense = None
-
-    def set_model(self, model):
-        self._discriminator_model_dense = model
-
-    def get_dense_discriminator_model(self) -> Optional[Model]:
-        """
-        Retrieve the dense discriminator model.
-
-        Returns:
-            Optional[Model]: The dense discriminator model, or None if not set.
-        """
-        return self._discriminator_model_dense
-
-    def set_dropout_decay_rate_discriminator(self, dropout_decay_rate_discriminator: float):
-        """
-        Set the dropout decay rate for the discriminator network.
-
-        Args:
-            dropout_decay_rate_discriminator (float): The new dropout decay rate.
-        """
-        self._discriminator_dropout_decay_rate_d = dropout_decay_rate_discriminator
-
-    def set_dense_layer_sizes_discriminator(self, dense_layer_sizes_discriminator: List[int]):
-        """
-        Set the sizes for the dense layers in the discriminator network.
-
-        Args:
-            dense_layer_sizes_discriminator (List[int]): A list of integers specifying the layer sizes.
-        """
-        self._discriminator_dense_layer_sizes_d = dense_layer_sizes_discriminator
-
-    def get_optimizer(self) -> str:
-        """
-        Get the current optimizer/architecture type.
-
-        Returns:
-            str: The optimizer type ('dense' or 'convolutional').
-        """
-        return self._discriminator_optimizer
-
-    def set_optimizer(self, optimizer: str):
-        """
-        Set the optimizer/architecture type.
-
-        Args:
-            optimizer (str): The optimizer type ('dense' or 'convolutional').
-        """
-        self._discriminator_optimizer = optimizer
-
-    def _build_dense_discriminator(self, input_layer):
-        """
-        Build a fully-connected (dense) discriminator architecture.
-
-        Args:
-            input_layer: Input layer for the discriminator.
-
-        Returns:
-            Model: A Keras Model with dense layers.
-        """
-        discriminator_model = Dense(self._discriminator_dense_layer_sizes_d[0])(input_layer)
-        discriminator_model = Dropout(self._discriminator_dropout_decay_rate_d)(discriminator_model)
-        discriminator_model = self._add_activation_layer(discriminator_model, self._discriminator_activation_function)
-
-        # Add additional dense layers with dropout and activations
-        for layer_size in self._discriminator_dense_layer_sizes_d[1:]:
-            discriminator_model = Dense(layer_size)(discriminator_model)
-            discriminator_model = Dropout(self._discriminator_dropout_decay_rate_d)(discriminator_model)
-            discriminator_model = self._add_activation_layer(discriminator_model,
-                                                             self._discriminator_activation_function)
-
-        # Final output layer with specified activation function
-        discriminator_model = Dense(1)(discriminator_model)
-        discriminator_model = self._add_activation_layer(discriminator_model, self._discriminator_last_layer_activation)
-
-        return Model(inputs=input_layer, outputs=discriminator_model)
-
-    # ALTERNATIVE: Ultra-lightweight version for extreme memory constraints
-    def _build_ultra_lightweight_discriminator(self, input_layer):
-        """
-        Ultra-lightweight convolutional discriminator for extreme memory constraints.
-
-        Sacrifices some discriminative power for minimal memory usage.
-        """
-        from tensorflow.keras.layers import GlobalAveragePooling1D, DepthwiseConv1D
-
-        discriminator_model = Reshape((self._discriminator_output_shape, 1))(input_layer)
-
-        # Immediate massive downsampling
-        if self._discriminator_output_shape > 1000:
-            discriminator_model = MaxPooling1D(pool_size=16, padding='same')(discriminator_model)
-        elif self._discriminator_output_shape > 500:
-            discriminator_model = MaxPooling1D(pool_size=8, padding='same')(discriminator_model)
-        elif self._discriminator_output_shape > 100:
-            discriminator_model = MaxPooling1D(pool_size=4, padding='same')(discriminator_model)
-
-        # Single lightweight convolutional block
-        # Use DepthwiseConv1D: processes each channel separately (minimal params)
-        discriminator_model = DepthwiseConv1D(
-            kernel_size=3,
-            strides=2,
-            padding='same',
-            depthwise_initializer=RandomNormal(
-                mean=self._discriminator_initializer_mean,
-                stddev=self._discriminator_initializer_deviation
+        if self._use_sn:
+            return SpectralDense(
+                units,
+                use_bias=use_bias,
+                kernel_initializer=init,
+                use_spectral_norm=True,
+                name=name
             )
-        )(discriminator_model)
-        discriminator_model = self._add_activation_layer(
-            discriminator_model,
-            self._discriminator_activation_function
-        )
-
-        # Pointwise convolution to mix channels (1x1 conv)
-        discriminator_model = Conv1D(32, kernel_size=1, padding='same')(discriminator_model)
-        discriminator_model = self._add_activation_layer(
-            discriminator_model,
-            self._discriminator_activation_function
-        )
-        discriminator_model = Dropout(self._discriminator_dropout_decay_rate_d)(discriminator_model)
-
-        # Global pooling to collapse spatial dimensions
-        discriminator_model = GlobalAveragePooling1D()(discriminator_model)
-
-        # Minimal dense path to output
-        discriminator_model = Dense(16)(discriminator_model)
-        discriminator_model = self._add_activation_layer(
-            discriminator_model,
-            self._discriminator_activation_function
-        )
-
-        # Final output
-        discriminator_model = Dense(1)(discriminator_model)
-        discriminator_model = self._add_activation_layer(
-            discriminator_model,
-            self._discriminator_last_layer_activation
-        )
-
-        return Model(inputs=input_layer, outputs=discriminator_model, name="Ultra_Lightweight_Discriminator")
-
-    def _build_convolutional_discriminator(self, input_layer):
-        """
-        Build a memory-safe 1D convolutional discriminator with strict memory controls.
-
-        CRITICAL Memory Optimizations:
-        - Progressive downsampling strategy based on input size
-        - Minimal filter counts with intelligent scaling
-        - SeparableConv1D for 9x parameter reduction
-        - GlobalAveragePooling to eliminate massive Flatten
-        - Adaptive architecture based on input dimension
-        - Early pooling for large inputs (>1000 dims)
-        - Memory-aware dense layers
-
-        Args:
-            input_layer: Input layer for the discriminator.
-
-        Returns:
-            Model: A memory-safe Keras Model with Conv1D layers.
-        """
-        from tensorflow.keras.layers import GlobalAveragePooling1D, SeparableConv1D, BatchNormalization
-        import math
-
-        # ============================================================================
-        # MEMORY SAFETY: Calculate optimal architecture parameters
-        # ============================================================================
-        MAX_FILTERS = 64  # Conservative maximum
-        MIN_FILTERS = 8
-        TARGET_SPATIAL_FINAL = 8  # Target spatial dimension before pooling
-
-        input_dim = self._discriminator_output_shape
-
-        # Calculate required downsampling
-        total_downsample_needed = max(1, input_dim / TARGET_SPATIAL_FINAL)
-        num_downsample_ops = math.ceil(math.log2(total_downsample_needed))
-
-        # ============================================================================
-        # OPTIMIZATION 1: Intelligent initial downsampling
-        # ============================================================================
-        discriminator_model = Reshape((input_dim, 1))(input_layer)
-        current_spatial = input_dim
-
-        # Aggressive initial pooling based on input size
-        if input_dim > 4096:
-            # Extreme: reduce by 16x immediately
-            discriminator_model = MaxPooling1D(pool_size=16, padding='same')(discriminator_model)
-            current_spatial = (current_spatial + 15) // 16
-        elif input_dim > 2048:
-            # Very large: reduce by 8x
-            discriminator_model = MaxPooling1D(pool_size=8, padding='same')(discriminator_model)
-            current_spatial = (current_spatial + 7) // 8
-        elif input_dim > 1024:
-            # Large: reduce by 4x
-            discriminator_model = MaxPooling1D(pool_size=4, padding='same')(discriminator_model)
-            current_spatial = (current_spatial + 3) // 4
-        elif input_dim > 512:
-            # Medium: reduce by 2x
-            discriminator_model = MaxPooling1D(pool_size=2, padding='same')(discriminator_model)
-            current_spatial = (current_spatial + 1) // 2
-
-        # ============================================================================
-        # OPTIMIZATION 2: Calculate optimal number of conv layers
-        # ============================================================================
-        # Fewer layers for larger inputs (already downsampled heavily)
-        if input_dim > 2048:
-            num_conv_layers = 2
-        elif input_dim > 1024:
-            num_conv_layers = 3
-        elif input_dim > 512:
-            num_conv_layers = 3
         else:
-            num_conv_layers = min(4, len(self._discriminator_dense_layer_sizes_d))
-
-        # ============================================================================
-        # OPTIMIZATION 3: Memory-efficient filter progression
-        # ============================================================================
-        # Start small, grow moderately
-        filter_progression = []
-        for i in range(num_conv_layers):
-            # Logarithmic growth, capped at MAX_FILTERS
-            filters = min(MIN_FILTERS * (2 ** i), MAX_FILTERS)
-            filter_progression.append(filters)
-
-        # ============================================================================
-        # OPTIMIZATION 4: Convolutional blocks with adaptive downsampling
-        # ============================================================================
-        for i, filters in enumerate(filter_progression):
-            # Adaptive kernel size (smaller for better memory)
-            if current_spatial < 16:
-                kernel_size = 3
-            elif current_spatial < 64:
-                kernel_size = 3
-            else:
-                kernel_size = 5  # Slightly larger for very large dims
-
-            # Calculate stride based on current spatial dimension
-            # More aggressive striding for larger dimensions
-            if current_spatial > 64 and i < 2:
-                stride = 2
-            elif current_spatial > 32 and i < 1:
-                stride = 2
-            else:
-                stride = 1
-
-            # Use SeparableConv1D for maximum efficiency (9x fewer params)
-            if filters >= 16 and current_spatial >= 8:
-                discriminator_model = SeparableConv1D(
-                    filters=filters,
-                    kernel_size=kernel_size,
-                    strides=stride,
-                    padding='same',
-                    depthwise_initializer=RandomNormal(
-                        mean=self._discriminator_initializer_mean,
-                        stddev=self._discriminator_initializer_deviation
-                    ),
-                    pointwise_initializer=RandomNormal(
-                        mean=self._discriminator_initializer_mean,
-                        stddev=self._discriminator_initializer_deviation
-                    ),
-                    use_bias=False
-                )(discriminator_model)
-            else:
-                # Regular Conv1D for very small dimensions or filter counts
-                discriminator_model = Conv1D(
-                    filters=filters,
-                    kernel_size=kernel_size,
-                    strides=stride,
-                    padding='same',
-                    kernel_initializer=RandomNormal(
-                        mean=self._discriminator_initializer_mean,
-                        stddev=self._discriminator_initializer_deviation
-                    ),
-                    use_bias=False
-                )(discriminator_model)
-
-            # BatchNorm (more efficient than heavy dropout)
-            discriminator_model = BatchNormalization(momentum=0.9)(discriminator_model)
-            discriminator_model = self._add_activation_layer(
-                discriminator_model,
-                self._discriminator_activation_function
+            return Dense(
+                units,
+                use_bias=use_bias,
+                kernel_initializer=init,
+                name=name
             )
 
-            # Minimal dropout
-            if i >= num_conv_layers - 1:
-                discriminator_model = Dropout(self._discriminator_dropout_decay_rate_d * 0.3)(discriminator_model)
+    def _get_kernel_constraint(self):
+        """Retorna constraint baseado em configurações."""
+        # Não usado mais, mas mantido para compatibilidade
+        return None
 
-            # Update spatial dimension after stride
-            current_spatial = (current_spatial + stride - 1) // stride
+    def _get_initializer(self):
+        """Retorna inicializador otimizado."""
+        if self._use_sn:
+            return HeNormal()  # Melhor com Spectral Norm
+        return RandomNormal(self._init_mean, self._init_std)
 
-            # Additional pooling if still too large
-            if current_spatial > 64 and i < num_conv_layers - 1:
-                pool_size = 2
-                discriminator_model = MaxPooling1D(pool_size=pool_size, padding='same')(discriminator_model)
-                current_spatial = (current_spatial + pool_size - 1) // pool_size
+    def _add_noise_layer(self, x: Layer) -> Layer:
+        """Adiciona ruído gaussiano no input (regularização)."""
+        if not self._use_noise:
+            return x
 
-        # ============================================================================
-        # OPTIMIZATION 5: Global Average Pooling (eliminates Flatten memory spike)
-        # ============================================================================
-        # This converts (batch, spatial, filters) -> (batch, filters)
-        # No parameters, no memory issues!
-        discriminator_model = GlobalAveragePooling1D()(discriminator_model)
-
-        # ============================================================================
-        # OPTIMIZATION 6: Minimal dense pathway to output
-        # ============================================================================
-        # Use very small dense layer (fixed 32 units)
-        dense_size = 32
-        discriminator_model = Dense(
-            dense_size,
-            kernel_initializer=RandomNormal(
-                mean=self._discriminator_initializer_mean,
-                stddev=self._discriminator_initializer_deviation
+        @tf.function
+        def add_noise(t):
+            noise = tf.random.normal(
+                tf.shape(t),
+                stddev=self._noise_std,
+                dtype=t.dtype
             )
-        )(discriminator_model)
-        discriminator_model = self._add_activation_layer(
-            discriminator_model,
-            self._discriminator_activation_function
-        )
-        discriminator_model = Dropout(self._discriminator_dropout_decay_rate_d * 0.5)(discriminator_model)
+            return t + noise
 
-        # Final binary classification output
-        discriminator_model = Dense(1)(discriminator_model)
-        discriminator_model = self._add_activation_layer(
-            discriminator_model,
-            self._discriminator_last_layer_activation
-        )
+        return Lambda(add_noise, name='input_noise')(x)
 
-        return Model(inputs=input_layer, outputs=discriminator_model, name="Discriminator_ConvMemorySafe")
+    def _minibatch_stddev_layer(self, x: Layer) -> Layer:
+        """
+        Minibatch Standard Deviation (ProGAN, StyleGAN)
+        Otimizado para performance.
+        """
+        if not self._use_mbstd:
+            return x
+
+        @tf.function
+        def compute_mbstd(features):
+            group_size = tf.minimum(self._mb_group, tf.shape(features)[0])
+
+            # Reshape para grupos
+            s = tf.shape(features)
+            y = tf.reshape(features, [group_size, -1, s[1]])
+            y = tf.cast(y, tf.float32)
+
+            # Compute stddev
+            mean = tf.reduce_mean(y, axis=0, keepdims=True)
+            stddev = tf.sqrt(tf.reduce_mean(tf.square(y - mean), axis=0) + 1e-8)
+
+            # Average over features e spatial
+            if self._mb_avg == 'all':
+                stddev = tf.reduce_mean(stddev)
+            else:
+                stddev = tf.reduce_mean(stddev, axis=1, keepdims=True)
+
+            # Broadcast to batch
+            stddev = tf.tile(
+                tf.reshape(stddev, [1, -1]),
+                [s[0], 1]
+            )
+
+            return tf.concat([features, stddev], axis=1)
+
+        return Lambda(compute_mbstd, name='minibatch_stddev')(x)
+
+    def _normalization_layer(self, x: Layer, name: str) -> Layer:
+        """Adiciona normalização baseada em configuração."""
+        if self._norm_type == 'batch':
+            return BatchNormalization(name=f'{name}_bn')(x)
+        elif self._norm_type == 'layer':
+            return LayerNormalization(name=f'{name}_ln')(x)
+        return x
+
+    # ==================================================================
+    # BUILDING BLOCKS
+    # ==================================================================
+
+    def _dense_block(
+            self,
+            x: Layer,
+            units: int,
+            name: str,
+            use_residual: bool = False
+    ) -> Layer:
+        """
+        Bloco denso otimizado com:
+        - Spectral Normalization opcional
+        - Bottleneck architecture para eficiência
+        - Residual connections
+        """
+        identity = x
+
+        # Bottleneck (reduz computação)
+        if self._bottleneck < 1.0 and units > 64:
+            bottleneck_units = max(int(units * self._bottleneck), 32)
+
+            # Down-projection
+            x = self._get_dense_layer(
+                bottleneck_units,
+                name=f'{name}_bottleneck_down'
+            )(x)
+            x = self._normalization_layer(x, f'{name}_bottleneck')
+            x = self._add_activation_layer(x, self._activation_fn)
+
+            # Up-projection
+            x = self._get_dense_layer(
+                units,
+                name=f'{name}_bottleneck_up'
+            )(x)
+        else:
+            x = self._get_dense_layer(
+                units,
+                name=f'{name}_dense'
+            )(x)
+
+        x = self._normalization_layer(x, name)
+        x = self._add_activation_layer(x, self._activation_fn)
+        x = Dropout(self._dropout, name=f'{name}_dropout')(x)
+
+        # Residual connection
+        if use_residual and identity.shape[-1] == units:
+            x = Lambda(
+                lambda t: t[0] + self._res_scale * t[1],
+                name=f'{name}_residual'
+            )([identity, x])
+
+        return x
+
+    def _attention_block(self, x: Layer, layer_idx: int) -> Layer:
+        """Adiciona attention mechanisms."""
+        name = f'layer_{layer_idx}'
+
+        # Self-Attention
+        if self._use_attn and layer_idx in self._attn_layers:
+            units = x.shape[-1]
+            x = SelfAttention(units, name=f'{name}_self_attn')(x)
+
+        # Channel Attention (SE ou ECA)
+        if self._use_ch_attn:
+            if self._ch_attn_type == 'eca':
+                x = EfficientChannelAttention(name=f'{name}_eca')(x)
+            else:  # 'se' (default, mais robusto)
+                x = SqueezeExcitation(ratio=8, name=f'{name}_se')(x)
+
+        return x
+
+    # ==================================================================
+    # MODEL BUILDING
+    # ==================================================================
 
     def get_discriminator(self) -> Model:
+        """Constrói o discriminador avançado."""
+
+        if not self._class_info:
+            raise ValueError("number_samples_per_class is required")
+
+        # Mixed precision
+        if self._mixed_precision:
+            policy = tf.keras.mixed_precision.Policy('mixed_float16')
+            tf.keras.mixed_precision.set_global_policy(policy)
+
+        num_classes = self._class_info['number_classes']
+        input_size = int(np.prod(self._output_shape))
+
+        # Inputs
+        x_in = Input(shape=(input_size,), dtype=self._dtype, name='input_real')
+        y_in = Input(shape=(num_classes,), dtype=self._dtype, name='input_label')
+
+        # Adiciona ruído ao input
+        x = self._add_noise_layer(x_in)
+
+        # Minibatch stddev
+        x = self._minibatch_stddev_layer(x)
+
+        # Modulation inicial com label (conditional)
+        if self._use_cbn:
+            # Embedding da label
+            label_embed = self._get_dense_layer(
+                input_size,
+                name='label_embedding'
+            )(y_in)
+
+            # Concatena com features
+            x = Concatenate(name='concat_label')([x, label_embed])
+
+            # Projection layer
+            x = self._get_dense_layer(
+                32,
+                name='input_projection'
+            )(x)
+
+        # Processing blocks
+        for i, units in enumerate([32]):
+            # Dense block
+            use_res = self._use_residual and i > 0
+            x = self._dense_block(x, units, f'block_{i}', use_res)
+
+            # Conditional BN (se aplicável)
+            if self._use_cbn and i < len(self._dense_sizes) - 1:
+                x = ConditionalBatchNorm(units, num_classes, name=f'cbn_{i}')(
+                    [x, y_in]
+                )
+
+            # Attention mechanisms
+            x = self._attention_block(x, i)
+
+        # Output layer
+        x = self._get_dense_layer(
+            self._output_units,
+            name='output_logits'
+        )(x)
+
+        if self._last_activation is not None:
+            x = self._add_activation_layer(x, self._last_activation)
+
+        # Build model
+        model = Model(
+            inputs=[x_in, y_in],
+            outputs=x,
+            name='AdvancedDiscriminator'
+        )
+
+        self._model = model
+        model.summary()
+
+        return model
+
+    # ==================================================================
+    # GRADIENT PENALTY (para WGAN-GP)
+    # ==================================================================
+
+    @tf.function
+    def gradient_penalty(
+            self,
+            real_samples: tf.Tensor,
+            fake_samples: tf.Tensor,
+            labels: tf.Tensor,
+            lambda_gp: float = 10.0
+    ) -> tf.Tensor:
         """
-        Build and return the complete discriminator model with memory-safe embedding.
-
-        CRITICAL FIX: Eliminates massive Dense layers that cause OOM.
-        Uses progressive expansion and intelligent embedding strategies.
-
-        Returns:
-            Model: A memory-safe Keras Model instance.
+        Computa gradient penalty para WGAN-GP.
+        Uso: adicione ao loss do discriminador.
         """
-        import tensorflow as tf
-        from tensorflow.keras.layers import Lambda
+        if not self._use_gp:
+            return tf.constant(0.0)
 
-        MAX_DENSE_PARAMS = 4_000_000  # Max 4M parameters per layer (~16MB)
+        batch_size = tf.shape(real_samples)[0]
+        alpha = tf.random.uniform([batch_size, 1], 0.0, 1.0)
 
-        # Define input layers
-        neural_model_input = Input(
-            shape=(self._discriminator_output_shape,),
-            dtype=self._discriminator_dataset_type
-        )
-        discriminator_shape_input = Input(shape=(self._discriminator_output_shape,))
-        label_input = Input(
-            shape=(self._discriminator_number_samples_per_class["number_classes"],),
-            dtype=self._discriminator_dataset_type
-        )
+        # Interpolação
+        interpolated = alpha * real_samples + (1 - alpha) * fake_samples
 
-        # Build discriminator based on optimizer type
-        if self._discriminator_optimizer == 'convolutional':
-            discriminator_model = self._build_convolutional_discriminator(neural_model_input)
-        else:
-            discriminator_model = self._build_dense_discriminator(neural_model_input)
+        # Compute gradients
+        with tf.GradientTape() as tape:
+            tape.watch(interpolated)
+            pred = self._model([interpolated, labels], training=True)
 
-        self._discriminator_model_dense = discriminator_model
+        gradients = tape.gradient(pred, interpolated)
 
-        # ============================================================================
-        # OPTIMIZATION: Memory-safe label conditioning
-        # ============================================================================
-        num_classes = self._discriminator_number_samples_per_class["number_classes"]
-        output_shape = self._discriminator_output_shape
+        # Compute gradient penalty
+        slopes = tf.sqrt(tf.reduce_sum(tf.square(gradients), axis=1) + 1e-8)
+        gp = tf.reduce_mean(tf.square(slopes - 1.0))
 
-        # Concatenate inputs
-        concatenate_output = Concatenate()([discriminator_shape_input, label_input])
-        label_embedding = Flatten()(concatenate_output)
+        return lambda_gp * gp
 
-        # Calculate safe embedding size
-        input_size = output_shape + num_classes
+    # ==================================================================
+    # GETTERS
+    # ==================================================================
 
-        # Strategy 1: Use small embedding first
-        initial_embedding_size = min(128, input_size // 4)
-        initial_embedding_size = max(32, initial_embedding_size)
+    def get_model(self) -> Optional[Model]:
+        """Retorna o modelo construído."""
+        return self._model
 
-        model_input = Dense(
-            initial_embedding_size,
-            kernel_initializer=RandomNormal(
-                mean=self._discriminator_initializer_mean,
-                stddev=self._discriminator_initializer_deviation
-            )
-        )(label_embedding)
-        model_input = self._add_activation_layer(model_input, self._discriminator_activation_function)
+    @property
+    def trainable_variables(self):
+        """Retorna variáveis treináveis."""
+        return self._model.trainable_variables if self._model else []
 
-        # Strategy 2: Progressive expansion to output_shape
-        current_dim = initial_embedding_size
-        target_dim = output_shape
-
-        # Check if we need to expand
-        if current_dim < target_dim:
-            # Calculate safe expansion steps
-            expansion_ratio = target_dim / current_dim
-
-            if expansion_ratio > 8:
-                # Large expansion needed - use multiple steps
-                intermediate_sizes = []
-
-                # Calculate intermediate steps
-                num_steps = math.ceil(math.log2(expansion_ratio))
-                for step in range(1, num_steps):
-                    intermediate = min(
-                        int(current_dim * (2 ** step)),
-                        target_dim
-                    )
-
-                    # Check if this step is safe
-                    params = current_dim * intermediate
-                    if params <= MAX_DENSE_PARAMS:
-                        intermediate_sizes.append(intermediate)
-                        current_dim = intermediate
-                    else:
-                        # Use smaller step
-                        safe_size = min(
-                            current_dim + MAX_DENSE_PARAMS // current_dim,
-                            target_dim
-                        )
-                        intermediate_sizes.append(safe_size)
-                        current_dim = safe_size
-
-                    if current_dim >= target_dim:
-                        break
-
-                # Apply intermediate layers
-                for size in intermediate_sizes:
-                    model_input = Dense(
-                        size,
-                        kernel_initializer=RandomNormal(
-                            mean=self._discriminator_initializer_mean,
-                            stddev=self._discriminator_initializer_deviation
-                        )
-                    )(model_input)
-                    model_input = self._add_activation_layer(
-                        model_input,
-                        self._discriminator_activation_function
-                    )
-
-            # Final expansion to exact output_shape
-            if current_dim != target_dim:
-                # Check if direct expansion is safe
-                params = current_dim * target_dim
-
-                if params <= MAX_DENSE_PARAMS:
-                    # Direct expansion is safe
-                    model_input = Dense(
-                        target_dim,
-                        kernel_initializer=RandomNormal(
-                            mean=self._discriminator_initializer_mean,
-                            stddev=self._discriminator_initializer_deviation
-                        )
-                    )(model_input)
-                    model_input = self._add_activation_layer(
-                        model_input,
-                        self._discriminator_activation_function
-                    )
-                else:
-                    # Use tile/repeat strategy (no parameters!)
-                    def expand_with_tiling(x):
-                        # Calculate repeat factor needed
-                        repeat_factor = (target_dim + current_dim - 1) // current_dim
-                        # Tile the tensor
-                        repeated = tf.tile(x, [1, repeat_factor])
-                        # Crop to exact size
-                        return repeated[:, :target_dim]
-
-                    model_input = Lambda(
-                        expand_with_tiling,
-                        output_shape=(target_dim,)
-                    )(model_input)
-
-        # Get discriminator output
-        validity = discriminator_model(model_input)
-
-        return Model(
-            inputs=[discriminator_shape_input, label_input],
-            outputs=validity,
-            name='Discriminator_MemorySafe'
-        )
+    def get_config(self) -> Dict:
+        """Retorna configuração do discriminador."""
+        return {
+            'latent_dimension': self._latent_dim,
+            'output_shape': self._output_shape,
+            'dense_layer_sizes': self._dense_sizes,
+            'use_spectral_norm': self._use_sn,
+            'use_self_attention': self._use_attn,
+            'use_channel_attention': self._use_ch_attn,
+            'channel_attention_type': self._ch_attn_type,
+            'use_minibatch_stddev': self._use_mbstd,
+            'norm_type': self._norm_type,
+            'use_conditional_bn': self._use_cbn,
+            'use_residual_connections': self._use_residual,
+            'mixed_precision': self._mixed_precision
+        }
