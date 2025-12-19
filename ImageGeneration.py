@@ -26,12 +26,12 @@ from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 # =====================
 # Configurações
 # =====================
-IMAGE_SIZE = (32, 32)
-INPUT_SHAPE = (32, 32, 3)
+IMAGE_SIZE = (64, 64)
+INPUT_SHAPE = (64, 64, 3)
 DATASET_DIR = "./50k"
-MAX_SAMPLES = 6400
+MAX_SAMPLES = 8400
 N_CLASSES = 64
-BATCH_LIMIT = 5200
+BATCH_LIMIT = 8400
 LATENT_DIMENSION = 64
 CODEBOOK_SIZE = N_CLASSES
 CODEBOOK_DIM = 64
@@ -293,7 +293,7 @@ print("✓ VQ-VAE pronto")
 vqvae.fit(
     x_real_samples,
     x_real_samples,
-    epochs=20,
+    epochs=50,
     batch_size=128,
     validation_split=0.15,
     callbacks=[
