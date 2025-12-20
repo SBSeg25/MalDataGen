@@ -126,10 +126,12 @@ class SpectralDense(Layer):
             self.u.assign(u)
 
         # Calcula norma espectral (maior singular value)
-        sigma = tf.reduce_sum(tf.matmul(u, w_mat) * v)
+        # sigma = u^T W v (onde u e v são os vetores singulares)
+        sigma = tf.matmul(tf.matmul(v, w_mat), u, transpose_b=True)
+        sigma = tf.abs(sigma[0, 0])  # Extrai o escalar
 
         # Normaliza kernel
-        w_normalized = w / (sigma + 1e-12)
+        w_normalized = w / tf.maximum(sigma, 1e-12)
 
         # Operação Dense
         output = tf.matmul(x, w_normalized)
@@ -141,6 +143,9 @@ class SpectralDense(Layer):
             output = self.activation(output)
 
         return output
+
+    def compute_output_shape(self, input_shape):
+        return input_shape[:-1] + (self.units,)
 
     def get_config(self):
         return {
@@ -219,6 +224,9 @@ class MultiHeadDenseAttention(Layer):
 
         return output
 
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
     def get_config(self):
         return {
             **super().get_config(),
@@ -254,6 +262,9 @@ class FeatureSqueezeExcitation(Layer):
         scale = self.fc1(x)
         scale = self.fc2(scale)
         return x * scale
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
 
     def get_config(self):
         return {**super().get_config(), 'ratio': self.ratio, 'use_spectral': self.use_spectral}
@@ -361,6 +372,9 @@ class ResidualBlock(Layer):
             identity = self.projection(identity)
 
         return out + identity
+
+    def compute_output_shape(self, input_shape):
+        return input_shape[:-1] + (self.units,)
 
     def get_config(self):
         return {

@@ -62,8 +62,10 @@ class RMSNorm(Layer):
 
 class SpectralDense(Layer):
     """
-    Dense com Spectral Normalization OTIMIZADA
-    Implementação mais eficiente e numericamente estável
+    Dense com Spectral Normalization CORRIGIDA
+
+    ⚠️ IMPORTANTE: Substitua a classe inteira no seu arquivo!
+    Linha ~95-150 do VanillaDiscriminatorTensorflow.py
     """
 
     def __init__(
@@ -83,9 +85,11 @@ class SpectralDense(Layer):
         self.power_iterations = power_iterations
 
     def build(self, input_shape):
+        input_dim = int(input_shape[-1])
+
         self.kernel = self.add_weight(
             name='kernel',
-            shape=[input_shape[-1], self.units],
+            shape=[input_dim, self.units],
             initializer=self.kernel_initializer,
             trainable=True
         )
@@ -98,7 +102,7 @@ class SpectralDense(Layer):
                 trainable=True
             )
 
-        # Vetor u para power iteration (não-trainável)
+        # Vetor u para power iteration [1, output_dim]
         self.u = self.add_weight(
             name='sn_u',
             shape=[1, self.units],
@@ -110,15 +114,23 @@ class SpectralDense(Layer):
         super().build(input_shape)
 
     def call(self, x, training=None):
+        # Kernel: [input_dim, output_dim]
         w = self.kernel
         w_shape = w.shape
+
+        # Reshape para matriz 2D: [input_dim, output_dim]
         w_mat = tf.reshape(w, [-1, w_shape[-1]])
 
-        u = self.u
+        u = self.u  # [1, output_dim]
 
-        # Power iteration para encontrar singular value dominante
+        # Power iteration
         for _ in range(self.power_iterations):
+            # v = normalize(u @ W^T)
+            # [1, output_dim] @ [output_dim, input_dim] = [1, input_dim]
             v = tf.nn.l2_normalize(tf.matmul(u, w_mat, transpose_b=True))
+
+            # u = normalize(v @ W)
+            # [1, input_dim] @ [input_dim, output_dim] = [1, output_dim]
             u = tf.nn.l2_normalize(tf.matmul(v, w_mat))
 
         # Atualiza u durante treinamento
@@ -126,10 +138,15 @@ class SpectralDense(Layer):
             self.u.assign(u)
 
         # Calcula norma espectral (maior singular value)
-        sigma = tf.reduce_sum(tf.matmul(u, w_mat) * v)
+        # sigma = v @ W @ u^T
+        # [1, input_dim] @ [input_dim, output_dim] = [1, output_dim]
+        # [1, output_dim] @ [output_dim, 1] = [1, 1]
+        temp = tf.matmul(v, w_mat)  # [1, output_dim]
+        sigma = tf.matmul(temp, u, transpose_b=True)  # [1, 1]
+        sigma = tf.abs(sigma[0, 0])  # Extrai escalar
 
         # Normaliza kernel
-        w_normalized = w / (sigma + 1e-12)
+        w_normalized = w / tf.maximum(sigma, 1e-12)
 
         # Operação Dense
         output = tf.matmul(x, w_normalized)
@@ -142,6 +159,9 @@ class SpectralDense(Layer):
 
         return output
 
+    def compute_output_shape(self, input_shape):
+        return input_shape[:-1] + (self.units,)
+
     def get_config(self):
         return {
             **super().get_config(),
@@ -151,7 +171,6 @@ class SpectralDense(Layer):
             'kernel_initializer': tf.keras.initializers.serialize(self.kernel_initializer),
             'power_iterations': self.power_iterations
         }
-
 
 class MultiHeadDenseAttention(Layer):
     """
@@ -219,6 +238,9 @@ class MultiHeadDenseAttention(Layer):
 
         return output
 
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
     def get_config(self):
         return {
             **super().get_config(),
@@ -254,6 +276,9 @@ class FeatureSqueezeExcitation(Layer):
         scale = self.fc1(x)
         scale = self.fc2(scale)
         return x * scale
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
 
     def get_config(self):
         return {**super().get_config(), 'ratio': self.ratio, 'use_spectral': self.use_spectral}
@@ -362,6 +387,9 @@ class ResidualBlock(Layer):
 
         return out + identity
 
+    def compute_output_shape(self, input_shape):
+        return input_shape[:-1] + (self.units,)
+
     def get_config(self):
         return {
             **super().get_config(),
@@ -410,7 +438,7 @@ class ConditionalBatchNorm(Layer):
         }
 
 
-class VanillaDiscriminatorTensorflow(Activations):
+class VanillaDiscriminator(Activations):
     """
     State-of-the-Art Discriminator para WGAN-GP
 
