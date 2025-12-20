@@ -734,6 +734,53 @@ class AdversarialAlgorithmTensorflow(Model):
 
         return float(val_loss_tracker.result())
 
+    # def get_samples(self, number_samples_per_class):
+    #     """
+    #     Generate synthetic data samples for each specified class using the trained generator.
+    #
+    #     Mathematical Operation:
+    #     ----------------------
+    #     For each class c:
+    #         1. Create labels: y = one_hot(c)
+    #         2. Sample noise: z ~ N(μ, σ²)
+    #         3. Generate: x̂ = G(z|y)
+    #
+    #     Parameters:
+    #     -----------
+    #     number_samples_per_class : dict
+    #         Dictionary containing:
+    #         - "classes": dict of {class_label: number_of_samples}
+    #         - "number_classes": total number of classes
+    #
+    #     Returns:
+    #     --------
+    #     generated_data : dict
+    #         Dictionary mapping class labels to generated samples
+    #     """
+    #     generated_data = {}
+    #
+    #     for label_class, number_instances in number_samples_per_class["classes"].items():
+    #         # Create one-hot encoded labels for conditional generation
+    #         label_samples_generated = to_categorical(
+    #             [label_class] * number_instances,
+    #             num_classes=number_samples_per_class["number_classes"]
+    #         )
+    #
+    #         # Generate random noise vectors from normal distribution
+    #         latent_noise = numpy.random.normal(
+    #             self._latent_mean_distribution,
+    #             self._latent_standard_deviation,
+    #             (number_instances, self._latent_dimension)
+    #         )
+    #
+    #         # Generate synthetic samples using the trained generator
+    #         generated_samples = self._generator.predict([latent_noise, label_samples_generated], verbose=0)
+    #
+    #         # Store in dictionary by class
+    #         generated_data[label_class] = generated_samples
+    #
+    #     return generated_data
+
     def get_samples(self, number_samples_per_class):
         """
         Generate synthetic data samples for each specified class using the trained generator.
@@ -741,7 +788,7 @@ class AdversarialAlgorithmTensorflow(Model):
         Mathematical Operation:
         ----------------------
         For each class c:
-            1. Create labels: y = one_hot(c)
+            1. Use provided one-hot labels: y (already encoded)
             2. Sample noise: z ~ N(μ, σ²)
             3. Generate: x̂ = G(z|y)
 
@@ -749,21 +796,25 @@ class AdversarialAlgorithmTensorflow(Model):
         -----------
         number_samples_per_class : dict
             Dictionary containing:
-            - "classes": dict of {class_label: number_of_samples}
+            - "classes": dict of {one_hot_label: number_of_samples}
+              where one_hot_label is a tuple representing the one-hot encoded class
             - "number_classes": total number of classes
 
         Returns:
         --------
         generated_data : dict
-            Dictionary mapping class labels to generated samples
+            Dictionary mapping one-hot labels (as tuples) to generated samples
         """
         generated_data = {}
 
-        for label_class, number_instances in number_samples_per_class["classes"].items():
-            # Create one-hot encoded labels for conditional generation
-            label_samples_generated = to_categorical(
-                [label_class] * number_instances,
-                num_classes=number_samples_per_class["number_classes"]
+        for one_hot_label, number_instances in number_samples_per_class["classes"].items():
+            # Convert tuple back to numpy array if needed
+            one_hot_array = numpy.array(one_hot_label)
+
+            # Replicate the one-hot label for all samples
+            label_samples_generated = numpy.tile(
+                one_hot_array,
+                (number_instances, 1)
             )
 
             # Generate random noise vectors from normal distribution
@@ -774,12 +825,16 @@ class AdversarialAlgorithmTensorflow(Model):
             )
 
             # Generate synthetic samples using the trained generator
-            generated_samples = self._generator.predict([latent_noise, label_samples_generated], verbose=0)
+            generated_samples = self._generator.predict(
+                [latent_noise, label_samples_generated],
+                verbose=0
+            )
 
-            # Store in dictionary by class
-            generated_data[label_class] = generated_samples
+            # Store in dictionary by one-hot label
+            generated_data[one_hot_label] = generated_samples
 
         return generated_data
+
 
     def save_model(self, path_output, k_fold):
         """
