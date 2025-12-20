@@ -8,9 +8,6 @@ os.environ["ML_FRAMEWORK"] = "tensorflow"
 from Engine.models.WassersteinGP import WassersteinGP
 
 
-from Engine.architectures.adversarial.AdversarialModel import AdversarialModel
-from Engine.models.Adversarial import Adversarial
-
 from tensorflow.keras.layers import (
     Input, Dense, Flatten, Dropout, Concatenate, Conv2D, Reshape,
     LeakyReLU, Layer, Conv2DTranspose, Add, Multiply,
