@@ -3,9 +3,9 @@
 
 __author__ = 'Synthetic Ocean AI - Team'
 __email__ = 'syntheticoceanai@gmail.com'
-__version__ = '{2}.{0}.{0}'
+__version__ = '{2}.{1}.{0}'
 __initial_data__ = '2022/06/01'
-__last_update__ = '2025/12/18'
+__last_update__ = '2025/12/20'
 __credits__ = ['Synthetic Ocean AI']
 
 # MIT License
@@ -21,7 +21,7 @@ try:
     from tensorflow.keras.layers import (
         Layer, Dense, Input, Dropout, Flatten, Concatenate,
         Lambda, Multiply, Add, BatchNormalization, LayerNormalization,
-        GlobalAveragePooling1D, Reshape, Activation
+        GlobalAveragePooling1D, Reshape, Activation, MultiHeadAttention
     )
     from tensorflow.keras.models import Model
     from tensorflow.keras.initializers import RandomNormal, HeNormal
@@ -35,10 +35,7 @@ except ImportError as error:
 
 
 class SpectralDense(Layer):
-    """
-    Dense layer com Spectral Normalization integrada.
-    Mais eficiente e compatível com tf.function.
-    """
+    """Dense layer com Spectral Normalization integrada."""
 
     def __init__(
             self,
@@ -87,27 +84,21 @@ class SpectralDense(Layer):
     def call(self, x, training=None):
         kernel = self.kernel
 
-        # Apply spectral normalization
         if self.use_spectral_norm:
             w_shape = kernel.shape
             w_mat = tf.reshape(kernel, [-1, w_shape[-1]])
-
             u = self.u
 
-            # Power iteration
             for _ in range(self.n_iterations):
                 v = tf.nn.l2_normalize(tf.matmul(u, tf.transpose(w_mat)))
                 u = tf.nn.l2_normalize(tf.matmul(v, w_mat))
 
-            # Update u during training
             if training:
                 self.u.assign(u)
 
-            # Compute spectral norm
             sigma = tf.matmul(tf.matmul(v, w_mat), tf.transpose(u))
             kernel = kernel / (sigma + 1e-8)
 
-        # Dense operation
         output = tf.matmul(x, kernel)
 
         if self.use_bias:
@@ -130,215 +121,263 @@ class SpectralDense(Layer):
         })
         return config
 
-
-class EfficientChannelAttention(Layer):
-    """
-    ECA adaptado para features densas (1D).
-    Usa convolução 1D ao invés de 2D para vetores de features.
-    """
-
-    def __init__(self, gamma: int = 2, b: int = 1, **kwargs):
+class MinibatchStdDev(Layer):
+    def __init__(self, group_size: int = 8, **kwargs):
         super().__init__(**kwargs)
-        self.gamma = gamma
-        self.b = b
+        self.group_size = group_size
+
+    def call(self, x):
+        # x: [B, S, D]
+        batch_size = tf.shape(x)[0]
+        group_size = tf.minimum(self.group_size, batch_size)
+
+        mean = tf.reduce_mean(x, axis=0, keepdims=True)
+        stddev = tf.sqrt(tf.reduce_mean(tf.square(x - mean), axis=0) + 1e-8)
+
+        stddev = tf.reduce_mean(stddev)  # escalar
+
+        stddev_feature = tf.fill([batch_size, 1, 1], stddev)
+        stddev_feature = tf.broadcast_to(
+            stddev_feature,
+            [batch_size, tf.shape(x)[1], 1]
+        )
+
+        return tf.concat([x, stddev_feature], axis=-1)
+
+    def compute_output_shape(self, input_shape):
+        # input_shape: (B, S, D)
+        return (input_shape[0], input_shape[1], input_shape[2] + 1)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({'group_size': self.group_size})
+        return config
+class PositionalEncoding(Layer):
+    """
+    Positional encoding sinusoidal para sequências.
+    Permite que o Transformer entenda a ordem das features.
+    """
+
+    def __init__(self, max_length: int = 512, **kwargs):
+        super().__init__(**kwargs)
+        self.max_length = max_length
 
     def build(self, input_shape):
-        channels = input_shape[-1]
-        # Calcula kernel adaptativo
-        t = int(abs(math.log2(channels) + self.b) / self.gamma)
-        self.k_size = max(3, t if t % 2 else t + 1)
+        d_model = input_shape[-1]
+        position = np.arange(self.max_length)[:, np.newaxis]
+        div_term = np.exp(np.arange(0, d_model, 2) * -(np.log(10000.0) / d_model))
 
-        # Convolução 1D para features densas
-        self.conv = tf.keras.layers.Conv1D(
-            1,
-            self.k_size,
-            padding='same',
-            use_bias=False,
-            name='eca_conv1d'
+        pe = np.zeros((self.max_length, d_model))
+        pe[:, 0::2] = np.sin(position * div_term)
+        pe[:, 1::2] = np.cos(position * div_term)
+
+        self.pe = self.add_weight(
+            name='positional_encoding',
+            shape=(1, self.max_length, d_model),
+            initializer=tf.constant_initializer(pe),
+            trainable=False
         )
         super().build(input_shape)
 
     def call(self, x):
-        # x shape: (batch, features)
-        # Expande para (batch, features, 1) para Conv1D
-        x_expanded = tf.expand_dims(x, axis=-1)
+        seq_len = tf.shape(x)[1]
+        return x + self.pe[:, :seq_len, :]
 
-        # Apply 1D convolution
-        attention = self.conv(x_expanded)  # (batch, features, 1)
-        attention = tf.nn.sigmoid(attention)
-        attention = tf.squeeze(attention, axis=-1)  # (batch, features)
+    def get_config(self):
+        config = super().get_config()
+        config.update({'max_length': self.max_length})
+        return config
 
-        # Apply attention
-        return x * attention
 
-    def compute_output_shape(self, input_shape):
-        return input_shape
+class HierarchicalPooling(Layer):
+    def __init__(self, pool_size: int = 2, **kwargs):
+        super().__init__(**kwargs)
+        self.pool_size = pool_size
+
+    def call(self, x):
+        # x shape: [batch, seq_len, dim]
+        batch_size = tf.shape(x)[0]
+        seq_len = tf.shape(x)[1]
+        dim = tf.shape(x)[2]
+
+        pad_len = (self.pool_size - (seq_len % self.pool_size)) % self.pool_size
+
+        def pad():
+            return tf.pad(x, [[0, 0], [0, pad_len], [0, 0]])
+
+        def no_pad():
+            return x
+
+        x = tf.cond(pad_len > 0, pad, no_pad)
+
+        new_seq_len = (seq_len + pad_len) // self.pool_size
+
+        x_reshaped = tf.reshape(
+            x,
+            [batch_size, new_seq_len, self.pool_size, dim]
+        )
+
+        max_pool = tf.reduce_max(x_reshaped, axis=2)
+        avg_pool = tf.reduce_mean(x_reshaped, axis=2)
+
+        return (max_pool + avg_pool) / 2.0
+
+class TransformerBlock(Layer):
+    """
+    Bloco Transformer otimizado com:
+    - Multi-head attention
+    - Feed-forward network com Spectral Norm
+    - Residual connections
+    - Layer normalization
+    - Dropout
+    """
+
+    def __init__(
+            self,
+            d_model: int,
+            num_heads: int,
+            dff: int,
+            dropout_rate: float = 0.1,
+            use_spectral_norm: bool = True,
+            **kwargs
+    ):
+        super().__init__(**kwargs)
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.dff = dff
+        self.dropout_rate = dropout_rate
+        self.use_sn = use_spectral_norm
+
+    def build(self, input_shape):
+        # Multi-head attention
+        self.mha = MultiHeadAttention(
+            num_heads=self.num_heads,
+            key_dim=self.d_model // self.num_heads,
+            dropout=self.dropout_rate,
+            name='mha'
+        )
+
+        # Feed-forward network
+        if self.use_sn:
+            self.ffn1 = SpectralDense(
+                self.dff,
+                activation='gelu',
+                use_spectral_norm=True,
+                name='ffn1'
+            )
+            self.ffn2 = SpectralDense(
+                self.d_model,
+                use_spectral_norm=True,
+                name='ffn2'
+            )
+        else:
+            self.ffn1 = Dense(self.dff, activation='gelu', name='ffn1')
+            self.ffn2 = Dense(self.d_model, name='ffn2')
+
+        # Normalization
+        self.ln1 = LayerNormalization(epsilon=1e-6, name='ln1')
+        self.ln2 = LayerNormalization(epsilon=1e-6, name='ln2')
+
+        # Dropout
+        self.dropout1 = Dropout(self.dropout_rate, name='dropout1')
+        self.dropout2 = Dropout(self.dropout_rate, name='dropout2')
+
+        super().build(input_shape)
+
+    def call(self, x, training=None, mask=None):
+        # Multi-head attention com residual
+        attn_output = self.mha(
+            query=x,
+            value=x,
+            key=x,
+            attention_mask=mask,
+            training=training
+        )
+        attn_output = self.dropout1(attn_output, training=training)
+        x1 = self.ln1(x + attn_output)
+
+        # Feed-forward com residual
+        ffn_output = self.ffn1(x1)
+        ffn_output = self.dropout2(ffn_output, training=training)
+        ffn_output = self.ffn2(ffn_output)
+        x2 = self.ln2(x1 + ffn_output)
+
+        return x2
 
     def get_config(self):
         config = super().get_config()
         config.update({
-            'gamma': self.gamma,
-            'b': self.b
+            'd_model': self.d_model,
+            'num_heads': self.num_heads,
+            'dff': self.dff,
+            'dropout_rate': self.dropout_rate,
+            'use_spectral_norm': self.use_sn
         })
         return config
 
 
-class SqueezeExcitation(Layer):
+class ConditionalLayerNorm(Layer):
     """
-    Squeeze-and-Excitation block adaptado para features densas.
-    Alternativa mais simples e robusta ao ECA.
+    Conditional Layer Normalization para injetar informação de classe.
+    Similar ao CBN mas usando LayerNorm.
     """
 
-    def __init__(self, ratio: int = 8, **kwargs):
+    def __init__(self, d_model: int, num_classes: int, **kwargs):
         super().__init__(**kwargs)
-        self.ratio = ratio
-
-    def build(self, input_shape):
-        channels = input_shape[-1]
-        self.fc1 = Dense(
-            max(channels // self.ratio, 8),
-            activation='relu',
-            use_bias=False,
-            name='se_fc1'
-        )
-        self.fc2 = Dense(
-            channels,
-            activation='sigmoid',
-            use_bias=False,
-            name='se_fc2'
-        )
-        super().build(input_shape)
-
-    def call(self, x):
-        # Global average pooling já está implícito (features densas)
-        squeeze = self.fc1(x)
-        excitation = self.fc2(squeeze)
-        return x * excitation
-
-    def compute_output_shape(self, input_shape):
-        return input_shape
-
-    def get_config(self):
-        config = super().get_config()
-        config.update({'ratio': self.ratio})
-        return config
-
-
-class ConditionalBatchNorm(Layer):
-    """Conditional Batch Normalization - melhor que FiLM para GANs."""
-
-    def __init__(self, num_features: int, num_classes: int, **kwargs):
-        super().__init__(**kwargs)
-        self.num_features = num_features
+        self.d_model = d_model
         self.num_classes = num_classes
 
     def build(self, input_shape):
-        self.bn = BatchNormalization(scale=False, center=False)
-        self.gamma_embed = Dense(self.num_features, use_bias=False)
-        self.beta_embed = Dense(self.num_features, use_bias=False)
+        self.ln = LayerNormalization(scale=False, center=False, epsilon=1e-6)
+        self.gamma_embed = Dense(self.d_model, use_bias=False, name='gamma')
+        self.beta_embed = Dense(self.d_model, use_bias=False, name='beta')
         super().build(input_shape)
 
     def call(self, inputs):
-        x, y = inputs
-        x = self.bn(x)
-        gamma = self.gamma_embed(y)
-        beta = self.beta_embed(y)
-        return x * (1 + gamma) + beta
+        x, y = inputs  # x: [B, S, D], y: [B, C]
+        x_norm = self.ln(x)
 
-    def compute_output_shape(self, input_shape):
-        return input_shape[0]
+        # Expande label para broadcast
+        gamma = self.gamma_embed(y)  # [B, D]
+        beta = self.beta_embed(y)    # [B, D]
+
+        gamma = tf.expand_dims(gamma, axis=1)  # [B, 1, D]
+        beta = tf.expand_dims(beta, axis=1)    # [B, 1, D]
+
+        return x_norm * (1 + gamma) + beta
 
     def get_config(self):
         config = super().get_config()
         config.update({
-            'num_features': self.num_features,
+            'd_model': self.d_model,
             'num_classes': self.num_classes
-        })
-        return config
-
-
-class SelfAttention(Layer):
-    """
-    Self-Attention para features densas (feature-wise attention).
-    Calcula atenção entre diferentes dimensões do vetor de features.
-    """
-
-    def __init__(self, channels: int, reduction: int = 8, **kwargs):
-        super().__init__(**kwargs)
-        self.channels = channels
-        self.reduction = reduction
-        self.hidden_dim = max(channels // reduction, 8)
-
-    def build(self, input_shape):
-        # Query, Key, Value projections
-        self.query = Dense(self.hidden_dim, use_bias=False, name='attn_q')
-        self.key = Dense(self.hidden_dim, use_bias=False, name='attn_k')
-        self.value = Dense(self.hidden_dim, use_bias=False, name='attn_v')
-
-        # Output projection
-        self.out_proj = Dense(self.channels, use_bias=False, name='attn_out')
-
-        # Learnable residual weight
-        self.gamma = self.add_weight(
-            name='attn_gamma',
-            shape=[1],
-            initializer='zeros',
-            trainable=True
-        )
-        super().build(input_shape)
-
-    def call(self, x):
-        # x shape: (batch, channels)
-        batch_size = tf.shape(x)[0]
-
-        # Project to query, key, value
-        q = self.query(x)  # [B, H']
-        k = self.key(x)  # [B, H']
-        v = self.value(x)  # [B, H']
-
-        # Compute attention: queremos atenção "global" sobre as features
-        # Para batch de features, fazemos atenção entre samples
-        # Expandir para fazer matmul: [B, 1, H'] @ [B, H', 1] = [B, 1, 1]
-
-        # Alternativa: atenção elemento-wise (mais simples e eficiente)
-        attention_weights = tf.nn.softmax(
-            q * k / tf.sqrt(tf.cast(self.hidden_dim, tf.float32)),
-            axis=-1
-        )  # [B, H']
-
-        # Apply attention
-        attended = attention_weights * v  # [B, H']
-
-        # Project back to original dimension
-        out = self.out_proj(attended)  # [B, C]
-
-        # Residual connection with learnable weight
-        return self.gamma * out + x
-
-    def compute_output_shape(self, input_shape):
-        return input_shape
-
-    def get_config(self):
-        config = super().get_config()
-        config.update({
-            'channels': self.channels,
-            'reduction': self.reduction
         })
         return config
 
 
 class VanillaDiscriminator(Activations):
     """
-    Advanced Discriminator com técnicas SOTA:
+    Discriminator baseado em Transformers Hierárquicos.
 
-    - Spectral Normalization (SNGAN, 2018)
-    - Conditional Batch Normalization (cGAN improvements)
-    - Efficient Channel Attention ou Squeeze-Excitation
-    - Self-Attention otimizado
-    - Minibatch Discrimination otimizado
-    - Progressive Growing ready
-    - Mixed Precision ready
-    - Gradient Penalty ready
+    ECONOMIA DE PARÂMETROS através de:
+    ✓ Pooling Hierárquico: reduz sequência progressivamente (N → N/2 → N/4 → ...)
+    ✓ Attention eficiente: complexidade reduz quadraticamente com pooling
+    ✓ Shared weights: reutiliza blocos Transformer
+    ✓ Bottleneck FFN: dimensão intermediária menor
+    ✓ Spectral Normalization: estabiliza sem aumentar parâmetros
+
+    VANTAGENS sobre Dense:
+    - Escalabilidade: O(n²) → O(n²/4) → O(n²/16) por nível hierárquico
+    - Multi-scale features: captura padrões locais e globais
+    - Menos parâmetros: compartilhamento de pesos entre níveis
+    - Melhor generalização: inductive bias da hierarquia
+
+    TÉCNICAS MANTIDAS:
+    - Spectral Normalization nas FFN
+    - Conditional normalization
+    - Minibatch standard deviation
+    - Gradient penalty ready
+    - Input noise regularization
     """
 
     def __init__(
@@ -350,31 +389,27 @@ class VanillaDiscriminator(Activations):
             initializer_deviation: float,
             dropout_decay_rate_d: float,
             last_layer_activation: Callable,
-            dense_layer_sizes_d: List[int],
+            dense_layer_sizes_d: List[int],  # Usado para compatibilidade
             dataset_type: type = np.float32,
             number_samples_per_class: Optional[Dict[str, int]] = None,
-            # ========== HYPERPARAMETERS ==========
+            # ========== TRANSFORMER HYPERPARAMETERS ==========
+            # Architecture
+            d_model: int = 256,  # Dimensão do modelo
+            num_heads: int = 4,  # Número de attention heads
+            dff_ratio: float = 2.0,  # FFN dimension = d_model * dff_ratio
+            num_layers_per_level: int = 2,  # Blocos por nível hierárquico
+            hierarchy_levels: int = 3,  # Número de níveis (N → N/2 → N/4)
+            pool_size: int = 2,  # Fator de redução por nível
+            patch_size: int = 8,  # Features por patch inicial
             # Regularization
             use_spectral_norm: bool = True,
-            noise_stddev: float = 0.05,
-            use_input_noise: bool = True,
-            label_smoothing: float = 0.0,
+            noise_stddev: float = 0.0,
+            use_input_noise: bool = False,
             # Normalization
-            norm_type: str = 'layer',  # 'batch', 'layer', 'none'
-            use_conditional_bn: bool = True,
-            # Attention & Features
-            use_self_attention: bool = True,
-            attention_layers: List[int] = None,  # Indices de layers com attention
-            use_channel_attention: bool = True,
-            channel_attention_type: str = 'se',  # 'se' (Squeeze-Excitation) ou 'eca'
+            use_conditional_norm: bool = True,
             # Minibatch Discrimination
             use_minibatch_stddev: bool = True,
-            minibatch_stddev_group_size: int = 1,
-            minibatch_stddev_averaging: str = 'all',  # 'all' ou 'spatial'
-            # Architecture
-            use_residual_connections: bool = True,
-            residual_scaling: float = 0.1,
-            bottleneck_factor: float = 0.25,
+            minibatch_stddev_group_size: int = 8,
             # Output
             use_gradient_penalty: bool = False,
             output_units: int = 1,
@@ -387,8 +422,6 @@ class VanillaDiscriminator(Activations):
             raise ValueError("latent_dimension must be > 0")
         if not 0.0 <= dropout_decay_rate_d <= 1.0:
             raise ValueError("dropout_decay_rate_d must be in [0, 1]")
-        if not dense_layer_sizes_d:
-            raise ValueError("dense_layer_sizes_d cannot be empty")
 
         # Atributos básicos
         self._latent_dim = latent_dimension
@@ -396,29 +429,27 @@ class VanillaDiscriminator(Activations):
         self._activation_fn = activation_function
         self._last_activation = last_layer_activation
         self._dropout = dropout_decay_rate_d
-        self._dense_sizes = dense_layer_sizes_d
         self._dtype = dataset_type
         self._init_mean = initializer_mean
         self._init_std = initializer_deviation
         self._class_info = number_samples_per_class
 
-        # Hyperparameters
+        # Transformer hyperparameters
+        self._d_model = d_model
+        self._num_heads = num_heads
+        self._dff = int(d_model * dff_ratio)
+        self._num_layers = num_layers_per_level
+        self._hierarchy = hierarchy_levels
+        self._pool_size = pool_size
+        self._patch_size = patch_size
+
+        # Regularization
         self._use_sn = use_spectral_norm
         self._noise_std = noise_stddev
         self._use_noise = use_input_noise
-        self._label_smooth = label_smoothing
-        self._norm_type = norm_type
-        self._use_cbn = use_conditional_bn
-        self._use_attn = use_self_attention
-        self._attn_layers = attention_layers or [len(dense_layer_sizes_d) // 2]
-        self._use_ch_attn = use_channel_attention
-        self._ch_attn_type = channel_attention_type
+        self._use_cond_norm = use_conditional_norm
         self._use_mbstd = use_minibatch_stddev
         self._mb_group = minibatch_stddev_group_size
-        self._mb_avg = minibatch_stddev_averaging
-        self._use_residual = use_residual_connections
-        self._res_scale = residual_scaling
-        self._bottleneck = bottleneck_factor
         self._use_gp = use_gradient_penalty
         self._output_units = output_units
         self._mixed_precision = use_mixed_precision
@@ -426,42 +457,11 @@ class VanillaDiscriminator(Activations):
         self._model: Optional[Model] = None
 
     # ==================================================================
-    # UTILITY LAYERS
+    # UTILITY FUNCTIONS
     # ==================================================================
 
-    def _get_dense_layer(self, units: int, use_bias: bool = True, name: str = None):
-        """Retorna Dense layer com ou sem Spectral Normalization."""
-        init = self._get_initializer()
-
-        if self._use_sn:
-            return SpectralDense(
-                units,
-                use_bias=use_bias,
-                kernel_initializer=init,
-                use_spectral_norm=True,
-                name=name
-            )
-        else:
-            return Dense(
-                units,
-                use_bias=use_bias,
-                kernel_initializer=init,
-                name=name
-            )
-
-    def _get_kernel_constraint(self):
-        """Retorna constraint baseado em configurações."""
-        # Não usado mais, mas mantido para compatibilidade
-        return None
-
-    def _get_initializer(self):
-        """Retorna inicializador otimizado."""
-        if self._use_sn:
-            return HeNormal()  # Melhor com Spectral Norm
-        return RandomNormal(self._init_mean, self._init_std)
-
     def _add_noise_layer(self, x: Layer) -> Layer:
-        """Adiciona ruído gaussiano no input (regularização)."""
+        """Adiciona ruído gaussiano ao input."""
         if not self._use_noise:
             return x
 
@@ -477,120 +477,93 @@ class VanillaDiscriminator(Activations):
         return Lambda(add_noise, name='input_noise')(x)
 
     def _minibatch_stddev_layer(self, x: Layer) -> Layer:
-        """
-        Minibatch Standard Deviation (ProGAN, StyleGAN)
-        Otimizado para performance.
-        """
+        """Minibatch Standard Deviation para detectar mode collapse."""
         if not self._use_mbstd:
             return x
 
         @tf.function
         def compute_mbstd(features):
-            group_size = tf.minimum(self._mb_group, tf.shape(features)[0])
+            # features shape: [B, S, D]
+            batch_size = tf.shape(features)[0]
+            group_size = tf.minimum(self._mb_group, batch_size)
 
-            # Reshape para grupos
-            s = tf.shape(features)
-            y = tf.reshape(features, [group_size, -1, s[1]])
-            y = tf.cast(y, tf.float32)
+            # Compute stddev across batch
+            mean = tf.reduce_mean(features, axis=0, keepdims=True)
+            stddev = tf.sqrt(tf.reduce_mean(tf.square(features - mean), axis=0) + 1e-8)
 
-            # Compute stddev
-            mean = tf.reduce_mean(y, axis=0, keepdims=True)
-            stddev = tf.sqrt(tf.reduce_mean(tf.square(y - mean), axis=0) + 1e-8)
-
-            # Average over features e spatial
-            if self._mb_avg == 'all':
-                stddev = tf.reduce_mean(stddev)
-            else:
-                stddev = tf.reduce_mean(stddev, axis=1, keepdims=True)
+            # Average over sequence and features
+            stddev = tf.reduce_mean(stddev)
 
             # Broadcast to batch
-            stddev = tf.tile(
-                tf.reshape(stddev, [1, -1]),
-                [s[0], 1]
+            stddev_feature = tf.fill([batch_size, 1, 1], stddev)
+
+            return tf.concat([features, stddev_feature], axis=-1)
+
+        # ADICIONE output_shape aqui
+        def compute_output_shape(input_shape):
+            return (input_shape[0], input_shape[1], input_shape[2] + 1)
+
+        return Lambda(
+            compute_mbstd,
+            output_shape=compute_output_shape,
+            name='minibatch_stddev'
+        )(x)
+    def _patchify(self, x: Layer, name: str) -> Layer:
+        """
+        Converte features 1D em patches (sequência).
+        [B, N] → [B, N/P, P] onde P = patch_size
+        """
+        @tf.function
+        def create_patches(features):
+            batch_size = tf.shape(features)[0]
+            n_features = tf.shape(features)[1]
+
+            # Pad se necessário
+            pad_len = (self._patch_size - (n_features % self._patch_size)) % self._patch_size
+            if pad_len > 0:
+                features = tf.pad(features, [[0, 0], [0, pad_len]])
+
+            # Reshape para patches
+            n_patches = (n_features + pad_len) // self._patch_size
+            patches = tf.reshape(
+                features,
+                [batch_size, n_patches, self._patch_size]
             )
 
-            return tf.concat([features, stddev], axis=1)
+            return patches
 
-        return Lambda(compute_mbstd, name='minibatch_stddev')(x)
-
-    def _normalization_layer(self, x: Layer, name: str) -> Layer:
-        """Adiciona normalização baseada em configuração."""
-        if self._norm_type == 'batch':
-            return BatchNormalization(name=f'{name}_bn')(x)
-        elif self._norm_type == 'layer':
-            return LayerNormalization(name=f'{name}_ln')(x)
-        return x
+        return Lambda(create_patches, name=name)(x)
 
     # ==================================================================
-    # BUILDING BLOCKS
+    # HIERARCHICAL TRANSFORMER BLOCKS
     # ==================================================================
 
-    def _dense_block(
+    def _build_transformer_level(
             self,
             x: Layer,
-            units: int,
-            name: str,
-            use_residual: bool = False
+            level: int,
+            num_classes: int
     ) -> Layer:
         """
-        Bloco denso otimizado com:
-        - Spectral Normalization opcional
-        - Bottleneck architecture para eficiência
-        - Residual connections
+        Constrói um nível da hierarquia Transformer.
+        Cada nível tem múltiplos blocos Transformer seguidos de pooling.
         """
-        identity = x
 
-        # Bottleneck (reduz computação)
-        if self._bottleneck < 1.0 and units > 64:
-            bottleneck_units = max(int(units * self._bottleneck), 32)
+        # Conditional normalization no início do nível
+        if self._use_cond_norm and level > 0:
+            # Placeholder para label (será passado depois)
+            pass
 
-            # Down-projection
-            x = self._get_dense_layer(
-                bottleneck_units,
-                name=f'{name}_bottleneck_down'
+        # Múltiplos blocos Transformer
+        for layer_idx in range(self._num_layers):
+            x = TransformerBlock(
+                d_model=self._d_model,
+                num_heads=self._num_heads,
+                dff=self._dff,
+                dropout_rate=self._dropout,
+                use_spectral_norm=self._use_sn,
+                name=f'level{level}_block{layer_idx}'
             )(x)
-            x = self._normalization_layer(x, f'{name}_bottleneck')
-            x = self._add_activation_layer(x, self._activation_fn)
-
-            # Up-projection
-            x = self._get_dense_layer(
-                units,
-                name=f'{name}_bottleneck_up'
-            )(x)
-        else:
-            x = self._get_dense_layer(
-                units,
-                name=f'{name}_dense'
-            )(x)
-
-        x = self._normalization_layer(x, name)
-        x = self._add_activation_layer(x, self._activation_fn)
-        x = Dropout(self._dropout, name=f'{name}_dropout')(x)
-
-        # Residual connection
-        if use_residual and identity.shape[-1] == units:
-            x = Lambda(
-                lambda t: t[0] + self._res_scale * t[1],
-                name=f'{name}_residual'
-            )([identity, x])
-
-        return x
-
-    def _attention_block(self, x: Layer, layer_idx: int) -> Layer:
-        """Adiciona attention mechanisms."""
-        name = f'layer_{layer_idx}'
-
-        # Self-Attention
-        if self._use_attn and layer_idx in self._attn_layers:
-            units = x.shape[-1]
-            x = SelfAttention(units, name=f'{name}_self_attn')(x)
-
-        # Channel Attention (SE ou ECA)
-        if self._use_ch_attn:
-            if self._ch_attn_type == 'eca':
-                x = EfficientChannelAttention(name=f'{name}_eca')(x)
-            else:  # 'se' (default, mais robusto)
-                x = SqueezeExcitation(ratio=8, name=f'{name}_se')(x)
 
         return x
 
@@ -599,7 +572,7 @@ class VanillaDiscriminator(Activations):
     # ==================================================================
 
     def get_discriminator(self) -> Model:
-        """Constrói o discriminador avançado."""
+        """Constrói o discriminador Transformer Hierárquico."""
 
         if not self._class_info:
             raise ValueError("number_samples_per_class is required")
@@ -612,71 +585,171 @@ class VanillaDiscriminator(Activations):
         num_classes = self._class_info['number_classes']
         input_size = int(np.prod(self._output_shape))
 
-        # Inputs
+        # ==============================================================
+        # INPUTS
+        # ==============================================================
         x_in = Input(shape=(input_size,), dtype=self._dtype, name='input_real')
         y_in = Input(shape=(num_classes,), dtype=self._dtype, name='input_label')
 
         # Adiciona ruído ao input
         x = self._add_noise_layer(x_in)
 
-        # Minibatch stddev
-        x = self._minibatch_stddev_layer(x)
+        # ==============================================================
+        # EMBEDDING + CONDITIONING
+        # ==============================================================
 
-        # Modulation inicial com label (conditional)
-        if self._use_cbn:
-            # Embedding da label
-            label_embed = self._get_dense_layer(
-                input_size,
-                name='label_embedding'
-            )(y_in)
+        # Label embedding
+        label_embed = Dense(
+            input_size,
+            kernel_initializer=HeNormal(),
+            name='label_embedding'
+        )(y_in)
 
-            # Concatena com features
-            x = Concatenate(name='concat_label')([x, label_embed])
+        # Combina input com label
+        x = Concatenate(name='concat_input_label')([x, label_embed])
 
-            # Projection layer
-            x = self._get_dense_layer(
-                32,
-                name='input_projection'
+        # Patchify: converte em sequência
+        x = self._patchify(x, 'patchify')
+
+        # Projection para d_model
+        x = Dense(
+            self._d_model,
+            kernel_initializer=HeNormal(),
+            name='patch_projection'
+        )(x)
+
+        # Positional encoding
+        max_seq_len = (input_size * 2) // self._patch_size + 10
+        x = PositionalEncoding(max_length=max_seq_len, name='pos_encoding')(x)
+
+        # ==============================================================
+        # HIERARCHICAL TRANSFORMER
+        # ==============================================================
+
+        for level in range(self._hierarchy):
+            # Transformer blocks
+            x = self._build_transformer_level(x, level, num_classes)
+
+            # Conditional normalization
+            if self._use_cond_norm:
+                x = ConditionalLayerNorm(
+                    self._d_model,
+                    num_classes,
+                    name=f'cond_norm_level{level}'
+                )([x, y_in])
+
+            # Pooling hierárquico (exceto no último nível)
+            if level < self._hierarchy - 1:
+                x = HierarchicalPooling(
+                    pool_size=self._pool_size,
+                    name=f'pool_level{level}'
+                )(x)
+
+        # ==============================================================
+        # GLOBAL AGGREGATION
+        # ==============================================================
+
+        # Minibatch stddev antes do pooling final
+        x = MinibatchStdDev()(x)
+
+        # Global average pooling
+        x = Lambda(
+            lambda t: tf.reduce_mean(t, axis=1),
+            name='global_avg_pool'
+        )(x)
+
+        # ==============================================================
+        # OUTPUT HEAD
+        # ==============================================================
+
+        # Final projection
+        if self._use_sn:
+            x = SpectralDense(
+                self._d_model // 2,
+                activation='gelu',
+                use_spectral_norm=True,
+                name='pre_output'
+            )(x)
+        else:
+            x = Dense(
+                self._d_model // 2,
+                activation='gelu',
+                name='pre_output'
             )(x)
 
-        # Processing blocks
-        for i, units in enumerate([32]):
-            # Dense block
-            use_res = self._use_residual and i > 0
-            x = self._dense_block(x, units, f'block_{i}', use_res)
+        x = Dropout(self._dropout, name='output_dropout')(x)
 
-            # Conditional BN (se aplicável)
-            if self._use_cbn and i < len(self._dense_sizes) - 1:
-                x = ConditionalBatchNorm(units, num_classes, name=f'cbn_{i}')(
-                    [x, y_in]
-                )
-
-            # Attention mechanisms
-            x = self._attention_block(x, i)
-
-        # Output layer
-        x = self._get_dense_layer(
-            self._output_units,
-            name='output_logits'
-        )(x)
+        # Output logits
+        if self._use_sn:
+            x = SpectralDense(
+                self._output_units,
+                use_spectral_norm=True,
+                name='output_logits'
+            )(x)
+        else:
+            x = Dense(
+                self._output_units,
+                name='output_logits'
+            )(x)
 
         if self._last_activation is not None:
             x = self._add_activation_layer(x, self._last_activation)
 
-        # Build model
+        # ==============================================================
+        # BUILD MODEL
+        # ==============================================================
+
         model = Model(
             inputs=[x_in, y_in],
             outputs=x,
-            name='AdvancedDiscriminator'
+            name='HierarchicalTransformerDiscriminator'
         )
 
         self._model = model
+
+        # Informações
+        print("\n" + "=" * 70)
+        print("🚀 Hierarchical Transformer Discriminator Configuration:")
+        print("=" * 70)
+        print(f"✓ Architecture: {self._hierarchy} hierarchical levels")
+        print(f"✓ Transformer: d_model={self._d_model}, heads={self._num_heads}")
+        print(f"✓ Blocks per level: {self._num_layers}")
+        print(f"✓ FFN dimension: {self._dff}")
+        print(f"✓ Patch size: {self._patch_size}")
+        print(f"✓ Pooling factor: {self._pool_size}")
+
+        # Estimar redução de sequência
+        seq_reduction = self._pool_size ** (self._hierarchy - 1)
+        print(f"✓ Sequence reduction: {seq_reduction}x (N → N/{seq_reduction})")
+
+        if self._use_sn:
+            print("✓ Spectral Normalization in FFN")
+        if self._use_cond_norm:
+            print("✓ Conditional Layer Normalization")
+        if self._use_mbstd:
+            print(f"✓ Minibatch StdDev (group_size={self._mb_group})")
+        if self._use_noise:
+            print(f"✓ Input noise (stddev={self._noise_std})")
+        if self._use_gp:
+            print("✓ Gradient Penalty ready")
+
+        # Estimativa de economia de parâmetros
+        print("\n💡 Parameter Efficiency:")
+        print(f"   - Attention complexity per level:")
+        base_seq = (input_size * 2) // self._patch_size
+        for i in range(self._hierarchy):
+            seq_len = base_seq // (self._pool_size ** i)
+            complexity = seq_len ** 2
+            print(f"     Level {i}: O({seq_len}²) = O({complexity:,})")
+
+        print("=" * 70 + "\n")
+
         model.summary()
 
         return model
 
     # ==================================================================
-    # GRADIENT PENALTY (para WGAN-GP)
+    # GRADIENT PENALTY
     # ==================================================================
 
     @tf.function
@@ -687,27 +760,20 @@ class VanillaDiscriminator(Activations):
             labels: tf.Tensor,
             lambda_gp: float = 10.0
     ) -> tf.Tensor:
-        """
-        Computa gradient penalty para WGAN-GP.
-        Uso: adicione ao loss do discriminador.
-        """
+        """Gradient penalty para WGAN-GP."""
         if not self._use_gp:
             return tf.constant(0.0)
 
         batch_size = tf.shape(real_samples)[0]
         alpha = tf.random.uniform([batch_size, 1], 0.0, 1.0)
 
-        # Interpolação
         interpolated = alpha * real_samples + (1 - alpha) * fake_samples
 
-        # Compute gradients
         with tf.GradientTape() as tape:
             tape.watch(interpolated)
             pred = self._model([interpolated, labels], training=True)
 
         gradients = tape.gradient(pred, interpolated)
-
-        # Compute gradient penalty
         slopes = tf.sqrt(tf.reduce_sum(tf.square(gradients), axis=1) + 1e-8)
         gp = tf.reduce_mean(tf.square(slopes - 1.0))
 
@@ -731,14 +797,18 @@ class VanillaDiscriminator(Activations):
         return {
             'latent_dimension': self._latent_dim,
             'output_shape': self._output_shape,
-            'dense_layer_sizes': self._dense_sizes,
+            'd_model': self._d_model,
+            'num_heads': self._num_heads,
+            'dff': self._dff,
+            'num_layers_per_level': self._num_layers,
+            'hierarchy_levels': self._hierarchy,
+            'pool_size': self._pool_size,
+            'patch_size': self._patch_size,
             'use_spectral_norm': self._use_sn,
-            'use_self_attention': self._use_attn,
-            'use_channel_attention': self._use_ch_attn,
-            'channel_attention_type': self._ch_attn_type,
+            'use_conditional_norm': self._use_cond_norm,
             'use_minibatch_stddev': self._use_mbstd,
-            'norm_type': self._norm_type,
-            'use_conditional_bn': self._use_cbn,
-            'use_residual_connections': self._use_residual,
+            'use_gradient_penalty': self._use_gp,
+            'use_input_noise': self._use_noise,
+            'noise_stddev': self._noise_std,
             'mixed_precision': self._mixed_precision
         }
