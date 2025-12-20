@@ -38,9 +38,6 @@ class SpectralDense(Layer):
     """
     Dense layer com Spectral Normalization integrada.
     Mais eficiente e compatível com tf.function.
-
-    Spectral Norm é uma das melhores técnicas para estabilizar
-    treinamento de discriminadores em GANs.
     """
 
     def __init__(
@@ -134,12 +131,101 @@ class SpectralDense(Layer):
         return config
 
 
+class EfficientChannelAttention(Layer):
+    """
+    ECA adaptado para features densas (1D).
+    Usa convolução 1D ao invés de 2D para vetores de features.
+    """
+
+    def __init__(self, gamma: int = 2, b: int = 1, **kwargs):
+        super().__init__(**kwargs)
+        self.gamma = gamma
+        self.b = b
+
+    def build(self, input_shape):
+        channels = input_shape[-1]
+        # Calcula kernel adaptativo
+        t = int(abs(math.log2(channels) + self.b) / self.gamma)
+        self.k_size = max(3, t if t % 2 else t + 1)
+
+        # Convolução 1D para features densas
+        self.conv = tf.keras.layers.Conv1D(
+            1,
+            self.k_size,
+            padding='same',
+            use_bias=False,
+            name='eca_conv1d'
+        )
+        super().build(input_shape)
+
+    def call(self, x):
+        # x shape: (batch, features)
+        # Expande para (batch, features, 1) para Conv1D
+        x_expanded = tf.expand_dims(x, axis=-1)
+
+        # Apply 1D convolution
+        attention = self.conv(x_expanded)  # (batch, features, 1)
+        attention = tf.nn.sigmoid(attention)
+        attention = tf.squeeze(attention, axis=-1)  # (batch, features)
+
+        # Apply attention
+        return x * attention
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            'gamma': self.gamma,
+            'b': self.b
+        })
+        return config
+
+
+class SqueezeExcitation(Layer):
+    """
+    Squeeze-and-Excitation block adaptado para features densas.
+    Alternativa mais simples e robusta ao ECA.
+    """
+
+    def __init__(self, ratio: int = 8, **kwargs):
+        super().__init__(**kwargs)
+        self.ratio = ratio
+
+    def build(self, input_shape):
+        channels = input_shape[-1]
+        self.fc1 = Dense(
+            max(channels // self.ratio, 8),
+            activation='relu',
+            use_bias=False,
+            name='se_fc1'
+        )
+        self.fc2 = Dense(
+            channels,
+            activation='sigmoid',
+            use_bias=False,
+            name='se_fc2'
+        )
+        super().build(input_shape)
+
+    def call(self, x):
+        # Global average pooling já está implícito (features densas)
+        squeeze = self.fc1(x)
+        excitation = self.fc2(squeeze)
+        return x * excitation
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({'ratio': self.ratio})
+        return config
+
+
 class ConditionalBatchNorm(Layer):
-    """
-    Conditional Batch Normalization para discriminadores condicionais.
-    Modula as features baseado na classe/label.
-    Muito eficaz em GANs condicionais com arquiteturas densas.
-    """
+    """Conditional Batch Normalization - melhor que FiLM para GANs."""
 
     def __init__(self, num_features: int, num_classes: int, **kwargs):
         super().__init__(**kwargs)
@@ -175,9 +261,6 @@ class SelfAttention(Layer):
     """
     Self-Attention para features densas (feature-wise attention).
     Calcula atenção entre diferentes dimensões do vetor de features.
-
-    Permite que o discriminador aprenda relações importantes entre
-    diferentes features do input, melhorando discriminação.
     """
 
     def __init__(self, channels: int, reduction: int = 8, **kwargs):
@@ -213,7 +296,11 @@ class SelfAttention(Layer):
         k = self.key(x)  # [B, H']
         v = self.value(x)  # [B, H']
 
-        # Compute attention weights (element-wise for dense features)
+        # Compute attention: queremos atenção "global" sobre as features
+        # Para batch de features, fazemos atenção entre samples
+        # Expandir para fazer matmul: [B, 1, H'] @ [B, H', 1] = [B, 1, 1]
+
+        # Alternativa: atenção elemento-wise (mais simples e eficiente)
         attention_weights = tf.nn.softmax(
             q * k / tf.sqrt(tf.cast(self.hidden_dim, tf.float32)),
             axis=-1
@@ -242,26 +329,16 @@ class SelfAttention(Layer):
 
 class VanillaDiscriminator(Activations):
     """
-    Discriminator otimizado para arquiteturas DENSAS com técnicas SOTA aplicáveis:
+    Advanced Discriminator com técnicas SOTA:
 
-    ✓ Técnicas mantidas (fazem sentido para Dense):
-    - Spectral Normalization (SNGAN): estabiliza treinamento
-    - Conditional Batch Norm: conditioning via normalização
-    - Self-Attention: aprende relações entre features
-    - Minibatch Standard Deviation (ProGAN): detecta mode collapse
-    - Residual connections: facilita gradientes
-    - Gradient Penalty (WGAN-GP): alternativa ao clipping
-    - Input noise: regularização adicional
-    - Bottleneck architecture: eficiência computacional
-    - Mixed precision: performance
-
-    ✗ Técnicas removidas (específicas para Conv2D/imagens):
-    - ECA (Efficient Channel Attention): projetado para canais espaciais (H×W×C)
-    - Squeeze-and-Excitation: originalmente para feature maps 2D
-
-    Nota: Essas técnicas de "channel attention" foram projetadas para explorar
-    relações espaciais entre canais em imagens. Em features densas 1D, não há
-    estrutura espacial para explorar da mesma forma.
+    - Spectral Normalization (SNGAN, 2018)
+    - Conditional Batch Normalization (cGAN improvements)
+    - Efficient Channel Attention ou Squeeze-Excitation
+    - Self-Attention otimizado
+    - Minibatch Discrimination otimizado
+    - Progressive Growing ready
+    - Mixed Precision ready
+    - Gradient Penalty ready
     """
 
     def __init__(
@@ -285,9 +362,11 @@ class VanillaDiscriminator(Activations):
             # Normalization
             norm_type: str = 'layer',  # 'batch', 'layer', 'none'
             use_conditional_bn: bool = True,
-            # Attention
+            # Attention & Features
             use_self_attention: bool = True,
             attention_layers: List[int] = None,  # Indices de layers com attention
+            use_channel_attention: bool = True,
+            channel_attention_type: str = 'eca',  # 'se' (Squeeze-Excitation) ou 'eca'
             # Minibatch Discrimination
             use_minibatch_stddev: bool = True,
             minibatch_stddev_group_size: int = 8,
@@ -332,6 +411,8 @@ class VanillaDiscriminator(Activations):
         self._use_cbn = use_conditional_bn
         self._use_attn = use_self_attention
         self._attn_layers = attention_layers or [len(dense_layer_sizes_d) // 2]
+        self._use_ch_attn = use_channel_attention
+        self._ch_attn_type = channel_attention_type
         self._use_mbstd = use_minibatch_stddev
         self._mb_group = minibatch_stddev_group_size
         self._mb_avg = minibatch_stddev_averaging
@@ -368,6 +449,11 @@ class VanillaDiscriminator(Activations):
                 name=name
             )
 
+    def _get_kernel_constraint(self):
+        """Retorna constraint baseado em configurações."""
+        # Não usado mais, mas mantido para compatibilidade
+        return None
+
     def _get_initializer(self):
         """Retorna inicializador otimizado."""
         if self._use_sn:
@@ -375,10 +461,7 @@ class VanillaDiscriminator(Activations):
         return RandomNormal(self._init_mean, self._init_std)
 
     def _add_noise_layer(self, x: Layer) -> Layer:
-        """
-        Adiciona ruído gaussiano no input (regularização).
-        Ajuda a tornar o discriminador mais robusto e menos overconfident.
-        """
+        """Adiciona ruído gaussiano no input (regularização)."""
         if not self._use_noise:
             return x
 
@@ -395,13 +478,8 @@ class VanillaDiscriminator(Activations):
 
     def _minibatch_stddev_layer(self, x: Layer) -> Layer:
         """
-        Minibatch Standard Deviation (ProGAN, StyleGAN).
-
-        Adiciona uma feature extra com a variação estatística do batch.
-        Ajuda o discriminador a detectar quando o generator está produzindo
-        amostras muito similares (mode collapse).
-
-        Funciona perfeitamente com features densas.
+        Minibatch Standard Deviation (ProGAN, StyleGAN)
+        Otimizado para performance.
         """
         if not self._use_mbstd:
             return x
@@ -419,7 +497,7 @@ class VanillaDiscriminator(Activations):
             mean = tf.reduce_mean(y, axis=0, keepdims=True)
             stddev = tf.sqrt(tf.reduce_mean(tf.square(y - mean), axis=0) + 1e-8)
 
-            # Average over features
+            # Average over features e spatial
             if self._mb_avg == 'all':
                 stddev = tf.reduce_mean(stddev)
             else:
@@ -458,11 +536,11 @@ class VanillaDiscriminator(Activations):
         Bloco denso otimizado com:
         - Spectral Normalization opcional
         - Bottleneck architecture para eficiência
-        - Residual connections para gradientes
+        - Residual connections
         """
         identity = x
 
-        # Bottleneck (reduz computação mantendo capacidade)
+        # Bottleneck (reduz computação)
         if self._bottleneck < 1.0 and units > 64:
             bottleneck_units = max(int(units * self._bottleneck), 32)
 
@@ -499,14 +577,20 @@ class VanillaDiscriminator(Activations):
         return x
 
     def _attention_block(self, x: Layer, layer_idx: int) -> Layer:
-        """
-        Adiciona self-attention se configurado.
-        Permite que o modelo aprenda quais features são mais importantes
-        para discriminação.
-        """
+        """Adiciona attention mechanisms."""
+        name = f'layer_{layer_idx}'
+
+        # Self-Attention
         if self._use_attn and layer_idx in self._attn_layers:
             units = x.shape[-1]
-            x = SelfAttention(units, name=f'layer_{layer_idx}_self_attn')(x)
+            x = SelfAttention(units, name=f'{name}_self_attn')(x)
+
+        # Channel Attention (SE ou ECA)
+        if self._use_ch_attn:
+            if self._ch_attn_type == 'eca':
+                x = EfficientChannelAttention(name=f'{name}_eca')(x)
+            else:  # 'se' (default, mais robusto)
+                x = SqueezeExcitation(ratio=8, name=f'{name}_se')(x)
 
         return x
 
@@ -515,7 +599,7 @@ class VanillaDiscriminator(Activations):
     # ==================================================================
 
     def get_discriminator(self) -> Model:
-        """Constrói o discriminador otimizado para arquiteturas densas."""
+        """Constrói o discriminador avançado."""
 
         if not self._class_info:
             raise ValueError("number_samples_per_class is required")
@@ -532,13 +616,13 @@ class VanillaDiscriminator(Activations):
         x_in = Input(shape=(input_size,), dtype=self._dtype, name='input_real')
         y_in = Input(shape=(num_classes,), dtype=self._dtype, name='input_label')
 
-        # Adiciona ruído ao input (regularização)
+        # Adiciona ruído ao input
         x = self._add_noise_layer(x_in)
 
-        # Minibatch stddev (detecta mode collapse)
+        # Minibatch stddev
         x = self._minibatch_stddev_layer(x)
 
-        # Conditioning inicial com label
+        # Modulation inicial com label (conditional)
         if self._use_cbn:
             # Embedding da label
             label_embed = self._get_dense_layer(
@@ -551,30 +635,23 @@ class VanillaDiscriminator(Activations):
 
             # Projection layer
             x = self._get_dense_layer(
-                self._dense_sizes[0] if self._dense_sizes else 256,
-                name='input_projection'
-            )(x)
-        else:
-            # Sem CBN, apenas concatena
-            x = Concatenate(name='concat_label')([x, y_in])
-            x = self._get_dense_layer(
-                self._dense_sizes[0] if self._dense_sizes else 256,
+                32,
                 name='input_projection'
             )(x)
 
         # Processing blocks
-        for i, units in enumerate(self._dense_sizes):
+        for i, units in enumerate([128, 128]):
             # Dense block
             use_res = self._use_residual and i > 0
             x = self._dense_block(x, units, f'block_{i}', use_res)
 
-            # Conditional BN (modula features pela label)
+            # Conditional BN (se aplicável)
             if self._use_cbn and i < len(self._dense_sizes) - 1:
                 x = ConditionalBatchNorm(units, num_classes, name=f'cbn_{i}')(
                     [x, y_in]
                 )
 
-            # Self-attention
+            # Attention mechanisms
             x = self._attention_block(x, i)
 
         # Output layer
@@ -590,34 +667,10 @@ class VanillaDiscriminator(Activations):
         model = Model(
             inputs=[x_in, y_in],
             outputs=x,
-            name='DenseDiscriminator'
+            name='AdvancedDiscriminator'
         )
 
         self._model = model
-
-        # Mostra informações
-        print("\n" + "=" * 60)
-        print("🎯 Dense Discriminator Configuration:")
-        print("=" * 60)
-        print(f"✓ Architecture: {len(self._dense_sizes)} hidden layers")
-        print(f"✓ Layer sizes: {self._dense_sizes}")
-        if self._use_sn:
-            print("✓ Spectral Normalization enabled")
-        if self._use_mbstd:
-            print(f"✓ Minibatch StdDev (group_size={self._mb_group})")
-        print(f"✓ Normalization type: {self._norm_type}")
-        if self._use_cbn:
-            print("✓ Conditional Batch Normalization")
-        if self._use_attn:
-            print(f"✓ Self-Attention at layers {self._attn_layers}")
-        if self._use_residual:
-            print(f"✓ Residual connections (scale={self._res_scale})")
-        if self._use_noise:
-            print(f"✓ Input noise (stddev={self._noise_std})")
-        if self._use_gp:
-            print("✓ Gradient Penalty ready")
-        print("=" * 60 + "\n")
-
         model.summary()
 
         return model
@@ -636,13 +689,7 @@ class VanillaDiscriminator(Activations):
     ) -> tf.Tensor:
         """
         Computa gradient penalty para WGAN-GP.
-
-        WGAN-GP usa gradient penalty ao invés de weight clipping,
-        resultando em treinamento mais estável.
-
-        Uso:
-            gp = discriminator.gradient_penalty(real, fake, labels)
-            d_loss = d_loss + gp
+        Uso: adicione ao loss do discriminador.
         """
         if not self._use_gp:
             return tf.constant(0.0)
@@ -650,7 +697,7 @@ class VanillaDiscriminator(Activations):
         batch_size = tf.shape(real_samples)[0]
         alpha = tf.random.uniform([batch_size, 1], 0.0, 1.0)
 
-        # Interpolação entre real e fake
+        # Interpolação
         interpolated = alpha * real_samples + (1 - alpha) * fake_samples
 
         # Compute gradients
@@ -687,16 +734,11 @@ class VanillaDiscriminator(Activations):
             'dense_layer_sizes': self._dense_sizes,
             'use_spectral_norm': self._use_sn,
             'use_self_attention': self._use_attn,
-            'attention_layers': self._attn_layers,
+            'use_channel_attention': self._use_ch_attn,
+            'channel_attention_type': self._ch_attn_type,
             'use_minibatch_stddev': self._use_mbstd,
-            'minibatch_stddev_group_size': self._mb_group,
             'norm_type': self._norm_type,
             'use_conditional_bn': self._use_cbn,
             'use_residual_connections': self._use_residual,
-            'residual_scaling': self._res_scale,
-            'bottleneck_factor': self._bottleneck,
-            'use_gradient_penalty': self._use_gp,
-            'use_input_noise': self._use_noise,
-            'noise_stddev': self._noise_std,
             'mixed_precision': self._mixed_precision
         }

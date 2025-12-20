@@ -5,6 +5,8 @@ import tensorflow as tf
 from tensorflow.keras.initializers import RandomNormal
 
 os.environ["ML_FRAMEWORK"] = "tensorflow"
+from Engine.models.WassersteinGP import WassersteinGP
+
 
 from Engine.architectures.adversarial.AdversarialModel import AdversarialModel
 from Engine.models.Adversarial import Adversarial
@@ -32,9 +34,9 @@ except ImportError:
 IMAGE_SIZE = (64, 64)
 INPUT_SHAPE = (64, 64, 3)
 DATASET_DIR = "./50k"
-MAX_SAMPLES = 4400
+MAX_SAMPLES = 8400
 N_CLASSES = 64
-BATCH_LIMIT = 4400
+BATCH_LIMIT = 8400
 LATENT_DIMENSION = 64
 CODEBOOK_SIZE = N_CLASSES
 CODEBOOK_DIM = 64
@@ -82,9 +84,8 @@ if N_CLASSES > 10:
     print(f"  ... (total de {N_CLASSES} classes)")
 
 models = {
-    "adversarial": Adversarial(
+    "adversarial": WassersteinGP(
         number_classes=N_CLASSES,
-        number_samples_per_class=number_samples_per_class,
     ),
 }
 
