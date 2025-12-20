@@ -31,10 +31,6 @@ except ImportError as error:
     sys.exit(-1)
 
 
-# ============================================================================
-#                    VERSÃO ULTRA ESTÁVEL - TESTADA
-# ============================================================================
-
 class RMSNorm(Layer):
     """Root Mean Square Layer Normalization - STABLE"""
 
@@ -63,7 +59,6 @@ class RMSNorm(Layer):
         config = super().get_config()
         config.update({'epsilon': self.epsilon})
         return config
-
 
 class SpectralDense(Layer):
     """
@@ -148,7 +143,6 @@ class SpectralDense(Layer):
         })
         return config
 
-
 class DepthwiseSeparableConv(Layer):
     """Depthwise Separable Convolution - STABLE"""
 
@@ -190,7 +184,6 @@ class DepthwiseSeparableConv(Layer):
             'strides': self.strides
         }
 
-
 class SqueezeExcitation(Layer):
     """Squeeze-and-Excitation Block - STABLE"""
 
@@ -219,7 +212,6 @@ class SqueezeExcitation(Layer):
 
     def get_config(self):
         return {**super().get_config(), 'ratio': self.ratio}
-
 
 class FiLM(Layer):
     """Feature-wise Linear Modulation - BATCH SAFE"""
@@ -329,7 +321,6 @@ class EfficientAttention(Layer):
             'head_dim': self.head_dim
         }
 
-
 class GLU(Layer):
     """Gated Linear Unit - STABLE"""
 
@@ -339,7 +330,6 @@ class GLU(Layer):
 
     def compute_output_shape(self, input_shape):
         return input_shape[:-1] + (input_shape[-1] // 2,)
-
 
 class ConvTransformerBlock(Layer):
     """Hybrid Conv-Transformer Block - ULTRA STABLE"""
@@ -415,7 +405,6 @@ class ConvTransformerBlock(Layer):
             'dropout_rate': self.dropout_rate
         }
 
-
 class MultiScaleFusion(Layer):
     """Multi-Scale Feature Fusion - BATCH SAFE"""
 
@@ -460,10 +449,6 @@ class MultiScaleFusion(Layer):
             fused.append(x * weights[i])
 
         return tf.add_n(fused)
-
-# ============================================================================
-#                         GENERATOR - ULTRA STABLE
-# ============================================================================
 
 class VanillaGenerator(Activations):
     """
