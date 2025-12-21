@@ -273,7 +273,6 @@ class AlgorithmDenoisingDiffusionTensorflow(tensorflow.keras.Model):
         raw_data, label = self._prepare_batch(data)
 
         loss_diffusion = self.train_diffusion_model(raw_data, label)
-        self.update_ema_weights()
         return {"Diffusion_loss": loss_diffusion if loss_diffusion is not None else 0}
 
     def fit(self, x=None, y=None, batch_size=32, epochs=1, verbose=1,
@@ -563,11 +562,9 @@ class AlgorithmDenoisingDiffusionTensorflow(tensorflow.keras.Model):
         return loss_diffusion
 
     def update_ema_weights(self):
-        """
-        Updates the weights of the second UNet model using exponential moving average.
-        """
-        for weight, ema_weight in zip(self._network.weights, self._second_unet_model.weights):
-            ema_weight.assign(self._ema * ema_weight + (1 - self._ema) * weight)
+        for w, ew in zip(self._network.trainable_weights,
+                         self._second_unet_model.trainable_weights):
+            ew.assign_add((1.0 - self._ema) * (w - ew))
 
     def generate_data(self, labels, batch_size):
         """

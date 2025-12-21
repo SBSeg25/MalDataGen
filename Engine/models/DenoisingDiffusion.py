@@ -34,7 +34,7 @@ DEFAULT_DIFFUSION_UNET_NUMBER_RESIDUAL_BLOCKS = 1
 DEFAULT_DIFFUSION_UNET_GROUP_NORMALIZATION = 1
 DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION = 'swish'
 DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION_ALPHA = 0.05
-DEFAULT_DIFFUSION_UNET_NUMBER_EPOCHS = 100
+DEFAULT_DIFFUSION_UNET_NUMBER_EPOCHS = 1
 DEFAULT_DIFFUSION_GAUSSIAN_BETA_START = 1e-4
 DEFAULT_DIFFUSION_GAUSSIAN_BETA_END = 0.02
 DEFAULT_DIFFUSION_GAUSSIAN_TIME_STEPS = 500
@@ -334,7 +334,9 @@ class DenoisingDiffusion:
                     f"First attempt: {e}. Second attempt: {e2}"
                 ) from e2
 
-        # Initialize the first instance of UNet
+        import tensorflow as tf
+
+        # Initialize ONLY the first instance of UNet
         self._denoising_first_instance_unet = DenoisingDiffusionUNetModel(
             output_shape=input_shape,
             embedding_channels=self._denoising_diffusion_unet_num_embedding_channels,
@@ -348,26 +350,43 @@ class DenoisingDiffusion:
             number_samples_per_class=self._number_samples_per_class
         )
 
-        # Initialize the second instance of UNet
-        self._denoising_second_instance_unet = DenoisingDiffusionUNetModel(
-            output_shape=input_shape,
-            embedding_channels=self._denoising_diffusion_unet_num_embedding_channels,
-            list_neurons_per_level=self._denoising_diffusion_unet_channels_per_level,
-            list_attentions=self._denoising_diffusion_unet_attention_mode,
-            number_residual_blocks=self._denoising_diffusion_unet_num_residual_blocks,
-            normalization_groups=self._denoising_diffusion_unet_group_normalization,
-            intermediary_activation_function=self._denoising_diffusion_unet_intermediary_activation,
-            intermediary_activation_alpha=self._denoising_diffusion_unet_intermediary_activation_alpha,
-            last_layer_activation=self._denoising_diffusion_unet_last_layer_activation,
-            number_samples_per_class=self._number_samples_per_class
-        )
-
-        # Build the models
+        # Build the first model
         self._denoising_first_unet_model = self._denoising_first_instance_unet.build_model()
-        self._denoising_second_unet_model = self._denoising_second_instance_unet.build_model()
 
-        # Synchronize weights
-        self._denoising_second_unet_model.set_weights(self._denoising_first_unet_model.get_weights())
+        # CRITICAL: Clone the model instead of creating a second instance
+        # This ensures IDENTICAL architecture
+        try:
+            # Method 1: Using clone_model (recommended)
+            from tensorflow.keras.models import clone_model
+            self._denoising_second_unet_model = clone_model(self._denoising_first_unet_model)
+            self._denoising_second_unet_model.set_weights(self._denoising_first_unet_model.get_weights())
+        except Exception as e:
+            logging.warning(f"clone_model failed: {e}. Trying alternative method...")
+            # Method 2: Manual cloning via model architecture
+            try:
+                model_config = self._denoising_first_unet_model.get_config()
+                self._denoising_second_unet_model = tf.keras.Model.from_config(model_config)
+                self._denoising_second_unet_model.set_weights(self._denoising_first_unet_model.get_weights())
+            except Exception as e2:
+                logging.error(f"Alternative cloning failed: {e2}. Creating second instance...")
+                # Fallback: Create second instance (original method)
+                self._denoising_second_instance_unet = DenoisingDiffusionUNetModel(
+                    output_shape=input_shape,
+                    embedding_channels=self._denoising_diffusion_unet_num_embedding_channels,
+                    list_neurons_per_level=self._denoising_diffusion_unet_channels_per_level,
+                    list_attentions=self._denoising_diffusion_unet_attention_mode,
+                    number_residual_blocks=self._denoising_diffusion_unet_num_residual_blocks,
+                    normalization_groups=self._denoising_diffusion_unet_group_normalization,
+                    intermediary_activation_function=self._denoising_diffusion_unet_intermediary_activation,
+                    intermediary_activation_alpha=self._denoising_diffusion_unet_intermediary_activation_alpha,
+                    last_layer_activation=self._denoising_diffusion_unet_last_layer_activation,
+                    number_samples_per_class=self._number_samples_per_class
+                )
+                self._denoising_second_unet_model = self._denoising_second_instance_unet.build_model()
+                self._denoising_second_unet_model.set_weights(self._denoising_first_unet_model.get_weights())
+
+        logging.info(f"✓ UNet models created and synchronized: "
+                     f"{len(self._denoising_first_unet_model.trainable_weights)} trainable weights")
 
         # Initialize GaussianDiffusion utility
         self._denoising_gaussian_diffusion_util = GaussianDenoisingDiffusion(
@@ -377,7 +396,6 @@ class DenoisingDiffusion:
             clip_min=self._denoising_diffusion_gaussian_clip_min,
             clip_max=self._denoising_diffusion_gaussian_clip_max
         )
-
     def _validate_callbacks(self, callbacks) -> list:
         """
         Validates and sanitizes the callbacks parameter.
