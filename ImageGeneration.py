@@ -3,10 +3,11 @@ import numpy as np
 from PIL import Image
 import tensorflow as tf
 from tensorflow.keras.initializers import RandomNormal
-
+os.environ["ML_FRAMEWORK"] = "tensorflow"
+from Engine.models.Adversarial import Adversarial
 from Engine.models.DenoisingDiffusion import DenoisingDiffusion
 
-os.environ["ML_FRAMEWORK"] = "tensorflow"
+
 from Engine.models.WassersteinGP import WassersteinGP
 
 
@@ -33,9 +34,9 @@ except ImportError:
 IMAGE_SIZE = (64, 64)
 INPUT_SHAPE = (64, 64, 3)
 DATASET_DIR = "./50k"
-MAX_SAMPLES = 8400
-N_CLASSES = 64
-BATCH_LIMIT = 8400
+MAX_SAMPLES = 9600
+N_CLASSES = 10
+BATCH_LIMIT = 9600
 LATENT_DIMENSION = 64
 CODEBOOK_SIZE = N_CLASSES
 CODEBOOK_DIM = 64
@@ -62,52 +63,31 @@ for img_name in image_files:
         break
 
 x_real_samples = np.array(x_real_samples, dtype=np.float32)
-print(f"✓ Carregadas {len(x_real_samples)} imagens")
-
-# =====================
-# Gerar Rótulos Aleatórios (0-63)
-# =====================
-np.random.seed(42)  # Para reprodutibilidade
+np.random.seed(42)
 y_real_samples_tuples = np.random.randint(0, N_CLASSES, size=len(x_real_samples))
-print(f"✓ Gerados {len(y_real_samples_tuples)} rótulos aleatórios (0-{N_CLASSES - 1})")
 
 number_samples_per_class = {
     "number_classes": N_CLASSES,
     "classes": {i: len(y_real_samples_tuples[y_real_samples_tuples == i]) for i in range(N_CLASSES)}
 }
 
-print(f"\n📊 Distribuição de classes:")
-for i in range(min(10, N_CLASSES)):  # Mostrar primeiras 10 classes
-    print(f"  Classe {i}: {number_samples_per_class['classes'][i]} amostras")
-if N_CLASSES > 10:
-    print(f"  ... (total de {N_CLASSES} classes)")
-
 models = {
-    "adversarial": DenoisingDiffusion(
+    "adversarial": WassersteinGP(
         number_classes=N_CLASSES,
     ),
 }
 
 for model_name, model in models.items():
-    print(f"\n{'=' * 60}")
-    print(f"🔧 Modelo: {model_name}")
-    print(f"{'=' * 60}")
-
-    print(f"⏳ Treinando {model_name}...")
     model.fit_model(
         input_shape=INPUT_SHAPE,
         x_real_samples=x_real_samples,
         y_real_samples=y_real_samples_tuples,
         flatten=True
     )
-    print(f"✓ Treinamento concluído")
 
-    print(f"🎨 Gerando amostras sintéticas...")
-
-    # Definir quantas amostras gerar por classe
     samples_per_class_dict = {
         "number_classes": N_CLASSES,
-        "classes": {i: 8 for i in range(N_CLASSES)}  # 8 amostras por classe
+        "classes": {i: 6 for i in range(N_CLASSES)}
     }
 
     synthetic_samples = model.get_samples(samples_per_class_dict)

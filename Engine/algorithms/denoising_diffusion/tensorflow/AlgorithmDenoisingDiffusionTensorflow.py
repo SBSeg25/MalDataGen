@@ -593,7 +593,7 @@ class AlgorithmDenoisingDiffusionTensorflow(tensorflow.keras.Model):
                                          dtype=tensorflow.int32)
 
             predicted_noise = self._network.predict([synthetic_data, array_time, labels_vector],
-                                                    verbose=0, batch_size=batch_size)
+                                                    verbose=0, batch_size=32)
 
             synthetic_data = self._gdf_util.p_sample(predicted_noise[0], synthetic_data, array_time,
                                                      clip_denoised=True)
