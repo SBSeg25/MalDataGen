@@ -471,7 +471,7 @@ class VanillaDiscriminator(Activations):
             # Architecture
             use_spectral_norm: bool = True,
             use_residual_blocks: bool = True,
-            num_residual_blocks: int = 2,
+            num_residual_blocks: int = 3,
             use_multi_scale: bool = True,
             # Attention
             use_attention: bool = True,
@@ -487,7 +487,7 @@ class VanillaDiscriminator(Activations):
             noise_stddev: float = 0.05,
             label_smoothing: float = 0.0,
             # Loss & Penalty
-            use_r1_regularization: bool = False,
+            use_r1_regularization: bool = True,
             r1_gamma: float = 10.0,
             use_gradient_penalty: bool = True,
             gp_lambda: float = 10.0,

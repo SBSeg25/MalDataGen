@@ -4,6 +4,8 @@ from PIL import Image
 import tensorflow as tf
 from tensorflow.keras.initializers import RandomNormal
 
+from Engine.models.DenoisingDiffusion import DenoisingDiffusion
+
 os.environ["ML_FRAMEWORK"] = "tensorflow"
 from Engine.models.WassersteinGP import WassersteinGP
 
@@ -28,8 +30,8 @@ except ImportError:
 # =====================
 # Configurações
 # =====================
-IMAGE_SIZE = (48, 48)
-INPUT_SHAPE = (48, 48, 3)
+IMAGE_SIZE = (32, 32)
+INPUT_SHAPE = (32, 32, 3)
 DATASET_DIR = "./50k"
 MAX_SAMPLES = 8400
 N_CLASSES = 64
@@ -81,7 +83,7 @@ if N_CLASSES > 10:
     print(f"  ... (total de {N_CLASSES} classes)")
 
 models = {
-    "adversarial": WassersteinGP(
+    "adversarial": DenoisingDiffusion(
         number_classes=N_CLASSES,
     ),
 }
