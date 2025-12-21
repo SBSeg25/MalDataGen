@@ -1,5 +1,5 @@
 __author__ = 'Synthetic Ocean AI - ULTRA-SOTA Team'
-__version__ = '4.1.0-memory-optimized'
+__version__ = '4.0.3-memory-optimized'
 
 import sys
 import math
@@ -14,27 +14,7 @@ from tensorflow.keras.layers import (
 )
 from tensorflow.keras.models import Model
 from tensorflow.keras.initializers import HeNormal, TruncatedNormal
-from tensorflow.keras import mixed_precision
 import numpy as np
-
-
-# ============================================================================
-# MEMORY OPTIMIZATION: Enable Mixed Precision Training
-# ============================================================================
-def enable_memory_efficient_mode():
-    """Enable all memory optimizations"""
-    # Mixed precision (FP16) - 50% memory reduction
-    policy = mixed_precision.Policy('mixed_float16')
-    mixed_precision.set_global_policy(policy)
-
-    # TensorFlow memory growth
-    gpus = tf.config.list_physical_devices('GPU')
-    if gpus:
-        for gpu in gpus:
-            tf.config.experimental.set_memory_growth(gpu, True)
-
-    print("✅ Memory optimizations enabled: Mixed Precision (FP16) + GPU Memory Growth")
-
 
 try:
     from Engine.activations.Activations import Activations
@@ -45,12 +25,13 @@ except ImportError:
 
 
 # ============================================================================
-# ROTARY POSITION EMBEDDINGS (RoPE) - Memory Optimized
+# ULTRA-SOTA: ROTARY POSITION EMBEDDINGS (RoPE)
 # ============================================================================
-class RotaryPositionEmbedding(Layer):
-    """Rotary Position Embeddings - Cached Version"""
 
-    def __init__(self, dim, max_seq_len=1024, **kwargs):  # Reduced default seq_len
+class RotaryPositionEmbedding(Layer):
+    """Rotary Position Embeddings (RoPE)"""
+
+    def __init__(self, dim, max_seq_len=2048, **kwargs):
         super().__init__(**kwargs)
         self.dim = dim
         self.max_seq_len = max_seq_len
@@ -75,21 +56,12 @@ class RotaryPositionEmbedding(Layer):
             return x
 
         seq_len = tf.shape(x)[1]
-
-        # Force float32 for positional embeddings
-        x_dtype = x.dtype
         t = tf.cast(tf.range(seq_len), tf.float32)
-        inv_freq = tf.cast(self.inv_freq, tf.float32)
-
-        freqs = tf.einsum('i,j->ij', t, inv_freq)
+        freqs = tf.einsum('i,j->ij', t, self.inv_freq)
         freqs = tf.reshape(freqs, [1, seq_len, 1, -1])
 
         cos_emb = tf.cos(freqs)
         sin_emb = tf.sin(freqs)
-
-        # Cast back to input dtype for computation
-        cos_emb = tf.cast(cos_emb, x_dtype)
-        sin_emb = tf.cast(sin_emb, x_dtype)
 
         x_even = x[..., 0::2]
         x_odd = x[..., 1::2]
@@ -104,22 +76,25 @@ class RotaryPositionEmbedding(Layer):
 
 
 # ============================================================================
-# GROUPED QUERY ATTENTION - Ultra Memory Efficient
+# ULTRA-SOTA: GROUPED QUERY ATTENTION (GQA)
 # ============================================================================
 class GroupedQueryAttention(Layer):
-    """GQA with aggressive memory optimization"""
+    """Grouped Query Attention (GQA) - Memory-Efficient Version"""
 
-    def __init__(self, d_model, num_heads=4, num_kv_heads=1, dropout=0.1,
-                 chunk_size=8, **kwargs):
+    def __init__(self, d_model, num_heads=8, num_kv_heads=2, dropout=0.1,
+                 chunk_size=64, use_memory_efficient=True, **kwargs):
         super().__init__(**kwargs)
         self.d_model = d_model
 
-        max_heads = max(d_model // 8, 1)  # More aggressive head reduction
+        max_heads = d_model // 2
+        if max_heads < 1:
+            max_heads = 1
+
         self.num_heads = min(num_heads, max_heads)
         self.num_kv_heads = min(num_kv_heads, self.num_heads)
         self.head_dim = d_model // self.num_heads
         self.dropout_rate = dropout
-        self.chunk_size = chunk_size  # Smaller chunks = less memory
+        self.chunk_size = chunk_size
 
         assert d_model % self.num_heads == 0
         assert self.num_heads % self.num_kv_heads == 0
@@ -130,7 +105,6 @@ class GroupedQueryAttention(Layer):
         return (input_shape[0], input_shape[1], self.d_model)
 
     def build(self, input_shape):
-        # Shared projections to reduce parameters
         self.q_proj = Dense(self.d_model, use_bias=False, kernel_initializer=HeNormal())
         self.k_proj = Dense(self.num_kv_heads * self.head_dim, use_bias=False, kernel_initializer=HeNormal())
         self.v_proj = Dense(self.num_kv_heads * self.head_dim, use_bias=False, kernel_initializer=HeNormal())
@@ -142,107 +116,87 @@ class GroupedQueryAttention(Layer):
         super().build(input_shape)
 
     def call(self, x, context=None, training=None):
-        batch = tf.shape(x)[0]
-        seq_len = tf.shape(x)[1]
+        original_batch = tf.shape(x)[0]
+        original_seq = tf.shape(x)[1]
 
         if context is None:
             context = x
 
-        # Projections
         q = self.q_proj(x)
         k = self.k_proj(context)
         v = self.v_proj(context)
 
-        # Reshape
-        q = tf.reshape(q, [batch, seq_len, self.num_heads, self.head_dim])
-        k = tf.reshape(k, [batch, tf.shape(context)[1], self.num_kv_heads, self.head_dim])
-        v = tf.reshape(v, [batch, tf.shape(context)[1], self.num_kv_heads, self.head_dim])
+        q = tf.reshape(q, [original_batch, original_seq, self.num_heads, self.head_dim])
+        k = tf.reshape(k, [tf.shape(context)[0], tf.shape(context)[1], self.num_kv_heads, self.head_dim])
+        v = tf.reshape(v, [tf.shape(context)[0], tf.shape(context)[1], self.num_kv_heads, self.head_dim])
 
-        # RoPE
         q = self.rope(q)
         k = self.rope(k)
 
-        # GQA: Repeat KV
         k = tf.repeat(k, self.num_queries_per_kv, axis=2)
         v = tf.repeat(v, self.num_queries_per_kv, axis=2)
 
-        # Transpose
         q = tf.transpose(q, [0, 2, 1, 3])
         k = tf.transpose(k, [0, 2, 1, 3])
         v = tf.transpose(v, [0, 2, 1, 3])
 
-        # Memory-efficient attention (gradient checkpointing disabled for stability)
-        out = self._chunked_attention(q, k, v, training)
+        out = self._memory_efficient_attention(q, k, v, training)
 
-        # Merge heads
         out = tf.transpose(out, [0, 2, 1, 3])
-        out = tf.reshape(out, [batch, seq_len, self.d_model])
+        out = tf.reshape(out, [original_batch, original_seq, self.num_heads * self.head_dim])
 
-        # Output projection
         out = self.o_proj(out)
+        out = tf.ensure_shape(out, [None, None, self.d_model])
+
         return out
 
-    def _chunked_attention(self, q, k, v, training):
-        """Process attention in small chunks to minimize memory"""
+    def _memory_efficient_attention(self, q, k, v, training):
         scale = tf.cast(self.head_dim, q.dtype) ** -0.5
         batch = tf.shape(q)[0]
         heads = tf.shape(q)[1]
         seq_len = tf.shape(q)[2]
         head_dim = tf.shape(q)[3]
 
-        # Calculate chunks
-        num_chunks = tf.cast(tf.math.ceil(tf.cast(seq_len, tf.float32) / tf.cast(self.chunk_size, tf.float32)),
-                             tf.int32)
+        num_chunks = (seq_len + self.chunk_size - 1) // self.chunk_size
         padded_len = num_chunks * self.chunk_size
-        pad_needed = padded_len - seq_len
+        padding_needed = padded_len - seq_len
 
-        # Pad queries
-        q = tf.pad(q, [[0, 0], [0, 0], [0, pad_needed], [0, 0]])
-        q_chunked = tf.reshape(q, [batch, heads, num_chunks, self.chunk_size, head_dim])
+        q_padded = tf.pad(q, [[0, 0], [0, 0], [0, padding_needed], [0, 0]], constant_values=0)
+        q_chunked = tf.reshape(q_padded, [batch, heads, num_chunks, self.chunk_size, head_dim])
 
-        # Process chunks using map_fn (graph-compatible)
-        def process_chunk(i):
-            q_chunk = q_chunked[:, :, i, :, :]
-
-            # Attention computation
+        def process_chunk(chunk_idx):
+            q_chunk = q_chunked[:, :, chunk_idx, :, :]
             scores = tf.matmul(q_chunk, k, transpose_b=True) * scale
-            attn = tf.nn.softmax(scores, axis=-1)
-            attn = self.dropout(attn, training=training)
-
-            out_chunk = tf.matmul(attn, v)
+            attn_weights = tf.nn.softmax(scores, axis=-1)
+            attn_weights = self.dropout(attn_weights, training=training)
+            out_chunk = tf.matmul(attn_weights, v)
             return out_chunk
 
-        # Map over all chunks
         outputs = tf.map_fn(
             process_chunk,
             tf.range(num_chunks),
             fn_output_signature=tf.TensorSpec(shape=[None, None, self.chunk_size, None], dtype=q.dtype),
-            parallel_iterations=1  # Sequential for memory efficiency
-        )  # Shape: [num_chunks, batch, heads, chunk_size, head_dim]
+            parallel_iterations=1
+        )
 
-        # Transpose to [batch, heads, num_chunks, chunk_size, head_dim]
         outputs = tf.transpose(outputs, [1, 2, 0, 3, 4])
-
-        # Reshape to [batch, heads, padded_len, head_dim]
         out = tf.reshape(outputs, [batch, heads, padded_len, head_dim])
-
-        # Remove padding
         out = out[:, :, :seq_len, :]
 
         return out
 
 
 # ============================================================================
-# SWIGLU - Lightweight Version
+# ULTRA-SOTA: SwiGLU ACTIVATION
 # ============================================================================
+
 class SwiGLU(Layer):
-    """SwiGLU with reduced hidden dim for memory"""
+    """SwiGLU Activation"""
 
     def __init__(self, dim, hidden_dim=None, **kwargs):
         super().__init__(**kwargs)
         self.dim = dim
-        # Reduced multiplier: 2.5x instead of 8/3x (2.67x)
-        self.hidden_dim = hidden_dim or int(dim * 2.5)
+        self.hidden_dim = hidden_dim or int(dim * 8 / 3)
 
     def compute_output_shape(self, input_shape):
         return (input_shape[0], input_shape[1], self.dim)
@@ -260,8 +214,9 @@ class SwiGLU(Layer):
 
 
 # ============================================================================
-# ADALN-ZERO
+# ULTRA-SOTA: ADALN-ZERO
 # ============================================================================
+
 class AdaLNZero(Layer):
     """Adaptive Layer Norm with Zero Initialization"""
 
@@ -288,18 +243,13 @@ class AdaLNZero(Layer):
             kernel_initializer='zeros',
             bias_initializer='zeros'
         )
+
         self.norm = LayerNormalization(epsilon=1e-6)
         super().build(input_shape)
 
     def call(self, inputs):
         x, cond = inputs
-
-        # Ensure same dtype
-        x_dtype = x.dtype
-        cond = tf.cast(cond, x_dtype)
-
         x_norm = self.norm(x)
-
         ada_params = self.ada_proj(cond)
         ada_params = tf.expand_dims(ada_params, axis=1)
 
@@ -313,13 +263,14 @@ class AdaLNZero(Layer):
 
 
 # ============================================================================
-# DIT BLOCK - Memory Optimized
+# ULTRA-SOTA: DiT BLOCK
 # ============================================================================
-class DiTBlock(Layer):
-    """Diffusion Transformer Block with gradient checkpointing"""
 
-    def __init__(self, d_model, num_heads=4, num_kv_heads=1, mlp_ratio=2.5,
-                 dropout=0.1, chunk_size=8, **kwargs):
+class DiTBlock(Layer):
+    """Diffusion Transformer Block"""
+
+    def __init__(self, d_model, num_heads=8, num_kv_heads=2, mlp_ratio=4, dropout=0.1,
+                 chunk_size=128, use_memory_efficient=True, **kwargs):
         super().__init__(**kwargs)
         self.d_model = d_model
         self.num_heads = num_heads
@@ -327,6 +278,7 @@ class DiTBlock(Layer):
         self.mlp_ratio = mlp_ratio
         self.dropout_rate = dropout
         self.chunk_size = chunk_size
+        self.use_memory_efficient = use_memory_efficient
 
     def compute_output_shape(self, input_shape):
         x_shape, cond_shape = input_shape
@@ -334,47 +286,62 @@ class DiTBlock(Layer):
 
     def build(self, input_shape):
         self.adaln = AdaLNZero()
+
         self.attn = GroupedQueryAttention(
             self.d_model,
             num_heads=self.num_heads,
             num_kv_heads=self.num_kv_heads,
             dropout=self.dropout_rate,
-            chunk_size=self.chunk_size
+            chunk_size=self.chunk_size,
+            use_memory_efficient=self.use_memory_efficient
         )
+
         self.ffn = SwiGLU(
             self.d_model,
             hidden_dim=int(self.d_model * self.mlp_ratio)
         )
+
         self.norm_ffn = LayerNormalization(epsilon=1e-6)
         self.dropout = Dropout(self.dropout_rate)
+
         super().build(input_shape)
 
     def call(self, inputs, training=None):
         x, cond = inputs
 
-        # Attention block (gradient checkpointing disabled for graph compatibility)
         x_mod, gate_attn, shift_ffn, scale_ffn, gate_ffn = self.adaln([x, cond])
+
         attn_out = self.attn(x_mod, training=training)
         attn_out = self.dropout(attn_out, training=training)
+
+        x = tf.ensure_shape(x, [None, None, self.d_model])
+        attn_out = tf.ensure_shape(attn_out, [None, None, self.d_model])
+        gate_attn = tf.ensure_shape(gate_attn, [None, 1, self.d_model])
+
         x = x + gate_attn * attn_out
 
-        # FFN block
         x_norm = self.norm_ffn(x)
         x_mod_ffn = x_norm * (1 + scale_ffn) + shift_ffn
+
         ffn_out = self.ffn(x_mod_ffn)
         ffn_out = self.dropout(ffn_out, training=training)
+
+        ffn_out = tf.ensure_shape(ffn_out, [None, None, self.d_model])
+        gate_ffn = tf.ensure_shape(gate_ffn, [None, 1, self.d_model])
+
         x = x + gate_ffn * ffn_out
 
         return x
 
 
 # ============================================================================
-# CONVNEXT BLOCK - Lightweight
+# ULTRA-SOTA: CONVOLUTIONAL BLOCKS
 # ============================================================================
-class ConvNextBlock(Layer):
-    """ConvNeXt Block - Memory efficient"""
 
-    def __init__(self, dim, mlp_ratio=2.5, dropout=0.0, **kwargs):
+class ConvNextBlock(Layer):
+    """ConvNeXt Block - Usado nos níveis sem atenção"""
+
+    def __init__(self, dim, mlp_ratio=4, dropout=0.0, **kwargs):
         super().__init__(**kwargs)
         self.dim = dim
         self.mlp_ratio = mlp_ratio
@@ -389,134 +356,96 @@ class ConvNextBlock(Layer):
             padding='same',
             depthwise_initializer=HeNormal()
         )
+
         self.norm = LayerNormalization(epsilon=1e-6)
+
         hidden_dim = int(self.dim * self.mlp_ratio)
         self.pwconv1 = Dense(hidden_dim, kernel_initializer=TruncatedNormal(stddev=0.02))
         self.pwconv2 = Dense(self.dim, kernel_initializer=TruncatedNormal(stddev=0.02))
+
         self.dropout = Dropout(self.dropout_rate)
+
         self.gamma = self.add_weight(
             name='layer_scale',
             shape=(self.dim,),
             initializer=tf.keras.initializers.Constant(1e-6),
             trainable=True
         )
+
         super().build(input_shape)
 
     def call(self, x, training=None):
         shortcut = x
+
         x = self.dwconv(x)
         x = self.norm(x)
+
         x = self.pwconv1(x)
         x = tf.nn.gelu(x)
         x = self.pwconv2(x)
+
         x = self.gamma * x
         x = self.dropout(x, training=training)
+
         return shortcut + x
 
 
-# ============================================================================
-# HYBRID BLOCK
-# ============================================================================
-class HybridConvTransformerBlock(Layer):
-    """Hybrid Conv+Transformer with memory optimizations"""
+class ConvResidualBlock(Layer):
+    """Bloco Residual Convolucional Simples com Conditioning"""
 
-    def __init__(self, dim, num_heads=4, num_kv_heads=1, dropout=0.1,
-                 chunk_size=8, **kwargs):
+    def __init__(self, dim, dropout=0.1, **kwargs):
         super().__init__(**kwargs)
         self.dim = dim
-        self.num_heads = num_heads
-        self.num_kv_heads = num_kv_heads
         self.dropout_rate = dropout
-        self.chunk_size = chunk_size
 
     def compute_output_shape(self, input_shape):
         x_shape, cond_shape = input_shape
         return x_shape
 
     def build(self, input_shape):
-        self.conv_block = ConvNextBlock(
-            self.dim,
-            mlp_ratio=2.5,
-            dropout=self.dropout_rate
-        )
-        self.transformer_block = DiTBlock(
-            self.dim,
-            num_heads=self.num_heads,
-            num_kv_heads=self.num_kv_heads,
-            mlp_ratio=2.5,
-            dropout=self.dropout_rate,
-            chunk_size=self.chunk_size
-        )
+        # Conditioning projection
+        self.cond_proj = Dense(self.dim * 2, activation='swish')
+
+        # Convolutional layers
+        self.conv1 = Conv1D(self.dim, kernel_size=3, padding='same', kernel_initializer=HeNormal())
+        self.conv2 = Conv1D(self.dim, kernel_size=3, padding='same', kernel_initializer=HeNormal())
+
+        self.norm1 = LayerNormalization(epsilon=1e-6)
+        self.norm2 = LayerNormalization(epsilon=1e-6)
+
+        self.dropout = Dropout(self.dropout_rate)
+
         super().build(input_shape)
 
     def call(self, inputs, training=None):
         x, cond = inputs
-        x = self.conv_block(x, training=training)
-        x = self.transformer_block([x, cond], training=training)
-        return x
+
+        # Process conditioning
+        cond_emb = self.cond_proj(cond)
+        scale, shift = tf.split(cond_emb, 2, axis=-1)
+        scale = tf.expand_dims(scale, axis=1)
+        shift = tf.expand_dims(shift, axis=1)
+
+        # First conv block
+        h = self.norm1(x)
+        h = h * (1 + scale) + shift
+        h = tf.nn.swish(h)
+        h = self.conv1(h)
+        h = self.dropout(h, training=training)
+
+        # Second conv block
+        h = self.norm2(h)
+        h = tf.nn.swish(h)
+        h = self.conv2(h)
+        h = self.dropout(h, training=training)
+
+        return x + h
 
 
 # ============================================================================
-# VECTOR QUANTIZER - Lightweight
+# HELPER: FOURIER TIME EMBEDDING
 # ============================================================================
-class VectorQuantizer(Layer):
-    """VQ with reduced codebook for memory"""
 
-    def __init__(self, num_embeddings, embedding_dim, commitment_cost=0.25, **kwargs):
-        super().__init__(**kwargs)
-        self.num_embeddings = num_embeddings
-        self.embedding_dim = embedding_dim
-        self.commitment_cost = commitment_cost
-
-    def compute_output_shape(self, input_shape):
-        batch, seq_len, dim = input_shape
-        return [
-            (batch, seq_len, dim),
-            (batch * seq_len,)
-        ]
-
-    def build(self, input_shape):
-        self.embeddings = self.add_weight(
-            name='codebook',
-            shape=(self.num_embeddings, self.embedding_dim),
-            initializer='uniform',
-            trainable=True
-        )
-        super().build(input_shape)
-
-    def call(self, x, training=None):
-        x_dtype = x.dtype
-        flat_x = tf.reshape(x, [-1, self.embedding_dim])
-
-        # Cast to float32 for distance computation (more stable)
-        flat_x_f32 = tf.cast(flat_x, tf.float32)
-        embeddings_f32 = tf.cast(self.embeddings, tf.float32)
-
-        distances = (
-                tf.reduce_sum(flat_x_f32 ** 2, axis=1, keepdims=True) +
-                tf.reduce_sum(embeddings_f32 ** 2, axis=1) -
-                2 * tf.matmul(flat_x_f32, embeddings_f32, transpose_b=True)
-        )
-
-        encoding_indices = tf.argmin(distances, axis=1)
-        quantized_flat = tf.nn.embedding_lookup(self.embeddings, encoding_indices)
-
-        # Cast back to original dtype
-        quantized_flat = tf.cast(quantized_flat, x_dtype)
-        quantized = tf.reshape(quantized_flat, tf.shape(x))
-        quantized = x + tf.stop_gradient(quantized - x)
-
-        if training:
-            e_latent_loss = tf.reduce_mean((tf.stop_gradient(quantized) - x) ** 2)
-            q_latent_loss = tf.reduce_mean((quantized - tf.stop_gradient(x)) ** 2)
-            self.add_loss(q_latent_loss + self.commitment_cost * e_latent_loss)
-
-        return quantized, encoding_indices
-
-
-# ============================================================================
-# FOURIER EMBEDDING
-# ============================================================================
 class FourierTimeEmbedding(Layer):
     """Fourier Time Embeddings"""
 
@@ -545,105 +474,151 @@ class FourierTimeEmbedding(Layer):
         super().build(input_shape)
 
     def call(self, timesteps):
-        # Force float32 for time embeddings to avoid mixed precision issues
         timesteps = tf.cast(timesteps, tf.float32)
         timesteps = tf.expand_dims(timesteps, -1)
-        freqs = tf.cast(self.freqs, tf.float32)
-        args = timesteps * freqs[None, :]
+        args = timesteps * self.freqs[None, :]
         embedding = tf.concat([tf.sin(args), tf.cos(args)], axis=-1)
         return self.proj(embedding)
 
 
 # ============================================================================
-# ULTRA-LIGHTWEIGHT U-NET
+# ULTRA-SOTA: U-NET MEMORY-OPTIMIZED
 # ============================================================================
+
 class DenoisingDiffusionUNetModelTensorflow(Activations):
-    """Memory-Optimized Diffusion U-Net"""
+    """
+    Ultra State-of-the-Art Diffusion U-Net - Memory Optimized
+
+    ✅ ATENÇÃO APENAS NO ÚLTIMO NÍVEL
+    - Níveis iniciais/intermediários: ConvResidualBlocks (mais rápidos, menos memória)
+    - Último nível: DiTBlocks com atenção completa (melhor qualidade)
+    - Bottleneck: DiTBlocks com atenção completa
+
+    Isso reduz drasticamente o uso de memória mantendo alta qualidade!
+    """
 
     def __init__(
             self,
             output_shape: int = 128,
             embedding_channels: int = 1,
             list_neurons_per_level: List[int] = None,
-            number_residual_blocks: int = 1,  # Reduced from 2
-            num_heads: int = 4,  # Reduced from 8
-            num_kv_heads: int = 1,  # Reduced from 2
+            number_residual_blocks: int = 2,
+            normalization_groups: int = 1,
+            num_heads: int = 4,
+            head_dim: int = 16,
             dropout_rate: float = 0.1,
+            se_ratio: int = 4,
+            intermediary_activation_function: str = 'gelu',
+            intermediary_activation_alpha: float = 0.05,
             last_layer_activation: str = 'linear',
             number_samples_per_class: Optional[Dict] = None,
-            use_vq: bool = False,
-            vq_levels: List[int] = None,
-            use_hybrid_blocks: bool = False,
-            attention_chunk_size: int = 8,  # Reduced from 32
-            use_mixed_precision: bool = False,  # NEW: Enable FP16
+            num_kv_heads: int = 2,
+            attention_chunk_size: int = 32,
+            use_memory_efficient_attention: bool = True,
             **kwargs
     ):
-        # Memory-optimized defaults
-        list_neurons_per_level = list_neurons_per_level or [32, 48, 64, 80]  # Reduced
-        vq_levels = vq_levels or [64, 32]  # Reduced codebook sizes
 
-        if use_mixed_precision:
-            enable_memory_efficient_mode()
+        list_neurons_per_level =  [4, 8, 16, 32, 64, 96]
+
+        if not isinstance(output_shape, int) or output_shape <= 0:
+            raise ValueError("output_shape must be a positive integer")
+
+        if not isinstance(embedding_channels, int) or embedding_channels <= 0:
+            raise ValueError("embedding_channels must be a positive integer")
+
+        if not isinstance(list_neurons_per_level, list) or not all(
+                isinstance(n, int) and n > 0 for n in list_neurons_per_level):
+            raise ValueError("list_neurons_per_level must be a list of positive integers")
+
+        if not isinstance(number_residual_blocks, int) or number_residual_blocks <= 0:
+            raise ValueError("number_residual_blocks must be a positive integer")
 
         self._output_shape = self._adjust_output_shape(output_shape, len(list_neurons_per_level))
         self._embedding_channels = embedding_channels
         self._list_neurons = list_neurons_per_level
         self._number_residual_blocks = number_residual_blocks
-        self._num_heads = num_heads
-        self._num_kv_heads = num_kv_heads
+        self._normalization_groups = normalization_groups
+
+        # Configuração de atenção
+        min_dim = min(list_neurons_per_level)
+        max_possible_heads = min_dim // 4
+
+        if max_possible_heads < 1:
+            max_possible_heads = 1
+            warnings.warn(
+                f"Smallest dimension ({min_dim}) too small for multi-head attention. Using single head.",
+                UserWarning
+            )
+
+        self._num_heads = min(num_heads, max_possible_heads)
+        self._num_kv_heads = min(num_kv_heads, self._num_heads)
+
+        while self._num_heads % self._num_kv_heads != 0:
+            self._num_kv_heads -= 1
+        if self._num_kv_heads < 1:
+            self._num_kv_heads = 1
+
+        self._head_dim = head_dim
         self._dropout = dropout_rate
+        self._se_ratio = se_ratio
+        self._intermediary_activation = intermediary_activation_function
+        self._intermediary_activation_alpha = intermediary_activation_alpha
         self._last_activation = last_layer_activation
         self._class_info = number_samples_per_class
-        self._use_vq = use_vq
-        self._vq_levels = vq_levels
-        self._use_hybrid = use_hybrid_blocks
+
+        self._num_transformer_blocks = number_residual_blocks
         self._attention_chunk_size = attention_chunk_size
-        self._use_mixed_precision = use_mixed_precision
+        self._use_memory_efficient = use_memory_efficient_attention
 
         print("\n" + "=" * 80)
-        print("🚀 MEMORY-OPTIMIZED DIFFUSION U-NET v4.1.0")
+        print("🚀 ULTRA-SOTA DIFFUSION U-NET v4.0.3 (MEMORY-OPTIMIZED)")
         print("=" * 80)
-        print(f"💾 Memory Optimizations:")
-        print(f"   • Mixed Precision (FP16): {'✅ Enabled' if use_mixed_precision else '❌ Disabled'}")
-        print(f"   • Chunked Attention: ✅ Enabled (chunk_size={attention_chunk_size})")
-        print(f"   • Base Dimensions: {list_neurons_per_level}")
-        print(f"   • GQA: Q heads={num_heads}, KV heads={num_kv_heads}")
-        print(f"   • Residual Blocks: {number_residual_blocks}")
-        print(f"\n💡 Estimated Memory Savings:")
-        print(f"   • FP16: ~50% reduction")
-        print(f"   • Small chunks: ~30-40% reduction")
-        print(f"   • GQA + reduced dims: ~20-30% reduction")
-        print(f"   • Total: ~65-75% less memory vs baseline")
-        print(f"\n⚠️  Note: Gradient checkpointing disabled for graph stability")
+        print(f"✅ ATENÇÃO APENAS NO ÚLTIMO NÍVEL + BOTTLENECK")
+        print(f"   • Níveis 0-{len(list_neurons_per_level) - 2}: ConvResidualBlocks (rápido, baixa memória)")
+        print(f"   • Nível {len(list_neurons_per_level) - 1}: DiTBlocks com atenção (alta qualidade)")
+        print(f"   • Bottleneck: DiTBlocks com atenção completa")
+        print(f"GQA: Query heads={self._num_heads}, KV heads={self._num_kv_heads}")
+        print(f"Chunk size: {attention_chunk_size} (memory-efficient: {use_memory_efficient_attention})")
+        print(f"Neurons per level: {list_neurons_per_level}")
         print("=" * 80 + "\n")
 
     @staticmethod
     def _adjust_output_shape(shape: int, num_downsamples: int) -> int:
         required_multiple = 2 ** num_downsamples
+
         if shape % required_multiple == 0:
             return shape
+
         padded = math.ceil(shape / required_multiple) * required_multiple
-        warnings.warn(f"output_shape {shape} adjusted to {padded}", UserWarning)
+        warnings.warn(
+            f"output_shape {shape} adjusted to {padded}",
+            UserWarning
+        )
         return padded
 
     def build_model(self):
-        """Build memory-optimized model"""
+        """Constrói o modelo memory-optimized"""
 
         if self._class_info is None:
             raise ValueError("number_samples_per_class is required")
 
+        if not isinstance(self._class_info, dict):
+            raise ValueError("number_samples_per_class must be a dictionary")
+
+        if 'number_classes' not in self._class_info:
+            raise ValueError("number_samples_per_class must contain 'number_classes' key")
+
         num_classes = self._class_info['number_classes']
 
-        # Inputs
+        # ===== INPUTS =====
         image_input = Input(
             shape=(self._output_shape, self._embedding_channels),
-            name="image_input",
-            dtype=tf.float32  # Will be auto-cast to FP16 if enabled
+            name="image_input"
         )
         time_input = Input(shape=(), dtype=tf.int32, name="time_input")
         label_input = Input(shape=(num_classes,), dtype=tf.float32, name="label_input")
 
-        # Embeddings
+        # ===== EMBEDDINGS =====
         base_dim = self._list_neurons[0]
 
         x = Conv1D(base_dim, kernel_size=3, padding='same', kernel_initializer=HeNormal())(image_input)
@@ -658,107 +633,99 @@ class DenoisingDiffusionUNetModelTensorflow(Activations):
         cond = Concatenate()([time_emb, label_emb])
         cond = Dense(base_dim * 4, activation='swish')(cond)
 
-        # Optional VQ-VAE
-        if self._use_vq:
-            vq_dim = base_dim
-            x = Conv1D(vq_dim, 1)(x)
-            vq_layer = VectorQuantizer(
-                num_embeddings=self._vq_levels[0],
-                embedding_dim=vq_dim
-            )
-            x, _ = vq_layer(x)
-
-        # Encoder
+        # ===== ENCODER =====
         skip_connections = []
+        last_level_idx = len(self._list_neurons) - 1
 
         for level, dim in enumerate(self._list_neurons):
+            is_last_level = (level == last_level_idx)
+
             for block_idx in range(self._number_residual_blocks):
-                if self._use_hybrid:
-                    x = HybridConvTransformerBlock(
-                        dim,
-                        num_heads=self._num_heads,
-                        num_kv_heads=self._num_kv_heads,
-                        dropout=self._dropout,
-                        chunk_size=self._attention_chunk_size,
-                        name=f'enc_hybrid_l{level}_b{block_idx}'
-                    )([x, cond])
-                else:
+                if is_last_level:
+                    # ✅ ÚLTIMO NÍVEL: Usa atenção completa
                     x = DiTBlock(
                         dim,
                         num_heads=self._num_heads,
                         num_kv_heads=self._num_kv_heads,
                         dropout=self._dropout,
                         chunk_size=self._attention_chunk_size,
-                        name=f'enc_dit_l{level}_b{block_idx}'
+                        use_memory_efficient=self._use_memory_efficient,
+                        name=f'enc_attention_l{level}_b{block_idx}'
+                    )([x, cond])
+                else:
+                    # ✅ OUTROS NÍVEIS: Usa apenas convoluções
+                    x = ConvResidualBlock(
+                        dim,
+                        dropout=self._dropout,
+                        name=f'enc_conv_l{level}_b{block_idx}'
                     )([x, cond])
 
             skip_connections.append(x)
 
+            # Downsample
             if level < len(self._list_neurons) - 1:
                 next_dim = self._list_neurons[level + 1]
                 x = Conv1D(next_dim, kernel_size=3, strides=2, padding='same')(x)
 
-        # Bottleneck
+        # ===== BOTTLENECK =====
         bottleneck_dim = self._list_neurons[-1]
-        for i in range(self._number_residual_blocks):
-            if self._use_hybrid:
-                x = HybridConvTransformerBlock(
-                    bottleneck_dim,
-                    num_heads=self._num_heads,
-                    num_kv_heads=self._num_kv_heads,
-                    dropout=self._dropout,
-                    chunk_size=self._attention_chunk_size,
-                    name=f'bottleneck_hybrid_{i}'
-                )([x, cond])
-            else:
-                x = DiTBlock(
-                    bottleneck_dim,
-                    num_heads=self._num_heads,
-                    num_kv_heads=self._num_kv_heads,
-                    dropout=self._dropout,
-                    chunk_size=self._attention_chunk_size,
-                    name=f'bottleneck_dit_{i}'
-                )([x, cond])
 
-        # Decoder
+        print(f"📍 Bottleneck: {self._number_residual_blocks} DiTBlocks com atenção")
+        for i in range(self._number_residual_blocks):
+            x = DiTBlock(
+                bottleneck_dim,
+                num_heads=self._num_heads,
+                num_kv_heads=self._num_kv_heads,
+                dropout=self._dropout,
+                chunk_size=self._attention_chunk_size,
+                use_memory_efficient=self._use_memory_efficient,
+                name=f'bottleneck_attention_{i}'
+            )([x, cond])
+
+        # ===== DECODER =====
         for level in reversed(range(len(self._list_neurons))):
             dim = self._list_neurons[level]
+            is_last_level = (level == last_level_idx)
 
+            # Upsample
             if level < len(self._list_neurons) - 1:
                 x = UpSampling1D(size=2)(x)
                 x = Conv1D(dim, kernel_size=3, padding='same')(x)
 
+            # Skip connection
             skip = skip_connections.pop()
             x = Concatenate(axis=-1)([x, skip])
             x = Conv1D(dim, kernel_size=1)(x)
 
+            # Blocos
             for block_idx in range(self._number_residual_blocks):
-                if self._use_hybrid:
-                    x = HybridConvTransformerBlock(
-                        dim,
-                        num_heads=self._num_heads,
-                        num_kv_heads=self._num_kv_heads,
-                        dropout=self._dropout,
-                        chunk_size=self._attention_chunk_size,
-                        name=f'dec_hybrid_l{level}_b{block_idx}'
-                    )([x, cond])
-                else:
+                if is_last_level:
+                    # ✅ ÚLTIMO NÍVEL: Usa atenção completa
                     x = DiTBlock(
                         dim,
                         num_heads=self._num_heads,
                         num_kv_heads=self._num_kv_heads,
                         dropout=self._dropout,
                         chunk_size=self._attention_chunk_size,
-                        name=f'dec_dit_l{level}_b{block_idx}'
+                        use_memory_efficient=self._use_memory_efficient,
+                        name=f'dec_attention_l{level}_b{block_idx}'
+                    )([x, cond])
+                else:
+                    # ✅ OUTROS NÍVEIS: Usa apenas convoluções
+                    x = ConvResidualBlock(
+                        dim,
+                        dropout=self._dropout,
+                        name=f'dec_conv_l{level}_b{block_idx}'
                     )([x, cond])
 
-        # Output
-        x = LayerNormalization(epsilon=1e-6, name='final_norm')(x)
-        x = Conv1D(self._embedding_channels, kernel_size=3, padding='same',
-                   kernel_initializer='zeros', name='final_conv', dtype='float32')(x)
+        # ===== OUTPUT =====
+        final_norm = LayerNormalization(epsilon=1e-6, name='final_norm')
+        x = final_norm(x)
+
+        x = Conv1D(self._embedding_channels, kernel_size=3, padding='same', name='final_conv')(x)
 
         if self._last_activation and self._last_activation != 'linear':
-            x = Activation(self._last_activation, name='final_activation', dtype='float32')(x)
+            x = Activation(self._last_activation, name='final_activation')(x)
 
         model = Model(
             inputs=[image_input, time_input, label_input],
@@ -768,11 +735,9 @@ class DenoisingDiffusionUNetModelTensorflow(Activations):
 
         print(f"✅ Model built successfully!")
         print(f"   Total parameters: {model.count_params():,}")
-
-        # Calculate memory estimation
-        param_memory = model.count_params() * (2 if self._use_mixed_precision else 4)  # bytes per param
-        print(f"   Estimated param memory: {param_memory / 1e9:.2f} GB")
-
+        print(
+            f"   Memory optimization: ~{(len(self._list_neurons) - 1) / len(self._list_neurons) * 100:.0f}% reduction in attention ops")
+        model.summary()
         return model
 
     # Properties
@@ -783,3 +748,23 @@ class DenoisingDiffusionUNetModelTensorflow(Activations):
     @property
     def embedding_channels(self):
         return self._embedding_channels
+
+    @property
+    def list_neurons_per_level(self):
+        return self._list_neurons
+
+    @property
+    def last_layer_activation(self):
+        return self._last_activation
+
+    @property
+    def number_residual_blocks(self):
+        return self._number_residual_blocks
+
+    @property
+    def normalization_groups(self):
+        return self._normalization_groups
+
+    @property
+    def number_samples_per_class(self):
+        return self._class_info
