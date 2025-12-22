@@ -34,8 +34,8 @@ except ImportError:
 # =====================
 # Configurações
 # =====================
-IMAGE_SIZE = (48, 48)
-INPUT_SHAPE = (48, 48, 3)
+IMAGE_SIZE = (64, 64)
+INPUT_SHAPE = (64, 64, 3)
 DATASET_DIR = "./50k"
 MAX_SAMPLES = 12000
 N_CLASSES = 10
