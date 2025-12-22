@@ -28,13 +28,13 @@ DEFAULT_DIFFUSION_UNET_LAST_LAYER_ACTIVATION = 'linear'
 DEFAULT_DIFFUSION_LATENT_DIMENSION = 24
 DEFAULT_DIFFUSION_UNET_NUMBER_EMBEDDING_CHANNELS = 1
 DEFAULT_DIFFUSION_UNET_CHANNELS_PER_LEVEL = [1, 2]
-DEFAULT_DIFFUSION_UNET_BATCH_SIZE = 64
+DEFAULT_DIFFUSION_UNET_BATCH_SIZE = 32
 DEFAULT_DIFFUSION_UNET_ATTENTION_MODE = [False, True, True]
 DEFAULT_DIFFUSION_UNET_NUMBER_RESIDUAL_BLOCKS = 1
 DEFAULT_DIFFUSION_UNET_GROUP_NORMALIZATION = 1
 DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION = 'swish'
 DEFAULT_DIFFUSION_UNET_INTERMEDIARY_ACTIVATION_ALPHA = 0.05
-DEFAULT_DIFFUSION_UNET_NUMBER_EPOCHS = 40
+DEFAULT_DIFFUSION_UNET_NUMBER_EPOCHS = 1
 DEFAULT_DIFFUSION_GAUSSIAN_BETA_START = 1e-4
 DEFAULT_DIFFUSION_GAUSSIAN_BETA_END = 0.02
 DEFAULT_DIFFUSION_GAUSSIAN_TIME_STEPS = 200
@@ -286,7 +286,7 @@ class DenoisingDiffusion:
             self._denoising_diffusion_algorithm = AlgorithmDenoisingDiffusion(
                 output_shape=input_shape,
                 first_unet_model=self._denoising_first_unet_model,
-                second_unet_model=self._denoising_second_unet_model,
+                second_unet_model=None,
                 gdf_util=self._denoising_gaussian_diffusion_util,
                 optimizer_autoencoder=optimizer_autoencoder,
                 optimizer_diffusion=optimizer_diffusion,
@@ -336,7 +336,8 @@ class DenoisingDiffusion:
 
         import tensorflow as tf
 
-        # Initialize ONLY the first instance of UNet
+        # ✅ CORREÇÃO: Criar APENAS o primeiro modelo
+        # O modelo EMA será criado automaticamente pelo AlgorithmDenoisingDiffusionTensorflow
         self._denoising_first_instance_unet = DenoisingDiffusionUNetModel(
             output_shape=input_shape,
             embedding_channels=self._denoising_diffusion_unet_num_embedding_channels,
@@ -350,43 +351,16 @@ class DenoisingDiffusion:
             number_samples_per_class=self._number_samples_per_class
         )
 
-        # Build the first model
+        # Construir o primeiro modelo
         self._denoising_first_unet_model = self._denoising_first_instance_unet.build_model()
 
-        # CRITICAL: Clone the model instead of creating a second instance
-        # This ensures IDENTICAL architecture
-        try:
-            # Method 1: Using clone_model (recommended)
-            from tensorflow.keras.models import clone_model
-            self._denoising_second_unet_model = clone_model(self._denoising_first_unet_model)
-            self._denoising_second_unet_model.set_weights(self._denoising_first_unet_model.get_weights())
-        except Exception as e:
-            logging.warning(f"clone_model failed: {e}. Trying alternative method...")
-            # Method 2: Manual cloning via model architecture
-            try:
-                model_config = self._denoising_first_unet_model.get_config()
-                self._denoising_second_unet_model = tf.keras.Model.from_config(model_config)
-                self._denoising_second_unet_model.set_weights(self._denoising_first_unet_model.get_weights())
-            except Exception as e2:
-                logging.error(f"Alternative cloning failed: {e2}. Creating second instance...")
-                # Fallback: Create second instance (original method)
-                self._denoising_second_instance_unet = DenoisingDiffusionUNetModel(
-                    output_shape=input_shape,
-                    embedding_channels=self._denoising_diffusion_unet_num_embedding_channels,
-                    list_neurons_per_level=self._denoising_diffusion_unet_channels_per_level,
-                    list_attentions=self._denoising_diffusion_unet_attention_mode,
-                    number_residual_blocks=self._denoising_diffusion_unet_num_residual_blocks,
-                    normalization_groups=self._denoising_diffusion_unet_group_normalization,
-                    intermediary_activation_function=self._denoising_diffusion_unet_intermediary_activation,
-                    intermediary_activation_alpha=self._denoising_diffusion_unet_intermediary_activation_alpha,
-                    last_layer_activation=self._denoising_diffusion_unet_last_layer_activation,
-                    number_samples_per_class=self._number_samples_per_class
-                )
-                self._denoising_second_unet_model = self._denoising_second_instance_unet.build_model()
-                self._denoising_second_unet_model.set_weights(self._denoising_first_unet_model.get_weights())
+        # ✅ CRÍTICO: NÃO CRIAR SEGUNDO MODELO AQUI!
+        # Deixe o AlgorithmDenoisingDiffusionTensorflow criar automaticamente o modelo EMA
+        self._denoising_second_unet_model = None
 
-        logging.info(f"✓ UNet models created and synchronized: "
-                     f"{len(self._denoising_first_unet_model.trainable_weights)} trainable weights")
+        logging.info(
+            f"✓ UNet model created: {len(self._denoising_first_unet_model.trainable_weights)} trainable weights")
+        logging.info("✓ EMA model will be created automatically by AlgorithmDenoisingDiffusionTensorflow")
 
         # Initialize GaussianDiffusion utility
         self._denoising_gaussian_diffusion_util = GaussianDenoisingDiffusion(
@@ -396,6 +370,7 @@ class DenoisingDiffusion:
             clip_min=self._denoising_diffusion_gaussian_clip_min,
             clip_max=self._denoising_diffusion_gaussian_clip_max
         )
+
     def _validate_callbacks(self, callbacks) -> list:
         """
         Validates and sanitizes the callbacks parameter.
@@ -510,7 +485,7 @@ class DenoisingDiffusion:
             callbacks: list
     ) -> None:
         """
-        TensorFlow training implementation.
+        TensorFlow training implementation using the CORRECTED AlgorithmDenoisingDiffusionTensorflow.
         """
         try:
             import tensorflow as tf
@@ -523,12 +498,14 @@ class DenoisingDiffusion:
                 "Make sure TensorFlow is installed."
             ) from e
 
+        # ✅ IMPORTANTE: Use a versão CORRIGIDA do AlgorithmDenoisingDiffusion
         try:
-            from Engine.algorithms.denoising_diffusion.AlgorithmDenoisingDiffusion import \
-                AlgorithmDenoisingDiffusion
+            # Use a versão corrigida que você forneceu
+            from Engine.algorithms.denoising_diffusion.tensorflow.AlgorithmDenoisingDiffusionTensorflow import \
+                AlgorithmDenoisingDiffusionTensorflow as AlgorithmDenoisingDiffusion
         except ImportError:
             try:
-                from Engine.algorithms.denoising_diffusion.tensorflow.AlgorithmDenoisingDiffusion import \
+                from Engine.algorithms.denoising_diffusion.AlgorithmDenoisingDiffusion import \
                     AlgorithmDenoisingDiffusion
             except ImportError as e:
                 raise ImportError(
@@ -552,17 +529,28 @@ class DenoisingDiffusion:
         if callbacks:
             callbacks_list.extend(callbacks)
 
-        # Initialize the diffusion algorithm
+        # ✅ CRÍTICO: Use o modelo EMA corrigido (second_unet_model=None para criação automática)
+        print("\n" + "=" * 80)
+        print("🔧 INICIALIZANDO MODELO DE DIFUSÃO CORRIGIDO")
+        print("=" * 80)
+        print(f"✓ Input shape: {input_shape}")
+        print(f"✓ Time steps: {self._denoising_diffusion_gaussian_time_steps}")
+        print(f"✓ EMA factor: {self._denoising_diffusion_ema}")
+        print(f"✓ Usando modelo EMA automático (second_unet_model=None)")
+        print("=" * 80 + "\n")
+
+        # Initialize the CORRECTED diffusion algorithm
         self._denoising_diffusion_algorithm = AlgorithmDenoisingDiffusion(
             output_shape=input_shape,
             first_unet_model=self._denoising_first_unet_model,
-            second_unet_model=self._denoising_second_unet_model,
+            second_unet_model=None,  # ✅ DEIXAR None para criação automática!
             gdf_util=self._denoising_gaussian_diffusion_util,
             optimizer_autoencoder=Adam(learning_rate=0.0001),
             optimizer_diffusion=Adam(learning_rate=0.0001),
             time_steps=self._denoising_diffusion_gaussian_time_steps,
             ema=self._denoising_diffusion_ema,
-            margin=self._denoising_diffusion_margin
+            margin=self._denoising_diffusion_margin,
+            debug=True  # ✅ Ativar debug para ver o processo de criação
         )
 
         # Compile the model
@@ -575,7 +563,16 @@ class DenoisingDiffusion:
         x_real_samples = np.array(x_real_samples)
         x_real_samples = tf.expand_dims(x_real_samples, axis=-1)
 
+        # ✅ Diagnosticar compatibilidade dos modelos
+        print("\n🔍 Executando diagnóstico de compatibilidade...")
+        try:
+            self._denoising_diffusion_algorithm.diagnose_model_compatibility()
+        except Exception as e:
+            print(f"⚠️  Diagnóstico falhou: {e}")
+            print("Continuando com treinamento...")
+
         # Train the model
+        print(f"\n🎯 Iniciando treinamento por {epochs} epochs...")
         history = self._denoising_diffusion_algorithm.fit(
             x_real_samples,
             to_categorical(y_real_samples, num_classes=self._number_samples_per_class["number_classes"]),
@@ -592,6 +589,9 @@ class DenoisingDiffusion:
                 self._training_history['loss'].append(history.history['loss'][epoch])
                 self._training_history['avg_loss'].append(history.history['loss'][epoch])
 
+        print("\n" + "=" * 80)
+        print("✅ TREINAMENTO CONCLUÍDO COM SUCESSO!")
+        print("=" * 80 + "\n")
     def fit_model(
             self,
             input_shape: tuple,

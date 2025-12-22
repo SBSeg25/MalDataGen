@@ -34,8 +34,8 @@ except ImportError:
 # =====================
 # Configurações
 # =====================
-IMAGE_SIZE = (64, 64)
-INPUT_SHAPE = (64, 64, 3)
+IMAGE_SIZE = (16, 16)
+INPUT_SHAPE = (16, 16, 3)
 DATASET_DIR = "./50k"
 MAX_SAMPLES = 12000
 N_CLASSES = 10
@@ -75,7 +75,7 @@ number_samples_per_class = {
 }
 
 models = {
-    "adversarial": WassersteinGP(
+    "adversarial": DenoisingDiffusion(
         number_classes=N_CLASSES
     ),
 }
