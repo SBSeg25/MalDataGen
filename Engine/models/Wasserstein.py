@@ -8,6 +8,7 @@ __initial_data__ = '2022/06/01'
 __last_update__ = '2025/12/13'
 __credits__ = ['Synthetic Ocean AI']
 
+import numpy
 
 # MIT License
 #
@@ -59,13 +60,13 @@ DEFAULT_WASSERSTEIN_MOMENTUM = 0.5
 DEFAULT_WASSERSTEIN_LAST_ACTIVATION_LAYER = "linear"
 DEFAULT_WASSERSTEIN_INITIALIZER_MEAN = 0.0
 DEFAULT_WASSERSTEIN_INITIALIZER_DEVIATION = 0.15
-DEFAULT_WASSERSTEIN_OPTIMIZER_GENERATOR_LEARNING_RATE = 0.001
-DEFAULT_WASSERSTEIN_OPTIMIZER_DISCRIMINATOR_LEARNING_RATE = 0.005
+DEFAULT_WASSERSTEIN_OPTIMIZER_GENERATOR_LEARNING_RATE = 0.0001
+DEFAULT_WASSERSTEIN_OPTIMIZER_DISCRIMINATOR_LEARNING_RATE = 0.0005
 DEFAULT_WASSERSTEIN_OPTIMIZER_GENERATOR_BETA = 0.5
 DEFAULT_WASSERSTEIN_OPTIMIZER_DISCRIMINATOR_BETA = 0.5
 DEFAULT_WASSERSTEIN_DISCRIMINATOR_STEPS = 5
 DEFAULT_WASSERSTEIN_SMOOTHING_RATE = 0.0
-DEFAULT_WASSERSTEIN_LATENT_MEAN_DISTRIBUTION = 0.256
+DEFAULT_WASSERSTEIN_LATENT_MEAN_DISTRIBUTION = 0.5
 DEFAULT_WASSERSTEIN_LATENT_STANDARD_DEVIATION = 0.5
 DEFAULT_WASSERSTEIN_FILE_NAME_DISCRIMINATOR = "discriminator_model"
 DEFAULT_WASSERSTEIN_FILE_NAME_GENERATOR = "generator_model"
@@ -274,7 +275,7 @@ class Wasserstein:
                 last_layer_activation=self._wasserstein_last_activation_layer,
                 dense_layer_sizes_g=self._wasserstein_dense_layer_sizes_generator,
                 dense_layer_sizes_d=self._wasserstein_dense_layer_sizes_discriminator,
-                dataset_type=torch.float32,
+                dataset_type=numpy.float32,
                 number_samples_per_class=self._number_samples_per_class
             )
 

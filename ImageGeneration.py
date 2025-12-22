@@ -3,9 +3,12 @@ import numpy as np
 from PIL import Image
 import tensorflow as tf
 from tensorflow.keras.initializers import RandomNormal
+
+
 os.environ["ML_FRAMEWORK"] = "tensorflow"
 from Engine.models.Adversarial import Adversarial
 from Engine.models.DenoisingDiffusion import DenoisingDiffusion
+from Engine.models.Wasserstein import Wasserstein
 
 
 from Engine.models.WassersteinGP import WassersteinGP
@@ -73,7 +76,7 @@ number_samples_per_class = {
 
 models = {
     "adversarial": WassersteinGP(
-        number_classes=N_CLASSES,
+        number_classes=N_CLASSES
     ),
 }
 
@@ -87,7 +90,7 @@ for model_name, model in models.items():
 
     samples_per_class_dict = {
         "number_classes": N_CLASSES,
-        "classes": {i: 6 for i in range(N_CLASSES)}
+        "classes": {i: 5 for i in range(N_CLASSES)}
     }
 
     synthetic_samples = model.get_samples(samples_per_class_dict)

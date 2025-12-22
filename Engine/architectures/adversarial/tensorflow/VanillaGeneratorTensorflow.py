@@ -1,10 +1,10 @@
 """
 Hybrid Convolutional-Transformer Generator com Vector Quantization Hierárquica
-Versão ESTÁVEL com VQ feedforward em múltiplos níveis (estilo VQ-VAE-2)
+Versão ESTÁVEL com AdaLN-Zero e Ativações Modernas (SwiGLU)
 """
 
 __author__ = 'Synthetic Ocean AI - Enhanced Team'
-__version__ = '5.1.0-stable-hierarchical-vq'
+__version__ = '5.3.0-stable-swiglu'
 
 try:
     import sys
@@ -186,8 +186,59 @@ class SpectralDense(Layer):
         return config
 
 
+class SiLU(Layer):
+    """
+    Sigmoid Linear Unit (SiLU) / Swish Activation
+
+    Estado-da-arte em transformers modernos (usado em EfficientNet, etc)
+    f(x) = x * sigmoid(x)
+
+    Propriedades:
+    - Suave e diferenciável
+    - Não-monotônica (permite pequenos valores negativos)
+    - Melhor que ReLU em muitos casos
+    """
+
+    def call(self, x):
+        return x * tf.nn.sigmoid(x)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+
+class SwiGLU(Layer):
+    """
+    Swish Gated Linear Unit - ULTRA MODERNO
+
+    Usado em LLaMA, LLaMA 2, LLaMA 3, PaLM, Mistral, etc.
+    Combina Swish (SiLU) com gating mechanism.
+
+    Processo:
+    1. Recebe x com dimensão 2*d
+    2. Split: gate, value = x[:d], x[d:]
+    3. Output: SiLU(gate) ⊙ value
+
+    Superioridade sobre GLU tradicional:
+    - Swish > Sigmoid para gating
+    - Melhor gradiente flow
+    - Resultados empíricos superiores em LLMs
+    """
+
+    def call(self, x):
+        # Split no meio: gate e value
+        half = tf.shape(x)[-1] // 2
+        gate = x[..., :half]
+        value = x[..., half:]
+
+        # SwiGLU: SiLU(gate) ⊙ value
+        return tf.nn.silu(gate) * value
+
+    def compute_output_shape(self, input_shape):
+        return input_shape[:-1] + (input_shape[-1] // 2,)
+
+
 class DepthwiseSeparableConv(Layer):
-    """Depthwise Separable Convolution - STABLE"""
+    """Depthwise Separable Convolution com SiLU - STABLE"""
 
     def __init__(self, filters, kernel_size=3, strides=1, **kwargs):
         super().__init__(**kwargs)
@@ -204,12 +255,14 @@ class DepthwiseSeparableConv(Layer):
         )
         self.pointwise = Conv1D(filters=self.filters, kernel_size=1, use_bias=False)
         self.norm = RMSNorm()
+        self.activation = SiLU()  # Moderno: SiLU em vez de ReLU
         super().build(input_shape)
 
     def call(self, x):
         x = self.depthwise(x)
         x = self.pointwise(x)
         x = self.norm(x)
+        x = self.activation(x)
         return x
 
     def compute_output_shape(self, input_shape):
@@ -225,7 +278,7 @@ class DepthwiseSeparableConv(Layer):
 
 
 class SqueezeExcitation(Layer):
-    """Squeeze-and-Excitation Block - STABLE"""
+    """Squeeze-and-Excitation Block com SiLU - STABLE"""
 
     def __init__(self, ratio=4, **kwargs):
         super().__init__(**kwargs)
@@ -236,13 +289,15 @@ class SqueezeExcitation(Layer):
         reduced = max(channels // self.ratio, 8)
 
         self.pool = GlobalAveragePooling1D()
-        self.fc1 = Dense(reduced, activation='relu')
+        self.fc1 = Dense(reduced, use_bias=True)
+        self.silu = SiLU()  # Moderno: SiLU em vez de ReLU
         self.fc2 = Dense(channels, activation='sigmoid')
         super().build(input_shape)
 
     def call(self, x):
         scale = self.pool(x)
         scale = self.fc1(scale)
+        scale = self.silu(scale)  # Ativação moderna
         scale = self.fc2(scale)
         scale = tf.expand_dims(scale, axis=1)
         return x * scale
@@ -254,19 +309,45 @@ class SqueezeExcitation(Layer):
         return {**super().get_config(), 'ratio': self.ratio}
 
 
-class FiLM(Layer):
-    """Feature-wise Linear Modulation - BATCH SAFE"""
+class AdaLNZero(Layer):
+    """
+    Adaptive Layer Normalization Zero - BATCH SAFE
+
+    Substitui FiLM com normalização adaptativa e inicialização zero do gate.
+    Usado em DiT (Diffusion Transformers) e outras arquiteturas modernas.
+
+    Processo:
+    1. Normaliza features com LayerNorm
+    2. Da condição, prediz: shift (β), scale (γ), gate (α)
+    3. Output: α ⊙ (γ ⊙ norm(x) + β)
+
+    O gate α inicia em zero para estabilidade no treinamento.
+    """
+
+    def __init__(self, epsilon=1e-6, **kwargs):
+        super().__init__(**kwargs)
+        self.epsilon = epsilon
 
     def build(self, input_shape):
         features_shape, condition_shape = input_shape
         channels = int(features_shape[-1])
 
-        self.gamma_dense = Dense(channels, kernel_initializer='zeros')
-        self.beta_dense = Dense(channels, kernel_initializer='zeros')
+        # Layer normalization
+        self.norm = LayerNormalization(epsilon=self.epsilon)
+
+        # Projeção da condição para 3 * channels (shift, scale, gate)
+        self.condition_proj = Dense(
+            channels * 3,
+            kernel_initializer='zeros',  # Inicialização zero crítica
+            name='adazero_condition_proj'
+        )
+
         super().build(input_shape)
 
     def call(self, inputs):
         features, condition = inputs
+
+        # Batch size matching
         bf = tf.shape(features)[0]
         bc = tf.shape(condition)[0]
 
@@ -276,13 +357,34 @@ class FiLM(Layer):
             lambda: condition
         )
 
-        gamma = self.gamma_dense(condition)
-        beta = self.beta_dense(condition)
+        # Normaliza features
+        normalized = self.norm(features)
 
-        gamma = tf.expand_dims(gamma, axis=1)
-        beta = tf.expand_dims(beta, axis=1)
+        # Projeta condição para shift, scale, gate
+        params = self.condition_proj(condition)  # (batch, 3 * channels)
+        params = tf.expand_dims(params, axis=1)  # (batch, 1, 3 * channels)
 
-        return features * (1.0 + gamma) + beta
+        channels = tf.shape(features)[-1]
+
+        # Split em 3 parâmetros
+        shift = params[..., :channels]           # β (beta)
+        scale = params[..., channels:2*channels] # γ (gamma)
+        gate = params[..., 2*channels:]          # α (alpha)
+
+        # Aplica modulação: gate * (scale * norm(x) + shift)
+        modulated = scale * normalized + shift
+        output = gate * modulated
+
+        return output
+
+    def compute_output_shape(self, input_shape):
+        return input_shape[0]
+
+    def get_config(self):
+        return {
+            **super().get_config(),
+            'epsilon': self.epsilon
+        }
 
 
 class EfficientAttention(Layer):
@@ -344,19 +446,15 @@ class EfficientAttention(Layer):
         }
 
 
-class GLU(Layer):
-    """Gated Linear Unit - STABLE"""
-
-    def call(self, x):
-        half = tf.shape(x)[-1] // 2
-        return x[..., :half] * tf.nn.sigmoid(x[..., half:])
-
-    def compute_output_shape(self, input_shape):
-        return input_shape[:-1] + (input_shape[-1] // 2,)
-
-
 class ConvTransformerBlock(Layer):
-    """Hybrid Conv-Transformer Block - ULTRA STABLE"""
+    """
+    Hybrid Conv-Transformer Block com SwiGLU - ULTRA STABLE
+
+    Arquitetura moderna inspirada em LLaMA:
+    - Convolution + SE para local patterns
+    - Multi-head attention para global dependencies
+    - SwiGLU FFN (em vez de GLU tradicional)
+    """
 
     def __init__(self, filters, num_heads=4, head_dim=32, ff_ratio=2.0, dropout=0.1, **kwargs):
         super().__init__(**kwargs)
@@ -371,9 +469,10 @@ class ConvTransformerBlock(Layer):
         self.se = SqueezeExcitation(ratio=4)
         self.attn = EfficientAttention(num_heads=self.num_heads, head_dim=self.head_dim)
 
+        # SwiGLU FFN: precisa de 2x dimensão para split
         ff_dim = int(self.filters * self.ff_ratio)
-        self.ff1 = Dense(ff_dim * 2)
-        self.glu = GLU()
+        self.ff1 = Dense(ff_dim * 2)  # 2x para SwiGLU split
+        self.swiglu = SwiGLU()  # Moderno: SwiGLU em vez de GLU
         self.ff2 = Dense(self.filters)
 
         self.norm1 = RMSNorm()
@@ -387,17 +486,20 @@ class ConvTransformerBlock(Layer):
         super().build(input_shape)
 
     def call(self, x, training=None):
+        # Convolutional path
         conv_out = self.conv(x)
         conv_out = self.se(conv_out)
         conv_out = self.drop1(conv_out, training=training)
         x = self.norm1(x + conv_out)
 
+        # Attention path
         attn_out = self.attn(x)
         attn_out = self.drop2(attn_out, training=training)
         x = self.norm2(x + attn_out)
 
+        # SwiGLU FFN path (LLaMA-style)
         ff_out = self.ff1(x)
-        ff_out = self.glu(ff_out)
+        ff_out = self.swiglu(ff_out)  # SwiGLU activation
         ff_out = self.ff2(ff_out)
         ff_out = self.drop3(ff_out, training=training)
         x = self.norm3(x + ff_out)
@@ -458,14 +560,18 @@ class MultiScaleFusion(Layer):
 
 class VanillaGenerator(Activations):
     """
-    Hybrid Conv-Transformer Generator com VQ Hierárquica Feedforward
+    Hybrid Conv-Transformer Generator - ARQUITETURA MODERNA
 
-    ARQUITETURA ESTÁVEL inspirada em VQ-VAE-2:
-    - Stage 0: processa → VQ₀ (códigos grossos)
-    - Stage 1: condicionado por VQ₀ → processa → VQ₁ (códigos médios)
-    - Stage 2: condicionado por VQ₁ → processa → VQ₂ (códigos finos)
+    Features state-of-the-art:
+    - VQ Hierárquica (estilo VQ-VAE-2)
+    - AdaLN-Zero (estilo DiT)
+    - SwiGLU FFN (estilo LLaMA)
+    - SiLU activations (moderno)
 
-    Fluxo CAUSAL sem loops circulares
+    Pipeline:
+    Stage 0: process → VQ₀ → AdaLN-Zero
+    Stage 1: VQ₀ condition → process → VQ₁ → AdaLN-Zero
+    Stage 2: VQ₁ condition → process → VQ₂ → AdaLN-Zero
     """
 
     @staticmethod
@@ -567,7 +673,7 @@ class VanillaGenerator(Activations):
         x = Concatenate(name='concat_initial')([z, condition])
         x = Dense(self._base_filters, name='init_channel_proj')(x)
         x = RMSNorm(name='init_norm')(x)
-        x = Activation('gelu')(x)
+        x = Lambda(lambda t: tf.nn.silu(t), name='init_silu')(x)  # SiLU moderno
         x = Lambda(lambda t: tf.expand_dims(t, axis=1), name='init_add_token_dim')(x)
 
         stage_outs = []
@@ -584,7 +690,7 @@ class VanillaGenerator(Activations):
 
             if i > 0:
                 x = Dense(n_filters, name=f's{i}_channel_proj')(x)
-                x = Activation('gelu')(x)
+                x = Lambda(lambda t: tf.nn.silu(t), name=f's{i}_silu')(x)  # SiLU
 
             x = Conv1D(filters=n_filters, kernel_size=3, padding='same',
                        strides=2 if i > 0 else self._tokens_per_stage[0],
@@ -599,19 +705,22 @@ class VanillaGenerator(Activations):
                 name=f's{i}_block'
             )(x)
 
-            x = FiLM(name=f's{i}_film')([x, condition])
+            # AdaLN-Zero modulation
+            x = AdaLNZero(name=f's{i}_adaln')([x, condition])
 
             stage_features = GlobalAveragePooling1D(name=f's{i}_pool')(x)
             stage_outs.append(stage_features)
 
             if self._use_vq:
+                vq_proj = Dense(self._vq_embedding_dim, name=f's{i}_vq_proj')(stage_features)
+                vq_proj = Lambda(lambda t: tf.nn.silu(t), name=f's{i}_vq_silu')(vq_proj)
 
-                vq_proj = Dense(self._vq_embedding_dim, activation='gelu', name=f's{i}_vq_proj')(stage_features)
-
-                vq_code_prev = VectorQuantization(num_embeddings=self._vq_num_embeddings,
-                                                  embedding_dim=self._vq_embedding_dim,
-                                                  commitment_cost=self._vq_commitment_cost,
-                                                  name=f's{i}_vq')(vq_proj)
+                vq_code_prev = VectorQuantization(
+                    num_embeddings=self._vq_num_embeddings,
+                    embedding_dim=self._vq_embedding_dim,
+                    commitment_cost=self._vq_commitment_cost,
+                    name=f's{i}_vq'
+                )(vq_proj)
 
         x = MultiScaleFusion(output_dim=self._base_filters * 2, name='fusion')(stage_outs)
 
@@ -620,7 +729,7 @@ class VanillaGenerator(Activations):
 
         x = Dense(self._base_filters * 2, name='pre_out')(x)
         x = RMSNorm(name='pre_out_norm')(x)
-        x = Activation('gelu')(x)
+        x = Lambda(lambda t: tf.nn.silu(t), name='pre_out_silu')(x)  # SiLU
 
         x = Dense(self._output_shape, name='output')(x)
 
@@ -630,7 +739,7 @@ class VanillaGenerator(Activations):
         elif self._last_activation:
             x = self._add_activation_layer(x, self._last_activation)
 
-        model = Model(inputs=[z, y], outputs=x, name='HybridGeneratorHierarchicalVQ')
+        model = Model(inputs=[z, y], outputs=x, name='HybridGenerator_SwiGLU_AdaLN')
         self._model = model
 
         model.summary()
