@@ -487,9 +487,9 @@ class VanillaDiscriminatorTensorflow(Activations):
             noise_stddev: float = 0.05,
             label_smoothing: float = 0.0,
             # Loss & Penalty
-            use_r1_regularization: bool = True,
+            use_r1_regularization: bool = False,
             r1_gamma: float = 10.0,
-            use_gradient_penalty: bool = True,
+            use_gradient_penalty: bool = False,
             gp_lambda: float = 10.0,
             # Output
             output_units: int = 1,

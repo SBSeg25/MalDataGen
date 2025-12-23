@@ -686,7 +686,6 @@ class VanillaDiscriminatorTensorflow(Activations):
         if self._last_activation is not None:
             x = self._add_activation_layer(x, self._last_activation)
 
-        # ==================== BUILD MODEL ====================
         model = Model(
             inputs=[x_in, y_in],
             outputs=x,
@@ -694,26 +693,6 @@ class VanillaDiscriminatorTensorflow(Activations):
         )
 
         self._model = model
-
-        # ==================== INFO ====================
-        print("\n" + "=" * 80)
-        print("🎯 STATE-OF-THE-ART DENSE DISCRIMINATOR")
-        print("=" * 80)
-        print(f"Architecture: {len(self._dense_sizes)} stages × {self._num_res_blocks} residual blocks")
-        print(f"Layer sizes: {self._dense_sizes}")
-        print(f"Activation: {self._activation_name}")
-        print(f"\n🔒 Spectral Norm: {'✓ ALL layers' if self._use_sn else '✗'}")
-        print(f"📊 Normalization: {self._norm_type.upper()}")
-        print(f"🧠 Multi-Head Attention: {'✓' if self._use_attn else '✗'} ({self._attn_heads} heads)")
-        print(f"🔀 Residual Blocks: {'✓' if self._use_residual else '✗'}")
-        print(f"📐 Multi-Scale: {'✓' if self._use_multi_scale else '✗'}")
-        print(f"📈 Minibatch StdDev: {'✓' if self._use_mbstd else '✗'} (group={self._mb_group})")
-        print(f"🎲 Input Noise: {'✓' if self._use_noise else '✗'} (σ={self._noise_std})")
-        print(f"🔧 Conditional BN: {'✓' if self._use_cbn else '✗'}")
-        print(f"\n⚖️ Regularization:")
-        print(f"   • R1: {'✓' if self._use_r1 else '✗'} (γ={self._r1_gamma})")
-        print(f"   • GP: {'✓' if self._use_gp else '✗'} (λ={self._gp_lambda})")
-        print("=" * 80 + "\n")
 
         model.summary()
 
