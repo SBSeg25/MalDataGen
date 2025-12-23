@@ -75,7 +75,7 @@ number_samples_per_class = {
 }
 
 models = {
-    "adversarial": DenoisingDiffusion(
+    "adversarial": WassersteinGP(
         number_classes=N_CLASSES
     ),
 }
