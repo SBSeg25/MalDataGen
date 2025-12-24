@@ -414,39 +414,42 @@ class GaussianDenoisingDiffusionTensorflow:
 
     def p_sample(self, predicted_noise, x, t, clip_denoised=True):
         """
-        Samples from the model's posterior distribution at a given time step.
+        VERSÃO CORRIGIDA - Samples from the model's posterior distribution.
 
-        Parameters:
-        -----------
-            predicted_noise : tensorflow.Tensor
-                Noise predicted by the model.
-            x : tensorflow.Tensor
-                Noisy input at time step t.
-            t : tensorflow.Tensor
-                Time step indices.
-            clip_denoised : bool, optional
-                Whether to clip the denoised output.
-
-        Returns:
-        --------
-            tensorflow.Tensor
-                Sampled output at time step t.
+        FIX: Corrige o shape da máscara nonzero para broadcast correto.
         """
 
-        model_mean, _, model_log_variance = self.p_mean_variance(predicted_noise,
-                                                                 x=x,
-                                                                 t=t,
-                                                                 clip_denoised=clip_denoised)
+        model_mean, _, model_log_variance = self.p_mean_variance(
+            predicted_noise,
+            x=x,
+            t=t,
+            clip_denoised=clip_denoised
+        )
 
-        noise = tensorflow.random.normal(shape=x.shape,
-                                         dtype=x.dtype)
+        noise = tensorflow.random.normal(shape=tensorflow.shape(x), dtype=x.dtype)
 
-        nonzero_mask = tensorflow.reshape(1 - tensorflow.cast(tensorflow.equal(t, 0),
-                                                              tensorflow.float32),
-                                          [tensorflow.shape(x)[0], 1, 1])
+        # ✅ FIX: Máscara com shape correto para broadcast
+        # Para dados 1D [batch, seq_len, channels], precisa ser [batch, 1, 1]
+        # Para dados 2D [batch, H, W, channels], precisa ser [batch, 1, 1, 1]
 
+        batch_size = tensorflow.shape(x)[0]
+        rank = len(x.shape)
+
+        if rank == 3:  # [batch, seq_len, channels] - dados 1D
+            nonzero_mask = tensorflow.reshape(
+                1.0 - tensorflow.cast(tensorflow.equal(t, 0), tensorflow.float32),
+                [batch_size, 1, 1]
+            )
+        elif rank == 4:  # [batch, H, W, channels] - dados 2D
+            nonzero_mask = tensorflow.reshape(
+                1.0 - tensorflow.cast(tensorflow.equal(t, 0), tensorflow.float32),
+                [batch_size, 1, 1, 1]
+            )
+        else:
+            raise ValueError(f"Unsupported tensor rank: {rank}")
+
+        # Amostragem: mean + noise (mas zero no timestep final)
         return model_mean + nonzero_mask * tensorflow.exp(0.5 * model_log_variance) * noise
-
     @property
     def beta_start(self) -> float:
         """Get the starting value of beta for the noise schedule.
