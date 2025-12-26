@@ -1,509 +1,648 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-__author__ = 'Kayuã Oleques Paim - Enhanced by Claude'
-__version__ = '6.0.0-complete'
-
 import os
-import sys
+import math
 import numpy as np
 import tensorflow as tf
-from typing import Dict, Optional, Tuple
-from tensorflow.keras.optimizers import AdamW
-from tensorflow.keras.callbacks import Callback
-from tqdm import tqdm
-
-from Engine.algorithms.denoising_diffusion.tensorflow.GaussianDenoisingDiffusionTensorflow import \
-    GaussianDenoisingDiffusionTensorflow
-from Engine.architectures.denoising_diffusion.tensorflow.DenoisingDiffusionUNetModelTensorflow import \
-    DenoisingDiffusionUNetModelTensorflow
+from tensorflow import keras
+from tensorflow.keras import layers
+from tensorflow.keras import mixed_precision
+import matplotlib.pyplot as plt
 
 
-# Imports dos seus módulos
+# =====================================================================
+# CONFIGURAÇÃO
+# =====================================================================
+def setup_environment():
+    gpus = tf.config.list_physical_devices('GPU')
+    if gpus:
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+        print(f"✓ {len(gpus)} GPU(s) disponível(is)")
+    else:
+        print("⚠ Nenhuma GPU encontrada")
 
-class EMACallback(Callback):
-    """Exponential Moving Average callback para estabilizar treinamento."""
 
-    def __init__(self, model, decay=0.9999):
+# =====================================================================
+# EDM NOISE SCHEDULE
+# =====================================================================
+class EDMNoiseSchedule:
+    def __init__(self, num_steps=1000, sigma_data=0.5):
+        ramp = np.linspace(0, 1, num_steps)
+        sigmas = (80.0 ** (1 / 7) + ramp * (0.002 ** (1 / 7) - 80.0 ** (1 / 7))) ** 7
+        self.sigmas = tf.constant(sigmas, dtype=tf.float32)
+        self.num_steps = num_steps
+        self.sigma_data = sigma_data
+
+    def get_scalings(self, sigma):
+        c_skip = self.sigma_data ** 2 / (sigma ** 2 + self.sigma_data ** 2)
+        c_out = sigma * self.sigma_data / tf.sqrt(sigma ** 2 + self.sigma_data ** 2)
+        c_in = 1 / tf.sqrt(sigma ** 2 + self.sigma_data ** 2)
+        c_noise = 0.25 * tf.math.log(sigma + 1e-8)
+        return c_skip, c_out, c_in, c_noise
+
+    def add_noise(self, x, t):
+        sigma = tf.gather(self.sigmas, t)
+        sigma = tf.reshape(sigma, [-1] + [1] * (len(x.shape) - 1))
+        noise = tf.random.normal(tf.shape(x), dtype=x.dtype)
+        return x + sigma * noise, noise, sigma
+
+
+# =====================================================================
+# COMPONENTES BÁSICOS DO TRANSFORMER
+# =====================================================================
+class RMSNorm(layers.Layer):
+    def __init__(self, dim, eps=1e-6, **kwargs):
+        super().__init__(**kwargs)
+        self.dim = dim
+        self.eps = eps
+
+    def build(self, input_shape):
+        self.scale = self.add_weight(shape=(self.dim,), initializer="ones", name="scale")
+        super().build(input_shape)
+
+    def call(self, x):
+        rms = tf.sqrt(tf.reduce_mean(tf.square(x), axis=-1, keepdims=True) + self.eps)
+        return x / rms * self.scale
+
+
+class RotaryEmbedding(layers.Layer):
+    def __init__(self, dim, **kwargs):
+        super().__init__(**kwargs)
+        inv_freq = 1.0 / (10000 ** (tf.range(0, dim // 2, dtype=tf.float32) / (dim // 2)))
+        self.inv_freq = inv_freq
+
+    def call(self, seq_len):
+        t = tf.range(seq_len, dtype=tf.float32)
+        freqs = tf.einsum("i,j->ij", t, self.inv_freq)
+        return tf.cos(freqs), tf.sin(freqs)
+
+    @staticmethod
+    def apply_rotary_emb(q, cos, sin):
+        cos = tf.cast(cos, q.dtype)
+        sin = tf.cast(sin, q.dtype)
+        cos, sin = cos[None, None, :, :], sin[None, None, :, :]
+        q1, q2 = tf.split(q, 2, axis=-1)
+        return tf.concat([q1 * cos - q2 * sin, q1 * sin + q2 * cos], axis=-1)
+
+
+class FlashAttention(layers.Layer):
+    def __init__(self, dim, num_heads, dropout=0.05, **kwargs):
+        super().__init__(**kwargs)
+        if dim % num_heads != 0:
+            raise ValueError(f"dim ({dim}) must be divisible by num_heads ({num_heads})")
+        self.dim = dim
+        self.num_heads = num_heads
+        self.head_dim = dim // num_heads
+        self.scale = self.head_dim ** -0.5
+        self.rope = RotaryEmbedding(self.head_dim)
+        self.qkv = layers.Dense(3 * dim, use_bias=False)
+        self.proj = layers.Dense(dim)
+        self.dropout = layers.Dropout(dropout)
+
+    def call(self, x, training=False):
+        B, N, _ = tf.shape(x)[0], tf.shape(x)[1], x.shape[2]
+
+        qkv = self.qkv(x)
+        qkv = tf.reshape(qkv, [B, N, 3, self.num_heads, self.head_dim])
+        qkv = tf.transpose(qkv, [2, 0, 3, 1, 4])
+        q, k, v = qkv[0], qkv[1], qkv[2]
+
+        cos, sin = self.rope(N)
+        q = RotaryEmbedding.apply_rotary_emb(q, cos, sin)
+        k = RotaryEmbedding.apply_rotary_emb(k, cos, sin)
+
+        attn = tf.matmul(q, k, transpose_b=True) * self.scale
+        attn = tf.nn.softmax(attn, axis=-1)
+        attn = self.dropout(attn, training=training)
+
+        out = tf.matmul(attn, v)
+        out = tf.transpose(out, [0, 2, 1, 3])
+        out = tf.reshape(out, [B, N, self.dim])
+
+        return self.proj(out)
+
+
+# =====================================================================
+# CROSS-ATTENTION HIERÁRQUICA
+# =====================================================================
+class HierarchicalCrossAttention(layers.Layer):
+    """Cross-attention entre diferentes escalas hierárquicas"""
+
+    def __init__(self, dim, num_heads, dropout=0.05, **kwargs):
+        super().__init__(**kwargs)
+        self.dim = dim
+        self.num_heads = num_heads
+        self.head_dim = dim // num_heads
+        self.scale = self.head_dim ** -0.5
+
+        self.q_proj = layers.Dense(dim, use_bias=False)
+        self.kv_proj = layers.Dense(2 * dim, use_bias=False)
+        self.proj = layers.Dense(dim)
+        self.dropout = layers.Dropout(dropout)
+
+    def call(self, x, context, training=False):
+        """
+        x: query (escala fina)
+        context: key/value (escala grossa)
+        """
+        B, N, _ = tf.shape(x)[0], tf.shape(x)[1], x.shape[2]
+        _, M, _ = tf.shape(context)[0], tf.shape(context)[1], context.shape[2]
+
+        # Query da escala atual
+        q = self.q_proj(x)
+        q = tf.reshape(q, [B, N, self.num_heads, self.head_dim])
+        q = tf.transpose(q, [0, 2, 1, 3])
+
+        # Key e Value da escala grossa
+        kv = self.kv_proj(context)
+        kv = tf.reshape(kv, [B, M, 2, self.num_heads, self.head_dim])
+        kv = tf.transpose(kv, [2, 0, 3, 1, 4])
+        k, v = kv[0], kv[1]
+
+        # Cross-attention
+        attn = tf.matmul(q, k, transpose_b=True) * self.scale
+        attn = tf.nn.softmax(attn, axis=-1)
+        attn = self.dropout(attn, training=training)
+
+        out = tf.matmul(attn, v)
+        out = tf.transpose(out, [0, 2, 1, 3])
+        out = tf.reshape(out, [B, N, self.dim])
+
+        return self.proj(out)
+
+
+class SwiGLU(layers.Layer):
+    def __init__(self, dim, mlp_ratio=4.0, dropout=0.05, **kwargs):
+        super().__init__(**kwargs)
+        hidden = int(dim * mlp_ratio)
+        self.fc1 = layers.Dense(hidden * 2)
+        self.fc2 = layers.Dense(dim)
+        self.dropout = layers.Dropout(dropout)
+
+    def call(self, x, training=False):
+        x_proj = self.fc1(x)
+        x, gate = tf.split(x_proj, 2, axis=-1)
+        return self.fc2(self.dropout(x * tf.nn.silu(gate), training=training))
+
+
+class AdaLNZero(layers.Layer):
+    def __init__(self, dim, **kwargs):
+        super().__init__(**kwargs)
+        self.linear1 = layers.Dense(dim, activation="silu")
+        self.linear2 = layers.Dense(6 * dim, kernel_initializer="zeros")
+
+    def call(self, cond):
+        return self.linear2(self.linear1(cond))
+
+
+# =====================================================================
+# BLOCO HIERÁRQUICO DO TRANSFORMER
+# =====================================================================
+class HierarchicalDiTBlock(layers.Layer):
+    """Bloco DiT com cross-attention hierárquica"""
+
+    def __init__(self, dim, num_heads, mlp_ratio=4.0, dropout=0.05,
+                 has_cross_attn=False, **kwargs):
+        super().__init__(**kwargs)
+        self.has_cross_attn = has_cross_attn
+
+        # Self-attention
+        self.norm1 = RMSNorm(dim)
+        self.attn = FlashAttention(dim, num_heads, dropout)
+
+        # Cross-attention (se houver escala mais grossa)
+        if has_cross_attn:
+            self.norm_cross = RMSNorm(dim)
+            self.cross_attn = HierarchicalCrossAttention(dim, num_heads, dropout)
+
+        # MLP
+        self.norm2 = RMSNorm(dim)
+        self.mlp = SwiGLU(dim, mlp_ratio, dropout)
+
+        # Adaptive Layer Norm
+        self.ada = AdaLNZero(dim)
+
+    def call(self, x, cond, coarse_features=None, training=False):
+        cond = tf.cast(cond, tf.float32)
+        mods = self.ada(cond)
+        mods = tf.cast(mods, x.dtype)
+        s1, sc1, g1, s2, sc2, g2 = tf.split(mods, 6, axis=-1)
+
+        # Self-attention
+        h = self.norm1(x)
+        h = h * (1 + sc1[:, None, :]) + s1[:, None, :]
+        x = x + g1[:, None, :] * self.attn(h, training=training)
+
+        # Cross-attention com escala mais grossa (se disponível)
+        if self.has_cross_attn and coarse_features is not None:
+            h_cross = self.norm_cross(x)
+            x = x + self.cross_attn(h_cross, coarse_features, training=training)
+
+        # MLP
+        h = self.norm2(x)
+        h = h * (1 + sc2[:, None, :]) + s2[:, None, :]
+        x = x + g2[:, None, :] * self.mlp(h, training=training)
+
+        return x
+
+
+class TimestepEmbedding(layers.Layer):
+    def __init__(self, dim, max_period=10000, **kwargs):
+        super().__init__(**kwargs)
+        self.dim = dim
+        half_dim = dim // 2
+        freqs = tf.exp(-math.log(max_period) * tf.range(0, half_dim, dtype=tf.float32) / half_dim)
+        self.freqs = tf.constant(freqs, dtype=tf.float32)
+
+    def call(self, timesteps):
+        timesteps = tf.cast(timesteps, tf.float32)
+        args = timesteps[:, None] * self.freqs[None, :]
+        return tf.concat([tf.sin(args), tf.cos(args)], axis=-1)
+
+
+# =====================================================================
+# MODELO COM TRANSFORMERS HIERÁRQUICOS
+# =====================================================================
+class HierarchicalDiTNetwork(keras.Model):
+    def __init__(self, vector_dim, num_classes, hidden_dim=768,
+                 depth_per_scale=[4, 6, 6], num_heads=12,
+                 label_dropout=0.1, **kwargs):
+        super().__init__(**kwargs)
+        self.vector_dim = vector_dim
+        self.num_classes = num_classes
+        self.hidden_dim = hidden_dim
+        self.label_dropout = label_dropout
+
+        # Configuração hierárquica OTIMIZADA: [coarse, medium, fine]
+        # Coarse: 8 patches, Medium: 16 patches, Fine: 64 patches
+        self.patch_sizes = [vector_dim // 8, vector_dim // 16, vector_dim // 64]
+        self.num_patches = [8, 16, 64]
+
+        print(f"\n🔷 ARQUITETURA HIERÁRQUICA:")
+        print(f"  Escala Coarse:  {self.num_patches[0]} patches x {self.patch_sizes[0]} dims")
+        print(f"  Escala Medium:  {self.num_patches[1]} patches x {self.patch_sizes[1]} dims")
+        print(f"  Escala Fine:    {self.num_patches[2]} patches x {self.patch_sizes[2]} dims")
+
+        # Projeções para cada escala
+        self.coarse_proj = layers.Dense(hidden_dim)
+        self.medium_proj = layers.Dense(hidden_dim)
+        self.fine_proj = layers.Dense(hidden_dim)
+
+        # Class tokens
+        self.coarse_token = self.add_weight(shape=(1, 1, hidden_dim),
+                                            initializer="zeros", trainable=True)
+        self.medium_token = self.add_weight(shape=(1, 1, hidden_dim),
+                                            initializer="zeros", trainable=True)
+        self.fine_token = self.add_weight(shape=(1, 1, hidden_dim),
+                                          initializer="zeros", trainable=True)
+
+        # Embeddings condicionais
+        self.t_emb = TimestepEmbedding(hidden_dim)
+        self.t_mlp = layers.Dense(hidden_dim, activation="silu")
+        self.label_emb = layers.Embedding(num_classes + 1, hidden_dim)
+
+        # Blocos hierárquicos
+        # Escala Coarse (sem cross-attention)
+        self.coarse_blocks = [
+            HierarchicalDiTBlock(hidden_dim, num_heads, has_cross_attn=False)
+            for _ in range(depth_per_scale[0])
+        ]
+
+        # Escala Medium (com cross-attention para coarse)
+        self.medium_blocks = [
+            HierarchicalDiTBlock(hidden_dim, num_heads, has_cross_attn=True)
+            for _ in range(depth_per_scale[1])
+        ]
+
+        # Escala Fine (com cross-attention para medium)
+        self.fine_blocks = [
+            HierarchicalDiTBlock(hidden_dim, num_heads, has_cross_attn=True)
+            for _ in range(depth_per_scale[2])
+        ]
+
+        # Upsampling entre escalas
+        self.coarse_to_medium = layers.Dense(hidden_dim)
+        self.medium_to_fine = layers.Dense(hidden_dim)
+
+        # Saída
+        self.out_norm = RMSNorm(hidden_dim)
+        self.out_ada_linear1 = layers.Dense(hidden_dim, activation="silu")
+        self.out_ada_linear2 = layers.Dense(2 * hidden_dim, kernel_initializer="zeros")
+        self.out_proj = layers.Dense(self.patch_sizes[2], kernel_initializer="zeros")
+        self.output_cast = layers.Activation('linear', dtype='float32')
+
+    def call(self, inputs, training=False):
+        vectors, timesteps, labels = inputs
+        B = tf.shape(vectors)[0]
+
+        # === ESCALA COARSE ===
+        coarse_patches = tf.reshape(vectors, [B, self.num_patches[0], self.patch_sizes[0]])
+        x_coarse = self.coarse_proj(coarse_patches)
+        ct_coarse = tf.tile(self.coarse_token, [B, 1, 1])
+        ct_coarse = tf.cast(ct_coarse, x_coarse.dtype)
+        x_coarse = tf.concat([ct_coarse, x_coarse], axis=1)
+
+        # Embedding condicional
+        t_emb = self.t_emb(timesteps)
+        t_emb = self.t_mlp(t_emb)
+        if training and self.label_dropout > 0:
+            mask = tf.random.uniform([B]) > self.label_dropout
+            labels = tf.where(mask, labels, self.num_classes)
+        label_emb = self.label_emb(labels)
+        cond = t_emb + label_emb
+
+        # Processa escala coarse
+        for block in self.coarse_blocks:
+            x_coarse = block(x_coarse, cond, training=training)
+
+        coarse_features = x_coarse[:, 1:, :]  # Remove class token
+
+        # === ESCALA MEDIUM ===
+        medium_patches = tf.reshape(vectors, [B, self.num_patches[1], self.patch_sizes[1]])
+        x_medium = self.medium_proj(medium_patches)
+        ct_medium = tf.tile(self.medium_token, [B, 1, 1])
+        ct_medium = tf.cast(ct_medium, x_medium.dtype)
+        x_medium = tf.concat([ct_medium, x_medium], axis=1)
+
+        # Upsample coarse features para guiar medium
+        coarse_upsampled = self.coarse_to_medium(coarse_features)
+
+        # Processa escala medium com cross-attention para coarse
+        for block in self.medium_blocks:
+            x_medium = block(x_medium, cond, coarse_upsampled, training=training)
+
+        medium_features = x_medium[:, 1:, :]
+
+        # === ESCALA FINE ===
+        fine_patches = tf.reshape(vectors, [B, self.num_patches[2], self.patch_sizes[2]])
+        x_fine = self.fine_proj(fine_patches)
+        ct_fine = tf.tile(self.fine_token, [B, 1, 1])
+        ct_fine = tf.cast(ct_fine, x_fine.dtype)
+        x_fine = tf.concat([ct_fine, x_fine], axis=1)
+
+        # Upsample medium features para guiar fine
+        medium_upsampled = self.medium_to_fine(medium_features)
+
+        # Processa escala fine com cross-attention para medium
+        for block in self.fine_blocks:
+            x_fine = block(x_fine, cond, medium_upsampled, training=training)
+
+        # === SAÍDA ===
+        mods = self.out_ada_linear2(self.out_ada_linear1(cond))
+        mods = tf.cast(mods, x_fine.dtype)
+        shift, scale = tf.split(mods, 2, axis=-1)
+
+        x_fine = self.out_norm(x_fine[:, 1:, :])  # Remove class token
+        x_fine = x_fine * (1 + scale[:, None, :]) + shift[:, None, :]
+        x_fine = self.out_proj(x_fine)
+
+        # Reconstrói vetor completo
+        output = tf.reshape(x_fine, [B, self.vector_dim])
+        return self.output_cast(output)
+
+
+# =====================================================================
+# CALLBACK
+# =====================================================================
+class ImageGenerationCallback(keras.callbacks.Callback):
+    def __init__(self, img_shape, num_classes, samples_per_class=5,
+                 every_n_epochs=10, guidance_scale=3.0):
         super().__init__()
-        self.model_to_track = model
-        self.decay = decay
-        self.ema_weights = None
-
-    def on_train_begin(self, logs=None):
-        # Inicializa EMA com pesos do modelo
-        self.ema_weights = [tf.Variable(w, trainable=False) for w in self.model_to_track.weights]
-
-    def on_batch_end(self, batch, logs=None):
-        # Atualiza EMA após cada batch
-        if self.ema_weights is not None:
-            for ema_w, model_w in zip(self.ema_weights, self.model_to_track.weights):
-                ema_w.assign(self.decay * ema_w + (1 - self.decay) * model_w)
-
-    def apply_ema_weights(self):
-        """Aplica pesos EMA ao modelo."""
-        if self.ema_weights is not None:
-            for ema_w, model_w in zip(self.ema_weights, self.model_to_track.weights):
-                model_w.assign(ema_w)
-
-
-class DenoisingDiffusion:
-    """
-    Wrapper completo para Diffusion Model com DiT.
-
-    Integra:
-    - GaussianDenoisingDiffusionTensorflow: Processo de difusão
-    - DenoisingDiffusionUNetModelTensorflow: Modelo DiT
-    - Treinamento com EMA e otimizações
-    - Geração de amostras sintéticas
-    """
-
-    def __init__(
-            self,
-            number_classes: int = 10,
-            beta_start: float = 1e-4,
-            beta_end: float = 0.02,
-            time_steps: int = 1000,
-            clip_min: float = -1.0,
-            clip_max: float = 1.0,
-            patch_size: int = 2,
-            hidden_dim: int = 512,
-            depth: int = 12,
-            num_heads: int = 8,
-            dropout_rate: float = 0.1,
-            ffn_expansion: float = 4.0,
-            use_cross_attention: bool = True,
-            context_seq_len: int = 32,
-            use_mixed_precision: bool = True,
-            learning_rate: float = 1e-4,
-            weight_decay: float = 0.01,
-            ema_decay: float = 0.9999,
-            **kwargs
-    ):
-        """
-        Inicializa o modelo de difusão.
-
-        Args:
-            number_classes: Número de classes para condicionamento
-            beta_start: Beta inicial do schedule de ruído
-            beta_end: Beta final do schedule de ruído
-            time_steps: Número de passos de difusão
-            clip_min/clip_max: Limites de clipping
-            patch_size: Tamanho dos patches
-            hidden_dim: Dimensão oculta do transformer
-            depth: Número de blocos DiT
-            num_heads: Número de cabeças de atenção
-            dropout_rate: Taxa de dropout
-            ffn_expansion: Fator de expansão do FFN
-            use_cross_attention: Usar cross-attention
-            context_seq_len: Comprimento da sequência de contexto
-            use_mixed_precision: Usar mixed precision
-            learning_rate: Taxa de aprendizado
-            weight_decay: Weight decay para AdamW
-            ema_decay: Decay para EMA
-        """
-
-        self.number_classes = number_classes
-        self.learning_rate = learning_rate
-        self.weight_decay = weight_decay
-        self.ema_decay = ema_decay
-        self.time_steps = time_steps
-
-        # Inicializa processo de difusão
-        self.diffusion_process = GaussianDenoisingDiffusionTensorflow(
-            beta_start=beta_start,
-            beta_end=beta_end,
-            time_steps=time_steps,
-            clip_min=clip_min,
-            clip_max=clip_max
-        )
-
-        # Parâmetros do modelo
-        self.model_params = {
-            'patch_size': patch_size,
-            'hidden_dim': hidden_dim,
-            'depth': depth,
-            'num_heads': num_heads,
-            'dropout_rate': dropout_rate,
-            'ffn_expansion': ffn_expansion,
-            'use_cross_attention': use_cross_attention,
-            'context_seq_len': context_seq_len,
-            'use_mixed_precision': use_mixed_precision,
-        }
-
-        self.model = None
-        self.ema_callback = None
-        self.is_trained = False
-
-        print(f"\n{'=' * 70}")
-        print(f"🎯 DenoisingDiffusion Initialized")
-        print(f"{'=' * 70}")
-        print(f"📊 Configuration:")
-        print(f"  • Number of classes: {number_classes}")
-        print(f"  • Diffusion steps: {time_steps}")
-        print(f"  • Hidden dimension: {hidden_dim}")
-        print(f"  • Depth: {depth} blocks")
-        print(f"  • Learning rate: {learning_rate}")
-        print(f"  • Weight decay: {weight_decay}")
-        print(f"  • EMA decay: {ema_decay}")
-        print(f"{'=' * 70}\n")
-
-    def _normalize_data(self, x: np.ndarray) -> np.ndarray:
-        """Normaliza dados para [-1, 1]."""
-        # Assume que entrada está em [0, 1]
-        return x * 2.0 - 1.0
-
-    def _denormalize_data(self, x: np.ndarray) -> np.ndarray:
-        """Denormaliza dados de [-1, 1] para [0, 1]."""
-        return (x + 1.0) / 2.0
-
-    def _flatten_images(self, x: np.ndarray) -> np.ndarray:
-        """Converte imagens [B, H, W, C] para sequência [B, H*W, C]."""
-        batch, h, w, c = x.shape
-        return x.reshape(batch, h * w, c)
-
-    def _unflatten_images(self, x: np.ndarray, target_shape: Tuple) -> np.ndarray:
-        """Converte sequência [B, H*W, C] para imagens [B, H, W, C]."""
-        batch = x.shape[0]
-        h, w, c = target_shape
-        return x.reshape(batch, h, w, c)
-
-    def _prepare_labels(self, y: np.ndarray) -> np.ndarray:
-        """Converte labels para one-hot encoding."""
-        if len(y.shape) == 1:
-            return tf.keras.utils.to_categorical(y, self.number_classes)
-        return y
-
-    @tf.function
-    def _train_step(self, x_batch, y_batch):
-        batch_size = tf.shape(x_batch)[0]
-
-        # Amostra timesteps aleatórios
-        t = tf.random.uniform(
-            shape=[batch_size],
-            minval=0,
-            maxval=self.time_steps,
-            dtype=tf.int32
-        )
-
-        # Gera ruído
-        noise = tf.random.normal(shape=tf.shape(x_batch))
-
-        # Aplica difusão forward
-        x_noisy = self.diffusion_process.q_sample(x_batch, t, noise)
-
-        with tf.GradientTape() as tape:
-            # Prediz o ruído (o modelo deve aprender a prever 'noise')
-            predicted_noise = self.model([x_noisy, t, y_batch], training=True)
-
-            # Loss MSE com proteção contra NaN
-            loss = tf.reduce_mean(tf.math.squared_difference(noise, predicted_noise))
-
-            # Se usares Mixed Precision, escala a loss aqui
-            if self.model_params.get('use_mixed_precision'):
-                scaled_loss = self.optimizer.get_scaled_loss(loss)
-
-        # Cálculo de gradientes
-        trainable_vars = self.model.trainable_variables
-        if self.model_params.get('use_mixed_precision'):
-            scaled_gradients = tape.gradient(scaled_loss, trainable_vars)
-            gradients = self.optimizer.get_unscaled_gradients(scaled_gradients)
-        else:
-            gradients = tape.gradient(loss, trainable_vars)
-
-        # FIX: Clipping de gradiente global para evitar explosão em Transformers
-        gradients, _ = tf.clip_by_global_norm(gradients, 1.0)
-
-        self.optimizer.apply_gradients(zip(gradients, trainable_vars))
-
-        return loss
-
-    def fit_model(
-            self,
-            input_shape: Tuple,
-            x_real_samples: np.ndarray,
-            y_real_samples: np.ndarray,
-            flatten: bool = True,
-            epochs: int = 100,
-            batch_size: int = 4,
-            validation_split: float = 0.1,
-            verbose: int = 1,
-            **kwargs
-    ):
-        """
-        Treina o modelo de difusão.
-
-        Args:
-            input_shape: Shape da entrada (H, W, C)
-            x_real_samples: Amostras reais [N, H, W, C]
-            y_real_samples: Labels [N] ou [N, num_classes]
-            flatten: Se True, converte para sequência 1D
-            epochs: Número de épocas
-            batch_size: Tamanho do batch
-            validation_split: Fração para validação
-            verbose: Nível de verbosidade
-        """
-
-        print(f"\n{'=' * 70}")
-        print(f"🚀 Starting Training")
-        print(f"{'=' * 70}")
-
-        # Normaliza dados
-        x_train = self._normalize_data(x_real_samples)
-
-        # Prepara labels
-        y_train = self._prepare_labels(y_real_samples)
-
-        # Flatten se necessário
-        original_shape = input_shape
-        if flatten:
-            h, w, c = input_shape
-            x_train = self._flatten_images(x_train)
-            output_shape = h * w
-            embedding_channels = c
-            print(f"✓ Flattened: {input_shape} -> ({output_shape}, {embedding_channels})")
-        else:
-            output_shape = input_shape[0]
-            embedding_channels = input_shape[-1]
-
-        # Constrói modelo se não existir
-        if self.model is None:
-            number_samples_per_class = {
-                'number_classes': self.number_classes,
-                'classes': {i: np.sum(y_real_samples == i) for i in range(self.number_classes)}
-            }
-
-            model_builder = DenoisingDiffusionUNetModelTensorflow(
-                output_shape=output_shape,
-                embedding_channels=embedding_channels,
-                number_samples_per_class=number_samples_per_class,
-                **self.model_params
-            )
-
-            self.model = model_builder.build_model()
-
-            # Otimizador
-            self.optimizer = AdamW(
-                learning_rate=self.learning_rate,
-                weight_decay=self.weight_decay,
-                clipnorm=1.0
-            )
-
-            # EMA callback
-            self.ema_callback = EMACallback(self.model, decay=self.ema_decay)
-            self.ema_callback.on_train_begin()
-
-        # Split treino/validação
-        n_samples = len(x_train)
-        n_val = int(n_samples * validation_split)
-        n_train = n_samples - n_val
-
-        indices = np.random.permutation(n_samples)
-        train_indices = indices[:n_train]
-        val_indices = indices[n_train:]
-
-        x_train_split = x_train[train_indices]
-        y_train_split = y_train[train_indices]
-        x_val = x_train[val_indices] if n_val > 0 else None
-        y_val = y_train[val_indices] if n_val > 0 else None
-
-        print(f"\n📊 Dataset:")
-        print(f"  • Training samples: {n_train}")
-        print(f"  • Validation samples: {n_val}")
-        print(f"  • Batch size: {batch_size}")
-        print(f"  • Steps per epoch: {n_train // batch_size}")
-
-        # Treinamento
-        best_val_loss = float('inf')
-        patience_counter = 0
-        patience = 10
-
-        for epoch in range(epochs):
-            print(f"\n{'=' * 70}")
-            print(f"Epoch {epoch + 1}/{epochs}")
-            print(f"{'=' * 70}")
-
-            # Shuffle
-            shuffle_indices = np.random.permutation(n_train)
-            x_train_epoch = x_train_split[shuffle_indices]
-            y_train_epoch = y_train_split[shuffle_indices]
-
-            # Training
-            train_losses = []
-            steps = n_train // batch_size
-
-            pbar = tqdm(range(steps), desc="Training", ncols=100)
-            for step in pbar:
-                start_idx = step * batch_size
-                end_idx = start_idx + batch_size
-
-                x_batch = x_train_epoch[start_idx:end_idx]
-                y_batch = y_train_epoch[start_idx:end_idx]
-
-                # Converte para tensors
-                x_batch = tf.constant(x_batch, dtype=tf.float32)
-                y_batch = tf.constant(y_batch, dtype=tf.float32)
-
-                # Train step
-                loss = self._train_step(x_batch, y_batch)
-                train_losses.append(float(loss))
-
-                # Update EMA
-                self.ema_callback.on_batch_end(step)
-
-                # Update progress bar
-                pbar.set_postfix({'loss': f'{np.mean(train_losses[-10:]):.4f}'})
-
-            avg_train_loss = np.mean(train_losses)
-
-            # Validation
-            if x_val is not None:
-                val_losses = []
-                val_steps = n_val // batch_size
-
-                for step in range(val_steps):
-                    start_idx = step * batch_size
-                    end_idx = start_idx + batch_size
-
-                    x_batch = tf.constant(x_val[start_idx:end_idx], dtype=tf.float32)
-                    y_batch = tf.constant(y_val[start_idx:end_idx], dtype=tf.float32)
-
-                    # Validation step (sem gradientes)
-                    batch_size_val = tf.shape(x_batch)[0]
-                    t = tf.random.uniform([batch_size_val], 0, self.time_steps, dtype=tf.int32)
-                    noise = tf.random.normal(shape=tf.shape(x_batch))
-                    x_noisy = self.diffusion_process.q_sample(x_batch, t, noise)
-
-                    predicted_noise = self.model([x_noisy, t, y_batch], training=False)
-                    loss = tf.reduce_mean(tf.square(noise - predicted_noise))
-                    val_losses.append(float(loss))
-
-                avg_val_loss = np.mean(val_losses)
-
-                print(f"\n📈 Results:")
-                print(f"  • Train Loss: {avg_train_loss:.4f}")
-                print(f"  • Val Loss: {avg_val_loss:.4f}")
-
-                # Early stopping
-                if avg_val_loss < best_val_loss:
-                    best_val_loss = avg_val_loss
-                    patience_counter = 0
-                    print(f"  ✓ Best model updated!")
-                else:
-                    patience_counter += 1
-                    print(f"  ⚠ No improvement ({patience_counter}/{patience})")
-
-                if patience_counter >= patience:
-                    print(f"\n⏹ Early stopping triggered!")
-                    break
+        self.img_shape = img_shape
+        self.num_classes = num_classes
+        self.samples_per_class = samples_per_class
+        self.every_n_epochs = every_n_epochs
+        self.guidance_scale = guidance_scale
+        self.output_dir = "samples_hierarchical"
+        os.makedirs(self.output_dir, exist_ok=True)
+
+    def on_epoch_end(self, epoch, logs=None):
+        if (epoch + 1) % self.every_n_epochs == 0:
+            print(f"\n{'=' * 60}")
+            print(f"Gerando amostras na época {epoch + 1} | Loss: {logs.get('loss', 0):.6f}")
+            all_samples = []
+            for c in range(self.num_classes):
+                labels = tf.fill([self.samples_per_class], c)
+                vec_samples = self.model.sampler.sample(
+                    self.model.ema_network,
+                    shape=(self.samples_per_class, np.prod(self.img_shape)),
+                    labels=labels, num_classes=self.num_classes,
+                    guidance_scale=self.guidance_scale
+                )
+                all_samples.append(vec_samples.numpy())
+            all_vectors = np.concatenate(all_samples, axis=0)
+            print(f"  Range: [{all_vectors.min():.3f}, {all_vectors.max():.3f}] | Mean: {all_vectors.mean():.3f}")
+            imgs = all_vectors.reshape(-1, *self.img_shape)
+            imgs = np.clip((imgs + 1) / 2, 0, 1)
+            fig, axes = plt.subplots(self.samples_per_class, self.num_classes,
+                                     figsize=(self.num_classes * 2, self.samples_per_class * 2))
+            fig.suptitle(f"Época {epoch + 1} (Transformers Hierárquicos)", fontsize=16)
+            for i in range(self.samples_per_class):
+                for j in range(self.num_classes):
+                    ax = axes[i, j] if self.samples_per_class > 1 else axes[j]
+                    ax.imshow(imgs[i * self.num_classes + j])
+                    ax.axis("off")
+                    if i == 0:
+                        ax.set_title(f"Classe {j}")
+            plt.tight_layout()
+            plt.savefig(os.path.join(self.output_dir, f"epoch_{epoch + 1:04d}.png"), dpi=150)
+            plt.close()
+            print(f"✓ Salvo em {self.output_dir}")
+            print(f"{'=' * 60}\n")
+
+
+# =====================================================================
+# DPM-SOLVER++
+# =====================================================================
+class DPMSolverPP:
+    def __init__(self, noise_schedule):
+        self.ns = noise_schedule
+
+    def sample(self, model, shape, labels, num_steps=100, guidance_scale=3.0, num_classes=10):
+        x = tf.random.normal(shape, dtype=tf.float32)
+        sigmas = self.ns.sigmas.numpy()
+        steps = np.linspace(len(sigmas) - 1, 0, num_steps, dtype=int)
+        null_labels = tf.fill([shape[0]], num_classes)
+        for i, t_idx in enumerate(steps):
+            sigma = float(sigmas[t_idx])
+            c_skip, c_out, c_in, c_noise = self.ns.get_scalings(sigma)
+            x_in = x * c_in
+            t_input = tf.fill([shape[0]], c_noise)
+            pred_cond = model([x_in, t_input, labels], training=False)
+            pred_cond = tf.cast(pred_cond, tf.float32)
+            if guidance_scale > 1.0:
+                pred_uncond = model([x_in, t_input, null_labels], training=False)
+                pred_uncond = tf.cast(pred_uncond, tf.float32)
+                pred = pred_uncond + guidance_scale * (pred_cond - pred_uncond)
             else:
-                print(f"\n📈 Train Loss: {avg_train_loss:.4f}")
+                pred = pred_cond
+            denoised = c_skip * x + c_out * pred
+            if i < len(steps) - 1:
+                sigma_next = float(sigmas[steps[i + 1]])
+                x = denoised + (sigma_next / sigma) * (x - denoised)
+            else:
+                x = denoised
+        return x
 
-        # Aplica pesos EMA ao modelo final
-        self.ema_callback.apply_ema_weights()
 
-        self.is_trained = True
-        self.original_shape = original_shape
-        self.flatten_mode = flatten
+# =====================================================================
+# MODELO PRINCIPAL
+# =====================================================================
+class HierarchicalDiT(keras.Model):
+    def __init__(self, img_shape, num_classes, hidden_dim=768,
+                 depth_per_scale=[4, 6, 6], num_heads=12,
+                 label_dropout=0.1, **kwargs):
+        super().__init__(**kwargs)
+        self.img_shape = img_shape
+        self.vector_dim = np.prod(img_shape)
+        self.num_classes = num_classes
+        self.network = HierarchicalDiTNetwork(
+            self.vector_dim, self.num_classes, hidden_dim,
+            depth_per_scale, num_heads, label_dropout
+        )
+        self.ema_network = HierarchicalDiTNetwork(
+            self.vector_dim, self.num_classes, hidden_dim,
+            depth_per_scale, num_heads, label_dropout
+        )
+        self.ns = EDMNoiseSchedule()
+        self.sampler = DPMSolverPP(self.ns)
+        self.ema_decay = 0.9999
+        self._initialized = False
 
-        print(f"\n{'=' * 70}")
-        print(f"✅ Training Completed!")
-        print(f"{'=' * 70}\n")
+    def _initialize_weights(self):
+        if self._initialized:
+            return
+        print("  • Inicializando pesos...")
+        dummy = (tf.zeros((2, self.vector_dim)), tf.zeros((2,)), tf.zeros((2,), dtype=tf.int64))
+        _ = self.network(dummy)
+        _ = self.ema_network(dummy)
+        self.ema_network.set_weights(self.network.get_weights())
+        self._initialized = True
+        print("  ✓ Pesos inicializados!")
 
-    @tf.function
-    def _denoise_step(self, x, t, y):
-        """Um passo de denoising."""
-        predicted_noise = self.model([x, t, y], training=False)
-        x_denoised = self.diffusion_process.p_sample(predicted_noise, x, t, clip_denoised=True)
-        return x_denoised
+    def train_step(self, data):
+        if not self._initialized:
+            raise RuntimeError("Modelo não inicializado!")
+        images, labels = data
+        batch_size = tf.shape(images)[0]
+        vectors = tf.reshape(images, [batch_size, -1])
+        t = tf.random.uniform([batch_size], 0, self.ns.num_steps, dtype=tf.int32)
+        noisy, _, sigma = self.ns.add_noise(vectors, t)
+        c_skip, c_out, c_in, c_noise = self.ns.get_scalings(sigma)
+        c_noise_scalar = tf.reshape(c_noise, [batch_size])
+        with tf.GradientTape() as tape:
+            pred = self.network([noisy * c_in, c_noise_scalar, labels], training=True)
+            target = (vectors - c_skip * noisy) / c_out
+            loss = tf.reduce_mean(tf.square(tf.cast(pred, tf.float32) - tf.cast(target, tf.float32)))
+        grads = tape.gradient(loss, self.network.trainable_weights)
+        self.optimizer.apply_gradients(zip(grads, self.network.trainable_weights))
+        for w, ema_w in zip(self.network.weights, self.ema_network.weights):
+            ema_w.assign(self.ema_decay * ema_w + (1 - self.ema_decay) * w)
+        return {"loss": loss}
 
-    def get_samples(
-            self,
-            samples_per_class: Dict,
-            guidance_scale: float = 1.0,
-            verbose: bool = True
-    ) -> np.ndarray:
-        """
-        Gera amostras sintéticas.
 
-        Args:
-            samples_per_class: Dict com 'number_classes' e 'classes'
-            guidance_scale: Escala de guidance (1.0 = sem guidance)
-            verbose: Mostrar progresso
+# =====================================================================
+# MAIN
+# =====================================================================
+def main():
+    setup_environment()
 
-        Returns:
-            Array de amostras sintéticas [N, H, W, C]
-        """
+    IMG_SIZE = 64
+    IMG_SHAPE = (IMG_SIZE, IMG_SIZE, 3)
+    N_CLASSES = 10
+    BATCH_SIZE = 32
+    EPOCHS = 1000
 
-        if not self.is_trained:
-            raise ValueError("Model must be trained before generating samples!")
+    from PIL import Image
+    dataset_dir = "./256x256/faces"
 
-        print(f"\n{'=' * 70}")
-        print(f"🎨 Generating Synthetic Samples")
-        print(f"{'=' * 70}")
+    if not os.path.exists(dataset_dir):
+        print(f"⚠ Dataset não encontrado. Usando dados sintéticos.")
+        np.random.seed(42)
+        x = np.random.uniform(-1, 1, (1000, IMG_SIZE, IMG_SIZE, 3)).astype(np.float32)
+        y = np.random.randint(0, N_CLASSES, 1000)
+    else:
+        files = sorted(os.listdir(dataset_dir))[:36000]
+        imgs = []
+        for f in files:
+            try:
+                img = Image.open(os.path.join(dataset_dir, f)).convert("RGB").resize((IMG_SIZE, IMG_SIZE))
+                imgs.append((np.array(img, dtype=np.float32) / 127.5) - 1.0)
+            except:
+                continue
+        x = np.array(imgs, dtype=np.float32)
 
-        # Prepara labels
-        all_samples = []
-        all_labels = []
+        # ===== LABELS RANDÔMICOS =====
+        print(f"\n🎲 Gerando labels randômicos...")
+        np.random.seed(42)  # Para reprodutibilidade
+        y = np.random.randint(0, N_CLASSES, len(x))
 
-        for class_idx, n_samples in samples_per_class['classes'].items():
-            all_labels.extend([class_idx] * n_samples)
+        # Mostra distribuição
+        unique, counts = np.unique(y, return_counts=True)
+        print(f"✓ Labels gerados aleatoriamente:")
+        print(f"  Distribuição dos labels:")
+        for c, count in zip(unique, counts):
+            print(f"    Classe {c}: {count} imagens ({count / len(y) * 100:.1f}%)")
 
-        n_total = len(all_labels)
-        y_generate = self._prepare_labels(np.array(all_labels))
+        print(f"✓ Dataset: {len(x)} imagens com {N_CLASSES} classes randômicas")
 
-        print(f"  • Total samples to generate: {n_total}")
-        print(f"  • Diffusion steps: {self.time_steps}")
-        print(f"  • Guidance scale: {guidance_scale}")
+    print("\n🔷 Criando modelo DiT HIERÁRQUICO...")
+    model = HierarchicalDiT(
+        IMG_SHAPE, N_CLASSES,
+        hidden_dim=320,
+        depth_per_scale=[4, 4, 4],
+        num_heads=8,
+        label_dropout=0.1
+    )
+    model.compile(optimizer=keras.optimizers.AdamW(learning_rate=1e-4, weight_decay=0.01))
+    model._initialize_weights()
 
-        # Shape do ruído inicial
-        if self.flatten_mode:
-            h, w, c = self.original_shape
-            noise_shape = (n_total, h * w, c)
-        else:
-            noise_shape = (n_total,) + self.original_shape
+    callback = ImageGenerationCallback(IMG_SHAPE, N_CLASSES, every_n_epochs=10, guidance_scale=3.0)
 
-        # Inicia com ruído puro
-        x = tf.random.normal(noise_shape, dtype=tf.float32)
-        y = tf.constant(y_generate, dtype=tf.float32)
+    print(f"\n{'=' * 60}")
+    print(f"🚀 INICIANDO TREINAMENTO (TRANSFORMERS HIERÁRQUICOS)")
+    print(f"  Dataset: {len(x)} imagens")
+    print(f"  Classes: {N_CLASSES} (labels RANDÔMICOS)")
+    print(f"  Escalas: Coarse (8) → Medium (16) → Fine (64)")
+    print(f"  Épocas: {EPOCHS}")
+    print(f"{'=' * 60}\n")
 
-        # Denoise progressivamente
-        if verbose:
-            timesteps = tqdm(reversed(range(self.time_steps)), desc="Denoising", total=self.time_steps)
-        else:
-            timesteps = reversed(range(self.time_steps))
+    def create_dataset(images, labels, batch_size, shuffle=True):
+        def generator():
+            indices = np.arange(len(images))
+            while True:
+                if shuffle:
+                    np.random.shuffle(indices)
+                for i in indices:
+                    yield images[i], labels[i]
 
-        for t_step in timesteps:
-            t = tf.constant([t_step] * n_total, dtype=tf.int32)
-            x = self._denoise_step(x, t, y)
+        dataset = tf.data.Dataset.from_generator(
+            generator,
+            output_signature=(
+                tf.TensorSpec(shape=IMG_SHAPE, dtype=tf.float32),
+                tf.TensorSpec(shape=(), dtype=tf.int32)
+            )
+        )
 
-        # Converte para numpy e denormaliza
-        samples = x.numpy()
-        samples = self._denormalize_data(samples)
-        samples = np.clip(samples, 0, 1)
+        if shuffle:
+            dataset = dataset.shuffle(10000, reshuffle_each_iteration=True)
 
-        # Unflatten se necessário
-        if self.flatten_mode:
-            samples = self._unflatten_images(samples, self.original_shape)
+        dataset = dataset.batch(batch_size, drop_remainder=True)
+        dataset = dataset.prefetch(tf.data.AUTOTUNE)
+        return dataset
 
-        print(f"\n✅ Generated {samples.shape[0]} samples")
-        print(f"  • Shape: {samples.shape}")
-        print(f"  • Range: [{samples.min():.3f}, {samples.max():.3f}]")
-        print(f"{'=' * 70}\n")
+    print(f"\nCriando dataset eficiente com {len(x)} imagens...")
+    train_dataset = create_dataset(x, y, BATCH_SIZE, shuffle=True)
+    print("✓ Dataset criado com sucesso!")
 
-        return samples
+    model.fit(
+        train_dataset,
+        epochs=EPOCHS,
+        steps_per_epoch=len(x) // BATCH_SIZE,
+        callbacks=[callback]
+    )
 
-    def save_model(self, path: str):
-        """Salva o modelo treinado."""
-        if self.model is not None:
-            self.model.save_weights(path)
-            print(f"✓ Model saved to {path}")
+    print("\n✓ Treinamento concluído!")
 
-    def load_model(self, path: str):
-        """Carrega um modelo salvo."""
-        if self.model is not None:
-            self.model.load_weights(path)
-            self.is_trained = True
-            print(f"✓ Model loaded from {path}")
-        else:
-            raise ValueError("Model must be built before loading weights!")
+
+if __name__ == "__main__":
+    main()
